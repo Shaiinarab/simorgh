@@ -198,7 +198,7 @@ Based on 2026 research, these additional free-tier providers could join the floc
 
 | Story | Description | Acceptance Criteria | Status |
 |-------|-------------|---------------------|--------|
-| 4.1 | `search_web(query)` tool | Real, no-KYC web search via DuckDuckGo Instant Answer; returns structured results | ✅ |
+| 4.1 | `search_web(query)` tool | Real, no-KYC web search (DDG Instant Answer as zero-key default + optional Brave Search API key as a bird-style source); returns structured results. ⚠️ *DDG Instant Answer is deprecated — empty responses are common; Brave key path is the resilient fallback (see §10)* | ✅ |
 | 4.2 | `get_server_time()` tool | Returns ISO-8601 server time | ✅ |
 | 4.3 | Clean answer synthesis | Agent synthesizes tool results into a coherent natural-language answer; no raw JSON dumps | 🛠️ |
 | 4.4 | Multi-tool orchestration | Agent can call multiple tools in sequence to answer complex prompts | 🛠️ |
@@ -419,6 +419,7 @@ This PRD synthesizes:
 1. **Original platform evidence:** README.md, SOUL.md, AGENT.md, REPULSE_ARCHITECTURE.md, test files
 2. **Grok-4.6 research digest** (13 turns, 1M context, web search): Architecture epics & stories for federation, Auto-Wrapper, BYOK, Data Trust, Intent Shield, Swarm-State
 3. **Web research (2026):** Competitor landscape (LiteLLM, Portkey, OpenRouter, Requesty, Kong, Cloudflare AI Gateway, Helicone); free no-KYC provider survey (Groq, HuggingFace, Cloudflare Workers AI, Google Gemini, Cerebras, GitHub Models, Mistral, OpenRouter free)
+4. **Research round 2 (2026-08-31):** [2026-08-round2.md](../research/2026-08-round2.md) — MCP 2026-07-28 spec verified & detailed (stateless core, header-based routing, MRTR, CIMD auth; SSE deprecated); DDG Instant Answer API confirmed deprecated → story 4.1 needs a Brave-API fallback; Workers AI free tier = 10,000 Neurons/day no-card (Homā verified); candidate-bird free tiers verified (Gemini no-card, Cerebras ~1M tok/day, Mistral free-mode trains models ⚠️ Data-Pact provider-aware consent), OpenRouter Free Models Router (Feb 2026)
 
 ---
 

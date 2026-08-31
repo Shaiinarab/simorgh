@@ -1,0 +1,138 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 08-31-2026 20:15
+last_updated: 08-31-2026 20:15
+project: Simorgh
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: done
+  1-1-agent-execute-loop: done
+  1-2-intent-shield-tool-allow-list: done
+  1-3-context-offload-kv: done
+  1-4-data-trust-vault-do: done
+  1-5-health-endpoint: done
+  epic-1-retrospective: optional
+
+  epic-2: done
+  2-1-bird-adapter-pattern: done
+  2-2-flockcoordinator-do-sqlite: done
+  2-3-circuit-breaker-logic: done
+  2-4-pickroute: done
+  2-5-flock-status-endpoint: done
+  epic-2-retrospective: optional
+
+  epic-3: done
+  3-1-self-contained-dashboard-html: done
+  3-2-live-flock-status-display: done
+  3-3-flight-console: done
+  epic-3-retrospective: optional
+
+  epic-4: in-progress
+  4-1-search_web-query-tool: done
+  4-2-get_server_time-tool: done
+  4-3-clean-answer-synthesis: in-progress
+  4-4-multi-tool-orchestration: in-progress
+  4-5-answer-quality-tests: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-do-atomic-updates: backlog
+  5-2-kv-fallback: backlog
+  5-3-request-to-request-state-passing: backlog
+  5-4-metrics-export: backlog
+  5-5-backpressure-handling: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-declarative-policy-engine: backlog
+  6-2-prompt-injection-defense: backlog
+  6-3-policy-versioning: backlog
+  6-4-swarm-state-policy-sharing: backlog
+  6-5-shield-audit-dashboard: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-consent-tiers-engine: backlog
+  7-2-pii-scrubbing-pipeline: backlog
+  7-3-transparency-ledger: backlog
+  7-4-flock-consent-integration: backlog
+  7-5-enforcement-compliance: backlog
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-openapi-to-mcp-code-generator: backlog
+  8-2-mcp-protocol-integration-2026-07-28: backlog
+  8-3-wrapper-validation-fallback: backlog
+  8-4-registry-discovery: backlog
+  8-5-security-hardening-wrappers: backlog
+  epic-8-retrospective: optional
+
+  epic-9: backlog
+  9-1-secure-key-vault-rotation: backlog
+  9-2-mcp-adapter-layer: backlog
+  9-3-swarm-state-mcp-integration: backlog
+  9-4-client-side-mcp-support: backlog
+  9-5-compliance-data-pact-integration: backlog
+  epic-9-retrospective: optional
+
+  epic-10: backlog
+  10-1-bird-adapter-spec: backlog
+  10-2-google-gemini-bird: backlog
+  10-3-cerebras-bird: backlog
+  10-4-github-models-bird: backlog
+  10-5-flock-priority-tuning: backlog
+  epic-10-retrospective: optional
+
+  epic-11: backlog
+  11-1-structured-logging: backlog
+  11-2-metrics-dashboard: backlog
+  11-3-alerting-hooks: backlog
+  11-4-debug-mode: backlog
+  11-5-cost-tracking: backlog
+  epic-11-retrospective: optional
+
+  epic-12: backlog
+  12-1-rate-limiting: backlog
+  12-2-authentication: backlog
+  12-3-secret-redaction: backlog
+  12-4-security-md: backlog
+  12-5-dependency-audit: backlog
+  epic-12-retrospective: optional
+
+  epic-13: in-progress
+  13-1-readme-comprehensive: done
+  13-2-contributing-md: backlog
+  13-3-architecture-decision-records-adrs: backlog
+  13-4-bird-adapter-tutorial: backlog
+  13-5-api-documentation: backlog
+  epic-13-retrospective: optional
