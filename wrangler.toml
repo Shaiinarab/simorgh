@@ -1,0 +1,35 @@
+name = "simorgh-edge-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# ── Bindings ──────────────────────────────────────────────
+# AI binding — always available, no key required (Homā bird)
+[ai]
+binding = "AI"
+
+# KV namespace — Context Offload
+[[kv_namespaces]]
+binding = "CONTEXT_STORE"
+id = "your-kv-namespace-id-here"
+
+# Durable Objects — Swarm-State + Data Trust
+[[durable_objects.bindings]]
+name = "FLOCK_COORDINATOR"
+class_name = "FlockCoordinator"
+
+[[durable_objects.bindings]]
+name = "DATA_TRUST_VAULT"
+class_name = "DataTrustVault"
+
+# ── Durable Object migrations ────────────────────────────
+[[migrations]]
+tag = "v1"
+new_classes = ["FlockCoordinator", "DataTrustVault"]
+
+# ── Secrets (optional — absent = dormant bird, safe by default) ─
+# npx wrangler secret put GROQ_API_KEY
+# npx wrangler secret put HF_TOKEN
+
+# ── Cron trigger — daily stale sweep ──────────────────────
+[triggers]
+crons = ["15 6 * * *"]

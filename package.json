@@ -1,0 +1,37 @@
+{
+  "name": "simorgh-platform",
+  "version": "2.0.0",
+  "description": "Free-to-run, no-KYC, self-evolving agentic AI gateway that federates fragmented free tiers into one resilient flock.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8787",
+    "deploy": "tsgo --noEmit && wrangler deploy",
+    "typecheck": "tsgo --noEmit",
+    "test": "vitest run",
+    "security:check": "npm audit --omit=dev && tsgo --noEmit && wrangler deploy --dry-run"
+  },
+  "keywords": [
+    "ai-agents",
+    "api-gateway",
+    "api-federation",
+    "cloudflare-workers",
+    "edge-computing",
+    "hono",
+    "typescript",
+    "mcp",
+    "no-kyc",
+    "free-tier"
+  ],
+  "author": "Shahin Arab",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^1.0.0",
+    "@typescript/native-preview": "^1.0.0",
+    "vitest": "^2.0.0",
+    "wrangler": "^3.90.0"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  }
+}

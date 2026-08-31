@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.npm/
+
+# Build artifacts
+dist/
+.mf/
+
+# Wrangler
+.wrangler/
+.dev.vars
+
+# Secrets (never commit)
+*.env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# BMAD state
+.bmad/cache/
