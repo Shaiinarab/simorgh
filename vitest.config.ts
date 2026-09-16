@@ -19,6 +19,16 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.toml" },
+
+      // `remoteBindings` defaults to true, which makes the pool open a *remote proxy
+      // session* through wrangler at startup — so the suite needs a Cloudflare login
+      // (CLOUDFLARE_API_TOKEN) before a single test runs. That made CI fail at
+      // "Failed to start the remote proxy session", for a suite that never touches a
+      // provider: the routing tests pass a fake env, and the HTTP tests stub the flock.
+      //
+      // Turning it off also stops the AI binding being dialled, which is what printed
+      // "Establishing remote connection" and held the process open past the test run.
+      remoteBindings: false,
     }),
   ],
 });

@@ -66,8 +66,13 @@ Two deliberate choices worth knowing about:
   disallowed tools and checks that the Durable Object received only the allow-listed
   ones — the security property, verified at the boundary rather than at the source.
 
-`vitest` may print `close timed out after 10000ms` at the end. That is the remote AI
-binding holding a connection open; the suite still exits `0`. It is noise, not a hang.
+The suite is **fully hermetic**: it needs no Cloudflare account, no API token, and makes
+no outbound request. That is not luck — `vitest.config.ts` sets `remoteBindings: false`,
+because the pool otherwise opens a remote proxy session through wrangler at startup and
+fails on any machine without `CLOUDFLARE_API_TOKEN`. The trade-off is deliberate: the
+routing tests use a fake env, and the HTTP tests stub the flock, so no test wants a real
+provider. A suite that needs production credentials to assert that a fallback works is a
+suite that will eventually be disabled.
 
 ---
 
