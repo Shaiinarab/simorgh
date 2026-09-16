@@ -1,0 +1,12 @@
+go 1.25
+
+use (
+	./bot
+	./gateway
+	./packages/config
+	./packages/crypto
+	./packages/ledger
+	./packages/providers
+	./packages/providers/groq
+	./tools
+)
