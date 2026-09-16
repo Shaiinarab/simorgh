@@ -76,10 +76,11 @@ app.post("/api/v1/agent/execute", async (c) => {
     timestamp: Date.now(),
   });
 
-  // Run the flock
+  // Run the flock. The Durable Object reads its own bindings — `env` is not
+  // cloneable and must not be sent across the RPC boundary.
   const id = c.env.FLOCK_COORDINATOR.idFromName("global");
   const stub = c.env.FLOCK_COORDINATOR.get(id);
-  const result = await stub.runFlock(body.prompt, vettedTools, c.env);
+  const result = await stub.runFlock(body.prompt, vettedTools);
 
   return c.json({
     success: true,
@@ -115,6 +116,22 @@ interface ExecuteRequest {
   tier?: "Free-Volunteer" | "Pro-Paid" | "Pro-Data-Pact";
 }
 
+// ── Cron — daily stale sweep ──────────────────────────────────────
+// wrangler.toml declares `[triggers] crons = ["15 6 * * *"]`. Without a
+// `scheduled` handler that trigger is inert: it fires, does nothing, and every bird
+// that ever failed keeps reading 'tired' on the dashboard for good.
+const scheduled: ExportedHandlerScheduledHandler<Env> = async (_controller, env) => {
+  const id = env.FLOCK_COORDINATOR.idFromName("global");
+  const stub = env.FLOCK_COORDINATOR.get(id);
+  const changed = await stub.sweepStale(Date.now());
+  console.log(JSON.stringify({ event: "flock_sweep", changed }));
+};
+
 // ── Export ────────────────────────────────────────────────────────
-export default app;
-export { FlockCoordinator, DataTrustVault };
+// The default export is a handler object, not the bare Hono app, so a `scheduled`
+// handler can sit beside `fetch` — a bare app cannot carry one.
+// `app.fetch` is bound to the instance by Hono, so passing the reference is correct.
+export default { fetch: app.fetch, scheduled } satisfies ExportedHandler<Env>;
+// `app` is re-exported so tests can drive routes with Hono's `app.request(path, init,
+// env)` helper, which takes the bindings explicitly and needs no ExecutionContext.
+export { app, FlockCoordinator, DataTrustVault };

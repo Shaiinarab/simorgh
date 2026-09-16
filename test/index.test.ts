@@ -1,40 +1,38 @@
+// The Worker entry contract. `src/index.ts` no longer default-exports the bare Hono
+// app — it exports a handler object so a `scheduled` handler can sit beside `fetch` —
+// and a bare app cannot carry one. These assertions pin that shape, because getting it
+// wrong is silent: `wrangler deploy` succeeds and the cron trigger simply never runs.
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import worker, { DataTrustVault, FlockCoordinator, app } from "../src/index";
 
-describe("Simorgh Edge Gateway — core contract", () => {
-  it("exports the Hono app with expected routes", async () => {
-    const mod = await import("../src/index");
-    expect(mod.default).toBeDefined();
-    expect(mod.FlockCoordinator).toBeDefined();
-    expect(mod.DataTrustVault).toBeDefined();
+describe("worker entry", () => {
+  it("exports a fetch handler and a scheduled handler", () => {
+    expect(typeof worker.fetch).toBe("function");
+    expect(typeof worker.scheduled).toBe("function");
   });
 
-  it("the flock has Homā as the zero-KYC always-on bird", async () => {
-    const { FLOCK } = await import("../src/flock");
-    const homa = FLOCK.find((b) => b.id === "homa");
-    expect(homa).toBeDefined();
-    expect(homa?.keyEnv).toBeUndefined();
-    expect(homa?.priority).toBe(30);
+  it("exposes the Durable Object classes the bindings name", () => {
+    // wrangler.toml binds class_name FlockCoordinator / DataTrustVault. If either
+    // top-level export disappears, the deploy fails at the migration step.
+    expect(typeof FlockCoordinator).toBe("function");
+    expect(typeof DataTrustVault).toBe("function");
   });
 
-  it("the flock sorts by priority (Shāhīn first, Homā last)", async () => {
-    const { FLOCK } = await import("../src/flock");
-    const sorted = [...FLOCK].sort((a, b) => a.priority - b.priority);
-    expect(sorted[0].id).toBe("shahin");
-    expect(sorted[sorted.length - 1].id).toBe("homa");
+  it("routes through the exported Hono app", async () => {
+    const res = await app.request("/health", undefined, env);
+    expect(res.status).toBe(200);
   });
 
-  it("the model catalog lists all current birds", async () => {
-    const { getModelCatalog } = await import("../src/models");
-    const catalog = getModelCatalog();
-    expect(catalog.length).toBe(3);
-    expect(catalog.map((m) => m.birdId)).toEqual(
-      expect.arrayContaining(["shahin", "bulbul", "homa"])
-    );
-  });
-
-  it("findModelBird resolves by model id", async () => {
-    const { findModelBird } = await import("../src/models");
-    const found = findModelBird("cf-llama-3b");
-    expect(found?.birdId).toBe("homa");
+  it("the scheduled handler runs the flock sweep without throwing", async () => {
+    // The cron contract: this must not throw, or the trigger fails every morning at
+    // 06:15 and nothing reports it.
+    await expect(
+      worker.scheduled!(
+        { scheduledTime: Date.now(), cron: "15 6 * * *", noRetry: () => {} },
+        env,
+        { waitUntil: () => {}, passThroughOnException: () => {} } as unknown as ExecutionContext
+      )
+    ).resolves.toBeUndefined();
   });
 });

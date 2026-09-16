@@ -6,10 +6,13 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev --local --port 8787",
-    "deploy": "tsgo --noEmit && wrangler deploy",
+    "deploy": "npm run typecheck && wrangler deploy",
+    "types": "wrangler types",
     "typecheck": "tsgo --noEmit",
     "test": "vitest run",
-    "security:check": "npm audit --omit=dev && tsgo --noEmit && wrangler deploy --dry-run"
+    "test:watch": "vitest",
+    "cf:dry-run": "wrangler deploy --dry-run --outdir dist",
+    "security:check": "npm audit --omit=dev && tsgo --noEmit && wrangler deploy --dry-run --outdir dist"
   },
   "keywords": [
     "ai-agents",
@@ -26,12 +29,15 @@
   "author": "Shahin Arab",
   "license": "MIT",
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^1.0.0",
-    "@typescript/native-preview": "^1.0.0",
-    "vitest": "^2.0.0",
-    "wrangler": "^3.90.0"
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.132.0"
   },
   "dependencies": {
-    "hono": "^4.6.0"
+    "hono": "^4.13.8"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

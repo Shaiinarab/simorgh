@@ -3,14 +3,24 @@ main = "src/index.ts"
 compatibility_date = "2026-08-01"
 
 # ── Bindings ──────────────────────────────────────────────
-# AI binding — always available, no key required (Homā bird)
+# AI binding — always available, no key required (Homā bird, the zero-KYC guarantee)
+#
+# `remote = true` is spelled out rather than assumed. Workers AI has no local
+# simulation: every call reaches Cloudflare's service and is billed, in `wrangler dev`
+# and in the test pool alike. Wrangler warns about this on each run until the binding
+# says so explicitly — and an unnoticed remote call in a test suite is exactly the kind
+# of thing that should be visible in the config, not inferred.
 [ai]
 binding = "AI"
+remote = true
 
-# KV namespace — Context Offload
+# KV namespace — Context Offload.
+# The id below is a placeholder: `wrangler dev` and `wrangler deploy --dry-run` are happy
+# with it, a real deploy is not. Create yours and paste the id:
+#   npx wrangler kv namespace create CONTEXT_STORE
 [[kv_namespaces]]
 binding = "CONTEXT_STORE"
-id = "your-kv-namespace-id-here"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 
 # Durable Objects — Swarm-State + Data Trust
 [[durable_objects.bindings]]
@@ -22,9 +32,11 @@ name = "DATA_TRUST_VAULT"
 class_name = "DataTrustVault"
 
 # ── Durable Object migrations ────────────────────────────
+# Both classes use `this.state.storage.sql`, so they must be created as *SQLite-backed*
+# classes. `new_classes` would provision key-value DOs and every SQL call would throw.
 [[migrations]]
 tag = "v1"
-new_classes = ["FlockCoordinator", "DataTrustVault"]
+new_sqlite_classes = ["FlockCoordinator", "DataTrustVault"]
 
 # ── Secrets (optional — absent = dormant bird, safe by default) ─
 # npx wrangler secret put GROQ_API_KEY
@@ -33,3 +45,11 @@ new_classes = ["FlockCoordinator", "DataTrustVault"]
 # ── Cron trigger — daily stale sweep ──────────────────────
 [triggers]
 crons = ["15 6 * * *"]
+
+# ── Observability ────────────────────────────────────────
+[observability]
+enabled = true
+
+# ── Local development ────────────────────────────────────
+[vars]
+ENVIRONMENT = "development"
