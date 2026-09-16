@@ -27,3 +27,9 @@ Thumbs.db
 
 # BMAD state
 .bmad/cache/
+
+# Mailbox internal state (locks, seen/claimed markers) — regenerated, never shared
+mailbox/.state/
+
+# Local scratch
+*.bak

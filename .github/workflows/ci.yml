@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workers:
+    name: TypeScript · typecheck · tests · bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck (TypeScript 7 / tsgo)
+        run: npm run typecheck
+      - name: Tests (vitest, workerd pool)
+        run: npm test
+      - name: Bundle check (wrangler dry-run)
+        run: npx wrangler deploy --dry-run --outdir dist
+
+  go:
+    name: Go · build · vet · tests
+    runs-on: ubuntu-latest
+    env:
+      # The workspace has no vendor directory, and -mod=vendor would make every
+      # command fail with a misleading "inconsistent vendoring" error.
+      GOFLAGS: -mod=readonly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: go.work.sum
+      - name: Build the whole workspace
+        run: go build all
+      # `./packages/...` is NOT a valid pattern at the workspace root: the root is not
+      # in any module, so Go answers "directory prefix packages does not contain modules
+      # listed in go.work". The module-path pattern is workspace-aware and is the one
+      # that actually runs the tests.
+      - name: Vet
+        run: go vet github.com/shaiinarab/simorgh/...
+      - name: Test (`go test all` would also run the stdlib's and dependencies' tests)
+        run: go test github.com/shaiinarab/simorgh/...
