@@ -6,35 +6,14 @@ import {
   recordObservation,
   sweepStale as sweepHealthRows,
 } from "./health";
+import {
+  RATE_LIMIT_SCHEMA,
+  consumeRateLimit,
+  type RateLimitDecision,
+} from "./rate-limit";
 
-// ── RPC surface ────────────────────────────────────────────────────
-//
-// Everything crossing a Durable Object RPC boundary must be *structured
-// cloneable*. This is load-bearing, not stylistic:
-//
-//   1. `env` cannot be sent as a parameter. Each Durable Object gets its own
-//      `env` from the runtime; the caller's is not cloneable and never was. A
-//      method taking `env: Env` typechecks only until you try to call it, then
-//      silently collapses its return type to `never` (see 2) and throws at runtime.
-//   2. A return type containing `Record<string, unknown>` or `unknown` makes
-//      `Result<R>` evaluate to `never`, because `Serializable<T>` has no branch
-//      matching `unknown`. The call site then reports "Property 'meta' does not
-//      exist on type 'never'".
-//
-// So: concrete interfaces of primitives, arrays, and plain objects — no `unknown`,
-// no index signatures — and the DO reads `this.env` itself.
-
-/** Names of the secrets a bird may need. Kept as a union, not `string`, so
- *  `env[keyEnv]` stays index-checked. */
 export type SecretKey = "GROQ_API_KEY" | "HF_TOKEN";
 
-/**
- * The slice of `Env` the flock actually touches.
- *
- * Narrower than `Env` on purpose: `Env` is structurally assignable to it, so
- * production passes the real bindings, while a test can pass a plain object with a
- * fake `AI`. Routing can therefore be exercised with no network and no runtime.
- */
 export interface FlockEnv {
   AI: Ai;
   GROQ_API_KEY?: string;
@@ -44,7 +23,6 @@ export interface FlockEnv {
 export interface FlockAttempt {
   birdId: string;
   ok: boolean;
-  /** Present when the attempt failed: a provider error, or "dormant". */
   error?: string;
 }
 
@@ -67,7 +45,6 @@ export interface BirdStatus {
   provider: string;
   model: string;
   priority: number;
-  /** True when the bird needs a secret that is not configured on this deployment. */
   dormant: boolean;
   status: "healthy" | "tired" | "dormant";
   consecutiveFailures: number;
@@ -81,7 +58,6 @@ export interface FlockStatus {
   timestamp: number;
 }
 
-// ── Bird adapter interface ─────────────────────────────────────────
 export interface Bird {
   id: string;
   name: string;
@@ -98,9 +74,6 @@ export interface BirdCallResult {
   error?: string;
 }
 
-// ── Birds ──────────────────────────────────────────────────────────
-
-// 🦅 Shāhīn — Groq (priority 10, fastest)
 const shahin: Bird = {
   id: "shahin",
   name: "Shāhīn",
@@ -115,7 +88,7 @@ const shahin: Bird = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${env.GROQ_API_KEY}`,
+          Authorization: "Bearer " + env.GROQ_API_KEY,
         },
         body: JSON.stringify({
           model: this.model,
@@ -123,7 +96,7 @@ const shahin: Bird = {
         }),
       });
       if (resp.status === 429) return { ok: false, error: "rate_limit" };
-      if (!resp.ok) return { ok: false, error: `http_${resp.status}` };
+      if (!resp.ok) return { ok: false, error: "http_" + resp.status };
       const data = (await resp.json()) as { choices: { message: { content: string } }[] };
       return { ok: true, answer: data.choices[0]?.message?.content ?? "" };
     } catch (e) {
@@ -132,7 +105,6 @@ const shahin: Bird = {
   },
 };
 
-// 🐦 Bulbul — HuggingFace Router (priority 20)
 const bulbul: Bird = {
   id: "bulbul",
   name: "Bulbul",
@@ -147,7 +119,7 @@ const bulbul: Bird = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${env.HF_TOKEN}`,
+          Authorization: "Bearer " + env.HF_TOKEN,
         },
         body: JSON.stringify({
           model: this.model,
@@ -155,7 +127,7 @@ const bulbul: Bird = {
         }),
       });
       if (resp.status === 429) return { ok: false, error: "rate_limit" };
-      if (!resp.ok) return { ok: false, error: `http_${resp.status}` };
+      if (!resp.ok) return { ok: false, error: "http_" + resp.status };
       const data = (await resp.json()) as { choices: { message: { content: string } }[] };
       return { ok: true, answer: data.choices[0]?.message?.content ?? "" };
     } catch (e) {
@@ -164,12 +136,6 @@ const bulbul: Bird = {
   },
 };
 
-// 🕊️ Homā — Cloudflare Workers AI (priority 30, ALWAYS ON, zero-KYC guarantee)
-//
-// Declared as a const so its *literal* type survives: `env.AI.run()` picks its typed
-// overload from the literal model id, and the runtime types maintain a versioned
-// `AiModels` list that rejects a widened `string`. One source for both the registry
-// entry and the call.
 const HOMA_MODEL = "@cf/meta/llama-3.2-3b-instruct";
 
 const homa: Bird = {
@@ -180,45 +146,33 @@ const homa: Bird = {
   priority: 30,
   async call(prompt, env) {
     try {
-      // Workers AI returns { response: string } for chat models.
       const resp = await env.AI.run(HOMA_MODEL, {
         messages: [{ role: "user", content: prompt }],
       });
-      return { ok: true, answer: (resp as { response?: string }).response ?? "" };
+      const answer =
+        typeof resp === "object" &&
+        resp !== null &&
+        "response" in resp &&
+        typeof (resp as { response?: unknown }).response === "string"
+          ? (resp as { response: string }).response
+          : String(resp);
+      return { ok: true, answer };
     } catch (e) {
       return { ok: false, error: String(e) };
     }
   },
 };
 
-// ── Flock ──────────────────────────────────────────────────────────
-export const FLOCK: Bird[] = [shahin, bulbul, homa];
+export const FLOCK: readonly Bird[] = [shahin, bulbul, homa];
 
-// ── Routing core ───────────────────────────────────────────────────
-//
-// Pulled out of the Durable Object so the routing policy can be tested directly.
-// The DO is a thin shell over storage; the decisions — priority order, skipping
-// dormant birds, honouring cooldowns, falling through on failure — live here, and
-// they are the part worth testing exhaustively. Keeping them inside the DO would
-// mean every routing test had to spin up a Durable Object and, because Homā calls
-// Workers AI, reach the real internet.
 export interface FlyFlockDeps {
-  birds: Bird[];
+  birds: readonly Bird[];
   env: FlockEnv;
-  /** Epoch ms until which this bird should be skipped; 0 = available. */
-  cooldownUntil(birdId: string): number;
-  /** Called once per attempted bird. `error` is undefined on success. */
-  record(birdId: string, ok: boolean, error?: string): void;
+  cooldownUntil: (birdId: string) => number;
+  record: (birdId: string, ok: boolean, error?: string) => void;
   now?: number;
 }
 
-/**
- * Try each bird in priority order until one answers.
- *
- * A bird whose secret is absent is skipped without charge: a missing key is a
- * deployment fact, not a provider fault, and penalising it would cool down a bird
- * that was never dialled.
- */
 export async function flyFlock(
   prompt: string,
   deps: FlyFlockDeps
@@ -249,7 +203,7 @@ export async function flyFlock(
     if (result.ok && result.answer) {
       return {
         meta: {
-          answered_by: `${bird.name} (${bird.provider})`,
+          answered_by: bird.name + " (" + bird.provider + ")",
           bird_id: bird.id,
           ai_model: bird.model,
           flock_attempts: attempts,
@@ -269,20 +223,12 @@ export async function flyFlock(
   };
 }
 
-// ── FlockCoordinator Durable Object ────────────────────────────────
-//
-// `DurableObject<Env>` matters: without the type argument `this.env` is the runtime
-// default (`Cloudflare.Env`, an empty interface) and every `env.GROQ_API_KEY` read
-// is a type error. With it, the DO sees the same bindings the Worker does.
 export class FlockCoordinator extends DurableObject<Env> {
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
-    // Schema creation must block: `waitUntil` schedules work *after* the current
-    // event and does not gate incoming requests, so a request arriving first would
-    // hit "no such table: bird_health". blockConcurrencyWhile is the documented
-    // way to finish initialization before any request is delivered.
     this.ctx.blockConcurrencyWhile(async () => {
       await this.ctx.storage.sql.exec(HEALTH_SCHEMA);
+      await this.ctx.storage.sql.exec(RATE_LIMIT_SCHEMA);
     });
   }
 
@@ -290,9 +236,6 @@ export class FlockCoordinator extends DurableObject<Env> {
     const rows = readAllHealth(this.ctx.storage.sql);
     const birds = FLOCK.map((bird): BirdStatus => {
       const row = rows.find((r) => r.bird_id === bird.id);
-      // Dormant = this deployment has no secret for the bird. Derived from the live
-      // env rather than from "the bird declares a keyEnv", so the dashboard tells the
-      // truth about whether the key is actually configured.
       const dormant = bird.keyEnv ? !this.env[bird.keyEnv] : false;
       const state = (row?.status as BirdStatus["status"] | undefined) ?? "healthy";
       return {
@@ -312,28 +255,41 @@ export class FlockCoordinator extends DurableObject<Env> {
     return { birds, timestamp: Date.now() };
   }
 
-  /**
-   * Fly the flock: try each bird in priority order until one answers.
-   *
-   * No `env` parameter — this DO reads its own bindings. See the RPC note at the
-   * top of this file for why passing one in is not merely wrong, it is impossible.
-   */
+  async checkRateLimit(
+    key: string,
+    limit: number,
+    windowMs: number,
+    now?: number
+  ): Promise<RateLimitDecision> {
+    const safeLimit = Math.min(1_000, Math.max(1, Math.floor(limit)));
+    const safeWindowMs = Math.min(
+      86_400_000,
+      Math.max(1_000, Math.floor(windowMs))
+    );
+    return consumeRateLimit(
+      this.ctx.storage.sql,
+      key.slice(0, 256),
+      safeLimit,
+      safeWindowMs,
+      now
+    );
+  }
+
   async runFlock(prompt: string, _tools: string[]): Promise<FlockRunResult> {
     return flyFlock(prompt, {
       birds: FLOCK,
       env: this.env,
       cooldownUntil: (birdId) => readCooldown(this.ctx.storage.sql, birdId),
       record: (birdId, ok, error) =>
-        recordObservation(this.ctx.storage.sql, birdId, ok, error === "rate_limit"),
+        recordObservation(
+          this.ctx.storage.sql,
+          birdId,
+          ok,
+          error === "rate_limit"
+        ),
     });
   }
 
-  /**
-   * Daily stale sweep — the handler for the `[triggers] crons` entry in
-   * wrangler.toml. Clears expired cooldowns and retires birds that have failed
-   * repeatedly, so `status` does not stay 'tired' forever after a transient blip.
-   * Returns how many rows changed.
-   */
   async sweepStale(now: number): Promise<number> {
     return sweepHealthRows(this.ctx.storage.sql, now);
   }

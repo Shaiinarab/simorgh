@@ -1,155 +1,274 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { FlockCoordinator } from "./flock";
 import { DataTrustVault } from "./data-trust";
 import { renderDashboard } from "./dashboard";
-import { AGENT_TOOLS, runAgentLoop, type AgentTool } from "./agent";
+import { AGENT_TOOLS } from "./agent";
+import { executeAgent } from "./agent-service";
+import {
+  authenticateServiceRequest,
+  isAllowedOrigin,
+  parseExecuteBody,
+  RequestValidationError,
+} from "./security";
+import { handleTelegramWebhook } from "./telegram";
 
-// ── App ──────────────────────────────────────────────────────────
 const app = new Hono<{ Bindings: Env }>();
 
-// ── Intent Shield — tool allow-list ──────────────────────────────
-// One source of truth with the agent core: the registry in agent.ts is the
-// allow-list, so a tool cannot be executable-but-unvetted or vetted-but-unrunnable.
-const TOOL_ALLOW_LIST: readonly AgentTool[] = AGENT_TOOLS;
-type AllowedTool = AgentTool;
+app.use("*", async (c, next) => {
+  const requestId = crypto.randomUUID();
+  c.header("X-Request-Id", requestId);
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("Referrer-Policy", "no-referrer");
+  c.header("X-Frame-Options", "DENY");
+  c.header(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()"
+  );
 
-function vetTool(toolName: string): toolName is AllowedTool {
-  return (TOOL_ALLOW_LIST as readonly string[]).includes(toolName);
-}
+  await next();
+});
 
-// ── Tools ────────────────────────────────────────────────────────
-async function executeTool(
-  tool: AllowedTool,
-  args: Record<string, unknown>,
-  env: Env
-): Promise<string> {
-  switch (tool) {
-    case "get_server_time":
-      return new Date().toISOString();
-    case "search_web": {
-      const query = String(args.query ?? "");
-      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`;
-      const resp = await fetch(url);
-      const data = (await resp.json()) as { AbstractText?: string };
-      return data.AbstractText || `No instant answer found for "${query}".`;
+app.use("/api/*", async (c, next) => {
+  const origin = c.req.header("Origin");
+
+  if (origin) {
+    if (!isAllowedOrigin(origin, c.env)) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "ORIGIN_NOT_ALLOWED",
+            message: "Origin is not allow-listed.",
+            requestId: c.res.headers.get("X-Request-Id"),
+          },
+        },
+        403
+      );
     }
+
+    c.header("Access-Control-Allow-Origin", origin);
+    c.header("Vary", "Origin");
+    c.header(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type, X-Simorgh-User-Id"
+    );
+    c.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    c.header("Access-Control-Expose-Headers", "X-Request-Id, Retry-After");
+    c.header("Access-Control-Max-Age", "86400");
   }
+
+  if (c.req.method === "OPTIONS") return c.body(null, 204);
+  await next();
+});
+
+async function requireServiceAuth(
+  c: Context<{ Bindings: Env }>
+): Promise<Response | undefined> {
+  const auth = await authenticateServiceRequest(c.req.raw, c.env);
+  if (auth.ok) return undefined;
+
+  const response = c.json(
+    {
+      success: false,
+      error: {
+        code: auth.code,
+        message:
+          auth.code === "AUTH_NOT_CONFIGURED"
+            ? "Simorgh API authentication is not configured."
+            : "A valid Bearer token is required.",
+        requestId: c.res.headers.get("X-Request-Id"),
+      },
+    },
+    auth.status
+  );
+  if (auth.status === 401) response.headers.set("WWW-Authenticate", "Bearer");
+  return response;
 }
 
-// ── Routes ───────────────────────────────────────────────────────
+app.onError((error, c) => {
+  const requestId = c.res.headers.get("X-Request-Id") ?? "unknown";
+  console.error(
+    JSON.stringify({
+      event: "request_error",
+      requestId,
+      error: String(error),
+      path: c.req.path,
+      method: c.req.method,
+    })
+  );
+
+  if (error instanceof RequestValidationError) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: error.code,
+          message: error.message,
+          requestId,
+        },
+      },
+      error.status
+    );
+  }
+
+  return c.json(
+    {
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "The request could not be completed.",
+        requestId,
+      },
+    },
+    500
+  );
+});
 
 app.get("/", (c) => c.text("Simorgh Edge Gateway — the flock is awake."));
 
-app.get("/health", (c) =>
-  c.json({ status: "ok", timestamp: new Date().toISOString() })
-);
+app.get("/health", (c) => {
+  c.header("Cache-Control", "no-store");
+  return c.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
-app.get("/dashboard", (c) =>
-  c.html(renderDashboard(c.env))
-);
+app.get("/dashboard", (c) => c.html(renderDashboard(c.env)));
 
 app.get("/api/v1/flock/status", async (c) => {
   const id = c.env.FLOCK_COORDINATOR.idFromName("global");
   const stub = c.env.FLOCK_COORDINATOR.get(id);
-  const status = await stub.getFlockStatus();
-  return c.json(status);
+  return c.json(await stub.getFlockStatus());
 });
 
 app.post("/api/v1/agent/execute", async (c) => {
-  const body = (await c.req.json()) as ExecuteRequest;
+  const denied = await requireServiceAuth(c);
+  if (denied) return denied;
 
-  // Vet tools against allow-list
-  const vettedTools = (body.tools ?? []).filter(vetTool);
-
-  // Run the agent loop: execute each vetted tool, fold the observations into a
-  // synthesis prompt (prose, not JSON), and let the answering bird produce a
-  // coherent natural-language answer from real results. Orchestration lives in
-  // the Worker on purpose — the loop needs no DO state, and keeping it here
-  // means the Durable Object receives a ready-to-answer prompt over RPC.
-  const agent = await runAgentLoop(body.prompt, vettedTools, (invocation) =>
-    executeTool(invocation.tool, invocation.args, c.env)
+  const raw = await c.req.text();
+  const request = parseExecuteBody(
+    raw,
+    AGENT_TOOLS,
+    c.req.header("X-Simorgh-User-Id")
   );
 
-  // Offload context to KV (the caller's original prompt, not the synthesis block —
-  // the ref is a replayable record of the request, not of the derived context)
-  const refId = crypto.randomUUID();
-  await c.env.CONTEXT_STORE.put(
-    `ctx_${refId}`,
-    JSON.stringify({ prompt: body.prompt, tools: vettedTools }),
-    { expirationTtl: 3600 }
-  );
-
-  // Log to Data Trust
-  const vaultId = c.env.DATA_TRUST_VAULT.idFromName("global");
-  const vault = c.env.DATA_TRUST_VAULT.get(vaultId);
-  await vault.logEntry({
-    userId: body.userId ?? "anonymous",
-    tier: body.tier ?? "Free-Volunteer",
-    refId,
-    timestamp: Date.now(),
-  });
-
-  // Run the flock. The Durable Object reads its own bindings — `env` is not
-  // cloneable and must not be sent across the RPC boundary. It receives the
-  // synthesis prompt: original request plus folded tool results.
   const id = c.env.FLOCK_COORDINATOR.idFromName("global");
-  const stub = c.env.FLOCK_COORDINATOR.get(id);
-  const result = await stub.runFlock(agent.effectivePrompt, vettedTools);
+  const limiter = c.env.FLOCK_COORDINATOR.get(id);
+  const decision = await limiter.checkRateLimit(
+    "execute:" + request.userId,
+    20,
+    60_000
+  );
 
-  return c.json({
-    success: true,
-    meta: {
-      ...result.meta,
-      contextRefId: refId,
-      loggedToLedger: true,
-      // Real loop telemetry, replacing the hardcoded zero: what was requested,
-      // how many iterations ran, and what each tool actually returned.
-      tool_iterations: agent.meta.tool_iterations,
-      tools_requested: agent.meta.tools_requested,
-      tool_observations: agent.meta.tool_observations,
-    },
-    agentResponse: result.answer,
-  });
+  c.header("X-RateLimit-Limit", String(decision.limit));
+  c.header("X-RateLimit-Remaining", String(decision.remaining));
+  c.header("X-RateLimit-Reset", String(Math.ceil(decision.resetAt / 1000)));
+
+  if (!decision.allowed) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((decision.resetAt - Date.now()) / 1000)
+    );
+    c.header("Retry-After", String(retryAfter));
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "RATE_LIMITED",
+          message: "Execution rate limit reached.",
+          requestId: c.res.headers.get("X-Request-Id"),
+        },
+      },
+      429
+    );
+  }
+
+  return c.json(
+    await executeAgent(c.env, {
+      prompt: request.prompt,
+      tools: request.tools,
+      userId: request.userId,
+      tier: request.tier,
+      blockedTools: request.blockedTools,
+      requestId: c.res.headers.get("X-Request-Id") ?? undefined,
+    })
+  );
 });
 
 app.get("/api/v1/context/:refId", async (c) => {
+  const denied = await requireServiceAuth(c);
+  if (denied) return denied;
+
   const refId = c.req.param("refId");
-  const data = await c.env.CONTEXT_STORE.get(`ctx_${refId}`);
+  if (!/^[0-9a-f-]{36}$/i.test(refId)) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "INVALID_CONTEXT_REF",
+          message: "Invalid context reference.",
+          requestId: c.res.headers.get("X-Request-Id"),
+        },
+      },
+      400
+    );
+  }
+
+  const data = await c.env.CONTEXT_STORE.get("ctx_" + refId);
   if (!data) return c.json({ error: "not_found" }, 404);
   return c.json(JSON.parse(data));
 });
 
 app.get("/api/v1/user/:userId/logs", async (c) => {
+  const denied = await requireServiceAuth(c);
+  if (denied) return denied;
+
+  const userId = c.req.param("userId");
+  if (!/^[A-Za-z0-9:_-]{1,128}$/.test(userId)) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "INVALID_USER_ID",
+          message: "Invalid user ID.",
+          requestId: c.res.headers.get("X-Request-Id"),
+        },
+      },
+      400
+    );
+  }
+
   const vaultId = c.env.DATA_TRUST_VAULT.idFromName("global");
   const vault = c.env.DATA_TRUST_VAULT.get(vaultId);
-  const logs = await vault.getUserLogs(c.req.param("userId"));
-  return c.json(logs);
+  return c.json(await vault.getUserLogs(userId));
 });
 
-// ── Types ─────────────────────────────────────────────────────────
-interface ExecuteRequest {
-  prompt: string;
-  tools?: string[];
-  userId?: string;
-  tier?: "Free-Volunteer" | "Pro-Paid" | "Pro-Data-Pact";
-}
+app.post("/api/v1/telegram/webhook", (c) =>
+  handleTelegramWebhook(c.req.raw, c.env)
+);
 
-// ── Cron — daily stale sweep ──────────────────────────────────────
-// wrangler.toml declares `[triggers] crons = ["15 6 * * *"]`. Without a
-// `scheduled` handler that trigger is inert: it fires, does nothing, and every bird
-// that ever failed keeps reading 'tired' on the dashboard for good.
-const scheduled: ExportedHandlerScheduledHandler<Env> = async (_controller, env) => {
+app.notFound((c) =>
+  c.json(
+    {
+      success: false,
+      error: {
+        code: "NOT_FOUND",
+        message: "Route not found.",
+        requestId: c.res.headers.get("X-Request-Id"),
+      },
+    },
+    404
+  )
+);
+
+const scheduled: ExportedHandlerScheduledHandler<Env> = async (
+  _controller,
+  env
+) => {
   const id = env.FLOCK_COORDINATOR.idFromName("global");
   const stub = env.FLOCK_COORDINATOR.get(id);
   const changed = await stub.sweepStale(Date.now());
   console.log(JSON.stringify({ event: "flock_sweep", changed }));
 };
 
-// ── Export ────────────────────────────────────────────────────────
-// The default export is a handler object, not the bare Hono app, so a `scheduled`
-// handler can sit beside `fetch` — a bare app cannot carry one.
-// `app.fetch` is bound to the instance by Hono, so passing the reference is correct.
 export default { fetch: app.fetch, scheduled } satisfies ExportedHandler<Env>;
-// `app` is re-exported so tests can drive routes with Hono's `app.request(path, init,
-// env)` helper, which takes the bindings explicitly and needs no ExecutionContext.
 export { app, FlockCoordinator, DataTrustVault };
