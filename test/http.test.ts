@@ -9,7 +9,7 @@
 // that the router hands the Durable Object the *allow-listed* tools, never the raw list
 // a caller sent.
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../src/index";
 
 interface FlockCall {
@@ -108,7 +108,23 @@ describe("GET /api/v1/flock/status", () => {
 });
 
 describe("POST /api/v1/agent/execute", () => {
-  it("filters tools to the allow-list before they reach the agent", async () => {
+  // The agent loop runs real tools (search_web fetches DDG, get_server_time reads the
+  // clock), so these tests stub `fetch` — the same hermeticity discipline as
+  // flock-routing.test.ts. Without the stub, every /execute case would make an
+  // outbound request, and a suite that needs the internet will eventually be disabled.
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("filters tools to the allow-list, runs them, and hands the DO a synthesis prompt", async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ AbstractText: "Simorgh is thirty birds." }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })) as typeof fetch;
+
     calls.length = 0;
     const res = await post({
       prompt: "hello flock",
@@ -118,24 +134,71 @@ describe("POST /api/v1/agent/execute", () => {
     });
 
     expect(res.status).toBe(200);
-    // The security property: unknown tools are dropped, order preserved.
-    expect(calls).toEqual([{ prompt: "hello flock", tools: ["search_web", "get_server_time"] }]);
+    // The security property: unknown tools are dropped, order preserved — and the
+    // DO receives the *synthesis prompt* (original request + folded tool results),
+    // not the raw prompt, because the bird answers from real tool output.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].tools).toEqual(["search_web", "get_server_time"]);
+    expect(calls[0].prompt).toContain("Request: hello flock");
+    expect(calls[0].prompt).toContain("[search_web] Simorgh is thirty birds.");
+    expect(calls[0].prompt).toContain("- [get_server_time] ");
+    expect(calls[0].prompt).not.toContain("rm_rf_root");
 
     const body = (await res.json()) as {
       success: boolean;
       agentResponse: string;
-      meta: { answered_by: string; contextRefId: string; loggedToLedger: boolean };
+      meta: {
+        answered_by: string;
+        contextRefId: string;
+        loggedToLedger: boolean;
+        tool_iterations: number;
+        tools_requested: string[];
+        tool_observations: { tool: string; iteration: number; ok: boolean }[];
+      };
     };
     expect(body.success).toBe(true);
     expect(body.agentResponse).toBe("stub-answer");
     expect(body.meta.loggedToLedger).toBe(true);
     expect(body.meta.contextRefId).toMatch(/^[0-9a-f-]{36}$/);
+    // Real loop telemetry, not the old hardcoded zero.
+    expect(body.meta.tool_iterations).toBe(2);
+    expect(body.meta.tools_requested).toEqual(["search_web", "get_server_time"]);
+    // Observations carry their results: the transparency story means the caller
+    // sees exactly what each tool returned, not just that it ran.
+    expect(body.meta.tool_observations).toEqual([
+      { tool: "search_web", iteration: 0, ok: true, result: "Simorgh is thirty birds." },
+      { tool: "get_server_time", iteration: 1, ok: true, result: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
+    ]);
   });
 
-  it("passes an empty tool list when the caller asks only for disallowed tools", async () => {
+  it("reports a failing tool as a failed observation and still answers", async () => {
+    globalThis.fetch = (async () => {
+      throw new TypeError("network unreachable");
+    }) as typeof fetch;
+
+    calls.length = 0;
+    const res = await post({ prompt: "will this break?", tools: ["search_web"] });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as {
+      success: boolean;
+      meta: { tool_observations: { tool: string; iteration: number; ok: boolean; result: string }[] };
+    };
+    expect(body.success).toBe(true);
+    expect(body.meta.tool_observations).toEqual([
+      { tool: "search_web", iteration: 0, ok: false, result: expect.stringContaining("network unreachable") },
+    ]);
+    // The DO was still asked to answer — with the failure folded in as prose.
+    expect(calls[0].prompt).toContain("[search_web] failed:");
+  });
+
+  it("passes an empty tool list and skips the loop entirely", async () => {
     calls.length = 0;
     await post({ prompt: "nothing allowed", tools: ["rm_rf_root"] });
     expect(calls[0].tools).toEqual([]);
+    // No tools ⇒ no iterations, and the prompt is passed through untouched —
+    // a tool-free request must not be wrapped in synthesis scaffolding.
+    expect(calls[0].prompt).toBe("nothing allowed");
   });
 
   it("offloads the context to KV and serves it back by reference", async () => {

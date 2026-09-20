@@ -2,13 +2,16 @@ import { Hono } from "hono";
 import { FlockCoordinator } from "./flock";
 import { DataTrustVault } from "./data-trust";
 import { renderDashboard } from "./dashboard";
+import { AGENT_TOOLS, runAgentLoop, type AgentTool } from "./agent";
 
 // ── App ──────────────────────────────────────────────────────────
 const app = new Hono<{ Bindings: Env }>();
 
 // ── Intent Shield — tool allow-list ──────────────────────────────
-const TOOL_ALLOW_LIST = ["search_web", "get_server_time"] as const;
-type AllowedTool = (typeof TOOL_ALLOW_LIST)[number];
+// One source of truth with the agent core: the registry in agent.ts is the
+// allow-list, so a tool cannot be executable-but-unvetted or vetted-but-unrunnable.
+const TOOL_ALLOW_LIST: readonly AgentTool[] = AGENT_TOOLS;
+type AllowedTool = AgentTool;
 
 function vetTool(toolName: string): toolName is AllowedTool {
   return (TOOL_ALLOW_LIST as readonly string[]).includes(toolName);
@@ -58,7 +61,17 @@ app.post("/api/v1/agent/execute", async (c) => {
   // Vet tools against allow-list
   const vettedTools = (body.tools ?? []).filter(vetTool);
 
-  // Offload context to KV
+  // Run the agent loop: execute each vetted tool, fold the observations into a
+  // synthesis prompt (prose, not JSON), and let the answering bird produce a
+  // coherent natural-language answer from real results. Orchestration lives in
+  // the Worker on purpose — the loop needs no DO state, and keeping it here
+  // means the Durable Object receives a ready-to-answer prompt over RPC.
+  const agent = await runAgentLoop(body.prompt, vettedTools, (invocation) =>
+    executeTool(invocation.tool, invocation.args, c.env)
+  );
+
+  // Offload context to KV (the caller's original prompt, not the synthesis block —
+  // the ref is a replayable record of the request, not of the derived context)
   const refId = crypto.randomUUID();
   await c.env.CONTEXT_STORE.put(
     `ctx_${refId}`,
@@ -77,10 +90,11 @@ app.post("/api/v1/agent/execute", async (c) => {
   });
 
   // Run the flock. The Durable Object reads its own bindings — `env` is not
-  // cloneable and must not be sent across the RPC boundary.
+  // cloneable and must not be sent across the RPC boundary. It receives the
+  // synthesis prompt: original request plus folded tool results.
   const id = c.env.FLOCK_COORDINATOR.idFromName("global");
   const stub = c.env.FLOCK_COORDINATOR.get(id);
-  const result = await stub.runFlock(body.prompt, vettedTools);
+  const result = await stub.runFlock(agent.effectivePrompt, vettedTools);
 
   return c.json({
     success: true,
@@ -88,7 +102,11 @@ app.post("/api/v1/agent/execute", async (c) => {
       ...result.meta,
       contextRefId: refId,
       loggedToLedger: true,
-      tool_iterations: 0,
+      // Real loop telemetry, replacing the hardcoded zero: what was requested,
+      // how many iterations ran, and what each tool actually returned.
+      tool_iterations: agent.meta.tool_iterations,
+      tools_requested: agent.meta.tools_requested,
+      tool_observations: agent.meta.tool_observations,
     },
     agentResponse: result.answer,
   });

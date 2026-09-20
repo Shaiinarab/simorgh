@@ -9,7 +9,7 @@
 | 1 | MVP — Edge Agent Core | 5 | ✅ shipped |
 | 2 | The Flock — Multi-Provider Federation | 5 | ✅ shipped |
 | 3 | Mission Control — Dashboard | 3 | ✅ shipped |
-| 4 | The Real Agent — Useful Tools | 5 | 🛠️ in progress |
+| 4 | The Real Agent — Useful Tools | 5 | ✅ shipped |
 | 5 | Swarm-State Hardening | 5 | ⬜ |
 | 6 | Intent Shield — Policy-as-Code | 5 | ⬜ |
 | 7 | Data Trust / Data Pact | 5 | ⬜ |

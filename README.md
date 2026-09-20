@@ -46,11 +46,12 @@ Then open `…workers.dev/dashboard`, exhaust Groq's quota, and **watch the floc
 npm test        # vitest, running *inside* workerd via @cloudflare/vitest-pool-workers
 ```
 
-47 tests across five files. They are split by what they need, on purpose:
+65 tests across six files. They are split by what they need, on purpose:
 
 | File | Runs against | Covers |
 |------|--------------|--------|
 | `flock-routing.test.ts` | nothing but a fake env | The routing policy — priority order, dormant skip, cooldowns, fall-through, exhaustion — plus the real Groq/HF adapters with `fetch` stubbed. No runtime, no network. |
+| `agent.test.ts` | an injected executor | The agent tool loop — registry, argument extraction, per-tool failure capture, truncation, the synthesis prompt, the iteration budget — and the story 4.5 quality bar at the core. No runtime, no network. |
 | `health-storage.test.ts` | a real `SqlStorage` | The `bird_health` upsert and the cron sweep. |
 | `durable-objects.test.ts` | real Durable Objects | The RPC boundary and SQLite, through the actual stubs. |
 | `http.test.ts` | real KV + a real ledger DO | Route contracts; only the flock is stubbed. |
@@ -121,13 +122,14 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 ```
 simorgh-platform/
 ├── src/                    # TypeScript / Workers
-│   ├── index.ts            # Hono app: routes, Intent Shield, Data Trust, Context Offload, cron
+│   ├── index.ts            # Hono app: routes, Intent Shield, agent loop, Data Trust, Context Offload, cron
+│   ├── agent.ts            # Agent core: tool registry, runAgentLoop(), synthesis prompt (Epic 4)
 │   ├── flock.ts            # Bird adapters + flyFlock() routing core + FlockCoordinator DO
 │   ├── health.ts           # bird_health storage statements (upsert, cooldown, sweep)
 │   ├── models.ts           # Model Registry (Auto-Wrapper): catalog + findModelBird
 │   ├── data-trust.ts       # DataTrustVault DO: transparency ledger
 │   └── dashboard.ts        # Self-contained Mission Control HTML (inline CSS/JS, no build)
-├── test/                   # 5 suites, 47 tests — see Testing above
+├── test/                   # 6 suites, 65 tests — see Testing above
 ├── packages/               # Go workspace modules
 │   ├── config/             #   provider config load/validate
 │   ├── crypto/             #   AES-256-GCM sealing, argon2id key derivation

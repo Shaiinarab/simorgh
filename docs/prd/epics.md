@@ -125,7 +125,7 @@ Interactive prompt → execute → see flock attempts + answer in the dashboard.
 
 Make the agent genuinely *useful*: real web search + clean answer synthesis.
 
-- **PRD status:** in progress
+- **PRD status:** shipped
 
 ### Story 4.1: search_web(query) tool
 
@@ -146,21 +146,21 @@ Returns ISO-8601 server time.
 Agent synthesizes tool results into a coherent natural-language answer; no raw JSON dumps.
 
 - **Acceptance:** coherent NL answer; no raw JSON dumps
-- **PRD status:** in progress
+- **PRD status:** shipped
 
 ### Story 4.4: Multi-tool orchestration
 
 Agent can call multiple tools in sequence to answer complex prompts.
 
 - **Acceptance:** sequential multi-tool calls for complex prompts
-- **PRD status:** in progress
+- **PRD status:** shipped
 
 ### Story 4.5: Answer quality tests
 
 End-to-end tests: "What time is it?" → synthesized answer contains ISO timestamp; "Search for X" → synthesized answer references search results.
 
 - **Acceptance:** e2e tests for time + search prompts pass
-- **PRD status:** backlog
+- **PRD status:** shipped
 
 ---
 

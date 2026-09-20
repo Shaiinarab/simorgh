@@ -194,15 +194,15 @@ Based on 2026 research, these additional free-tier providers could join the floc
 
 **Objective:** Make the agent genuinely *useful*: real web search + clean answer synthesis.
 
-**Status:** 🛠️ In Progress
+**Status:** ✅ Shipped
 
 | Story | Description | Acceptance Criteria | Status |
 |-------|-------------|---------------------|--------|
 | 4.1 | `search_web(query)` tool | Real, no-KYC web search (DDG Instant Answer as zero-key default + optional Brave Search API key as a bird-style source); returns structured results. ⚠️ *DDG Instant Answer is deprecated — empty responses are common; Brave key path is the resilient fallback (see §10)* | ✅ |
 | 4.2 | `get_server_time()` tool | Returns ISO-8601 server time | ✅ |
-| 4.3 | Clean answer synthesis | Agent synthesizes tool results into a coherent natural-language answer; no raw JSON dumps | 🛠️ |
-| 4.4 | Multi-tool orchestration | Agent can call multiple tools in sequence to answer complex prompts | 🛠️ |
-| 4.5 | Answer quality tests | End-to-end tests: "What time is it?" → synthesized answer contains ISO timestamp; "Search for X" → synthesized answer references search results | ⬜ |
+| 4.3 | Clean answer synthesis | Agent synthesizes tool results into a coherent natural-language answer; no raw JSON dumps | ✅ |
+| 4.4 | Multi-tool orchestration | Agent can call multiple tools in sequence to answer complex prompts | ✅ |
+| 4.5 | Answer quality tests | End-to-end tests: "What time is it?" → synthesized answer contains ISO timestamp; "Search for X" → synthesized answer references search results | ✅ |
 
 ---
 
