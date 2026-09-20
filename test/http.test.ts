@@ -53,6 +53,7 @@ function testEnv(): Env {
     DATA_TRUST_VAULT: env.DATA_TRUST_VAULT,
     FLOCK_COORDINATOR: fakeFlockNamespace(),
     ENVIRONMENT: env.ENVIRONMENT,
+    SIMORGH_API_KEY: "test-secret",
   } as unknown as Env;
 }
 
@@ -61,7 +62,7 @@ const post = (body: unknown) =>
     "/api/v1/agent/execute",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer test-secret" },
       body: JSON.stringify(body),
     },
     testEnv()
@@ -69,7 +70,7 @@ const post = (body: unknown) =>
 
 describe("static routes", () => {
   it("GET / identifies the gateway", async () => {
-    const res = await app.request("/", undefined, testEnv());
+    const res = await app.request("/", { headers: { Authorization: "Bearer test-secret" } }, testEnv());
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("Simorgh");
   });
