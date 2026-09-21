@@ -1,8 +1,10 @@
 # Mailbox — simorgh-platform
 
-Lead ↔ worker coordination, **identical protocol** to `projects/shiraz-league/mailbox/README.md` —
-read that file for the full contract (worker protocol, NAG channel, file map, Lead duties, report
-template). Only the project-specific parts are recorded here.
+Lead ↔ worker coordination, derived from the original engagement mailbox protocol (that project was
+de-branded and published 2026-09-21 as `projects/pabetoop-league/`, whose engagement-only
+`mailbox/` was stripped — the archived source is `Shaiinarab/Ararat-platform`). The full contract
+(worker protocol, NAG channel, file map, Lead duties, report template) is reproduced in
+`mailbox/PROTOCOL.md` inside this directory; the summary below covers the project-specific parts.
 
 Ported 2026-09-16 by taking the TASK-039/TASK-042 `fbmail` (portable root resolution, guarded
 `check` exit codes, guarded `done`). The binary is the same file; it resolves **this** project from
