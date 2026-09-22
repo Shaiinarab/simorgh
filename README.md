@@ -39,23 +39,48 @@ npx wrangler secret put HF_TOKEN
 Then open `…workers.dev/dashboard`, exhaust Groq's quota, and **watch the flock reroute to Homā** in real time.
 
 ---
+---
+
+## Modules
+
+The repo holds two packages, linked by a one-way dependency: the platform imports `@simorgh/phoenix-core`; the core imports nothing from the platform. Full architecture, port contracts, and invariant rules: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+| Package | Path | What it does |
+|---------|------|--------------|
+| `@simorgh/phoenix-core` | `phoenix-core/` | Runtime-agnostic engine: provider routing, agent tool loop, request validation, rate limiting, ledger. No runtime bindings — every capability arrives as an injected port. |
+| `simorgh-platform` | `simorgh-platform/` | Control plane: deployment targets, REST/MCP connectors, the connector conformance kit, deploy plans + preflight gate, fleet management, and the self-hosted Node runtime. |
+| the Cloudflare app | `src/` (root) | The Workers host: the Hono routes, the Durable Object shells, and the host adapters that bind `phoenix-core` to Cloudflare's bindings. |
+
+---
 
 ## Testing
 
+Two suites, split by what each can actually prove. `npm test` runs both, workers first.
+
 ```bash
-npm test        # vitest, running *inside* workerd via @cloudflare/vitest-pool-workers
+npm test                                                # both suites
+npm run test:workers                                    # workerd: the Cloudflare app
+npm run test:node                                       # plain Node: engine + platform
+npx vitest run --config vitest.node.config.ts <file>    # one file, scoped
 ```
 
-65 tests across six files. They are split by what they need, on purpose:
+Plus three commands that check the *assembled* thing rather than a unit:
 
-| File | Runs against | Covers |
-|------|--------------|--------|
-| `flock-routing.test.ts` | nothing but a fake env | The routing policy — priority order, dormant skip, cooldowns, fall-through, exhaustion — plus the real Groq/HF adapters with `fetch` stubbed. No runtime, no network. |
-| `agent.test.ts` | an injected executor | The agent tool loop — registry, argument extraction, per-tool failure capture, truncation, the synthesis prompt, the iteration budget — and the story 4.5 quality bar at the core. No runtime, no network. |
-| `health-storage.test.ts` | a real `SqlStorage` | The `bird_health` upsert and the cron sweep. |
-| `durable-objects.test.ts` | real Durable Objects | The RPC boundary and SQLite, through the actual stubs. |
-| `http.test.ts` | real KV + a real ledger DO | Route contracts; only the flock is stubbed. |
-| `index.test.ts` | the worker entry | `fetch` and `scheduled` handler shape. |
+```bash
+npm run e2e:ask          # the CLI reaches a live core over REST *and* MCP, and compares the answers
+npm run platform:smoke   # boots a real core on an ephemeral port, probes it, exits 0/1
+npm run simorgh -- doctor # diagnoses a fleet that will not answer
+```
+
+| Suite | Config | Files | Runs against |
+|-------|--------|-------|--------------|
+| workers | `vitest.config.ts` | `test/**` | The Cloudflare app *inside workerd*: Durable Object RPC, real KV, the cron shape, HTTP route contracts, and the full request path through Hono. Real bindings from `wrangler.toml`; only the flock is stubbed. |
+| node | `vitest.node.config.ts` | `phoenix-core/test/**` + `simorgh-platform/test/**` | The **engine** in isolation — routing, the agent tool loop, the tool executor, the ledger, validation, rate limiting, the portability invariants — and the **platform** — targets, connectors plus their conformance kit, deploy plans, preflight, the fleet, `doctor`. Real SQLite in memory; no runtime, no network. |
+
+`phoenix-core/test/boundary.test.ts` is the reason the split matters: it fails the build if the
+engine reaches for `cloudflare:workers`, any `node:` module outside its one declared adapter, or a
+bare runtime global. If the engine ever picks up a binding, the Node suite stops resolving and goes
+red while the workers suite keeps passing. That signal is the point.
 
 Two deliberate choices worth knowing about:
 
@@ -67,13 +92,46 @@ Two deliberate choices worth knowing about:
   disallowed tools and checks that the Durable Object received only the allow-listed
   ones — the security property, verified at the boundary rather than at the source.
 
-The suite is **fully hermetic**: it needs no Cloudflare account, no API token, and makes
+The workers suite is **fully hermetic**: it needs no Cloudflare account, no API token, and makes
 no outbound request. That is not luck — `vitest.config.ts` sets `remoteBindings: false`,
 because the pool otherwise opens a remote proxy session through wrangler at startup and
 fails on any machine without `CLOUDFLARE_API_TOKEN`. The trade-off is deliberate: the
 routing tests use a fake env, and the HTTP tests stub the flock, so no test wants a real
 provider. A suite that needs production credentials to assert that a fallback works is a
 suite that will eventually be disabled.
+
+---
+
+## The platform CLI
+
+`simorgh-platform` is a control plane you drive from a terminal. It runs **unbuilt** — Node ≥22 strips
+the types — so there is no build step between you and a running core.
+
+```bash
+npm run simorgh -- targets                              # where a core can live
+npm run simorgh -- plan node --origin 127.0.0.1:8788     # what deploying there involves
+npm run simorgh -- deploy node --mode cli --yes          # deploy (preflight-gated)
+npm run simorgh -- serve                                # run a phoenix-core on this box
+npm run simorgh -- connect node http://127.0.0.1:8788 --api-key <token>
+npm run simorgh -- ask "who is simorgh" --prefer rest     # ask the fleet, with failover
+npm run simorgh -- status                                # what is up, and what it can answer with
+npm run simorgh -- doctor                                # why one of them is not answering
+```
+
+Four things it is opinionated about:
+
+- **`deploy` is preflight-gated.** Required secrets, tools missing from `PATH`, unresolved `{origin}`
+  placeholders, and a runtime older than the workspace's `engines.node` are all checked *before* the
+  consent prompt. A doomed plan never starts, so it cannot leave a half-applied deploy behind — which
+  is the most expensive state a deployer can produce. `--skip-preflight` overrides, explicitly.
+- **`deploy --mode cli` requires `--yes`.** No env var, no config file, no "we are in CI so obviously
+  yes". Without it the CLI prints exactly what it would have run and exits 2. `--dry-run` executes
+  through a recording runner instead, so you can see the calls without running them.
+- **`ask` fails over and says what it skipped.** Every failure is reported, not just the last one — with
+  three cores down for three different reasons, "connection refused" alone sends you to the wrong one.
+- **`doctor` never throws on an unhealthy fleet.** An unreachable core is a finding with a stable code
+  (`unreachable`, `auth-not-configured`, `no-providers`, `all-tired`, …) and a fix hint, not a stack
+  trace. Exit 0 healthy, 1 unhealthy.
 
 ---
 
@@ -121,15 +179,27 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 
 ```
 simorgh-platform/
-├── src/                    # TypeScript / Workers
-│   ├── index.ts            # Hono app: routes, Intent Shield, agent loop, Data Trust, Context Offload, cron
-│   ├── agent.ts            # Agent core: tool registry, runAgentLoop(), synthesis prompt (Epic 4)
-│   ├── flock.ts            # Bird adapters + flyFlock() routing core + FlockCoordinator DO
-│   ├── health.ts           # bird_health storage statements (upsert, cooldown, sweep)
-│   ├── models.ts           # Model Registry (Auto-Wrapper): catalog + findModelBird
-│   ├── data-trust.ts       # DataTrustVault DO: transparency ledger
-│   └── dashboard.ts        # Self-contained Mission Control HTML (inline CSS/JS, no build)
-├── test/                   # 6 suites, 65 tests — see Testing above
+├── phoenix-core/           # @simorgh/phoenix-core — runtime-agnostic engine (ports, routing, agent, validation)
+│   ├── src/                # engine source: ports.ts, flock.ts, agent.ts, security.ts, execute.ts, health.ts, rate-limit.ts, models.ts, provider.ts
+│   │   └── node/           # Node adapter: nodeSqlPort, createNodePorts, memoryContextStore, sqlLedger (the only node: import in the engine)
+│   └── test/               # engine tests: boundary.test.ts, execute.test.ts, flock.test.ts, security.test.ts, storage.test.ts, agent.test.ts
+├── simorgh-platform/       # the control plane package (imports phoenix-core; nothing imports it)
+│   ├── src/                #   targets, connectors (rest/mcp) + conformance kit, deploy (plan/runner/preflight), fleet, mcp/server, runtimes (node/smoke), cli, doctor
+│   ├── scripts/            #   e2e-ask.ts — the CLI reaching a live core over REST *and* MCP
+│   └── test/               #   9 files, 113 tests (vitest.node.config.ts)
+├── src/                    # the Cloudflare host — the Worker itself
+│   ├── index.ts            #   Hono app: routes, Intent Shield, Data Trust, Context Offload, cron
+│   ├── flock.ts            #   host adapter → engine routing, plus the FlockCoordinator DO
+│   ├── agent.ts            #   host adapter → engine agent loop (tool registry, synthesis prompt)
+│   ├── agent-service.ts    #   host adapter → engine execute pipeline
+│   ├── data-trust.ts       #   DataTrustVault DO: the transparency ledger (delegates to the engine)
+│   ├── health.ts           #   bird_health storage statements (upsert, cooldown, sweep)
+│   ├── models.ts           #   Model Registry (Auto-Wrapper): catalog + findModelBird
+│   ├── rate-limit.ts       #   host adapter → engine rate limiter
+│   ├── security.ts         #   host adapter → engine security
+│   ├── telegram.ts         #   Telegram client + webhook (secret-token verified)
+│   └── dashboard.ts        #   Self-contained Mission Control HTML (inline CSS/JS, no build)
+├── test/                   # 10 files, 82 tests — the workerd suite (vitest.config.ts)
 ├── packages/               # Go workspace modules
 │   ├── config/             #   provider config load/validate
 │   ├── crypto/             #   AES-256-GCM sealing, argon2id key derivation
