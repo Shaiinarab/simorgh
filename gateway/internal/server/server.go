@@ -76,6 +76,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Messages) == 0 {
 		writeOpenAIError(w, 400, "invalid_request_error", "missing required field: messages")
+		return
 	}
 	cands := s.reg.Select(req.Model)
 	if len(cands) == 0 {
@@ -102,6 +103,12 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		} else {
 			resp, err = a.ChatCompletion(r.Context(), req)
 			if err == nil {
+				// Carry the provider-reported usage into the same variable the streaming branch
+				// fills. Without this, `u` stays zero-valued for every non-streaming request and
+				// the ledger records 0 tokens while the response body reports the real count — so
+				// /status would under-report token spend for exactly the requests that are easiest
+				// to account for. Found by TestNonStreamingUsageRecorded.
+				u = resp.Usage
 				writeJSON(w, 200, resp)
 			}
 		}
