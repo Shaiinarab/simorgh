@@ -32,8 +32,22 @@ falling back to the live tree.
 - **Never** run `git commit` / `git push` / `git rebase`. The Lead integrates and commits.
 - Workers touch **only** the files in their brief's Allowlist. Lock them first.
 
-## Status (2026-09-16, before the first fleet wave)
+## Status (2026-09-22)
 
-- `mailbox/` is newly created — no briefs yet.
-- The repo has **uncommitted** Go work (`bot/`, `gateway/`, `tools/`, `packages/`, `go.work`) — see
-  the session note in `memory/2026-09-16.md` at the workspace root.
+- **Nine briefs, all integrated.** TASK-001…006 landed in the modularization pass; TASK-007…009 are the
+  audit lanes (Go gateway tests, quality audit, trust-boundary audit).
+- **The Go workspace is committed and green** (`7a54d64 feat(go): land the self-hosted gateway workspace`,
+  2026-09-16) — build, vet and test all pass, locally and in CI. An earlier version of this section said
+  the Go work was uncommitted; that was wrong. Its role is now decided in `docs/adr/ADR-0001`.
+- The `go` job in `.github/workflows/ci.yml` runs the Go gates, and a `security` job runs
+  `scripts/security-scan.sh` (secrets scan + `npm audit --omit=dev`).
+
+### Harness reality — read before dispatching a lane
+
+- **`codex exec` is the working headless harness.** `pool exec -f` is *reachable* and exits `0` but
+  **ignores the brief** — do not trust it. `freebuff` and the fb containers are interactive TUI only, so
+  fb2/fb3 are verification sandboxes, not agent hosts.
+- **Never grade a lane on its driver's exit code.** Grade on the artifacts plus `fbmail check`. A lane has
+  already exited `0` having delivered one of three files.
+- Full detail, including how to detach a lane so it survives and how to size its timeout, is in the
+  `simorgh-lanes` skill.

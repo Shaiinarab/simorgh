@@ -33,3 +33,8 @@ mailbox/.state/
 
 # Local scratch
 *.bak
+
+# Agent scratch. Several mailbox briefs direct a worker to write a throwaway demo to
+# .openclaw/tmp/<name>.ts *inside the repo*, so this path is expected to appear — it must never be
+# committed. Real temp files belong at the workspace root (.openclaw/tmp), not here.
+.openclaw/

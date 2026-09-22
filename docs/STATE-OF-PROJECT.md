@@ -314,3 +314,46 @@ Three adversarial checks were run because a green suite is not evidence on its o
   our own mapper while disagreeing with every real core.
 
 Each of those was found by *running* something, not by reading a diff. Keep doing that.
+
+---
+
+## 10. What the second pass committed, and what it changed
+
+The 84 pending paths were landed as **six atomic commits** on top of `e0053fc` (which is PR #1's own
+head, so this branch is stacked directly on the PR rather than on `main`):
+
+| Commit | What it carries |
+|---|---|
+| `fe4bdb3` | `refactor(core)`: the engine extraction — `phoenix-core/`, the eight Worker host adapters, the affected tests, the workspace wiring |
+| `4f99637` | `feat(platform)`: the control plane — targets, connectors + conformance, deploy + preflight, fleet, MCP server, Node runtime, CLI |
+| `f9d9dec` | `docs`: ARCHITECTURE.md, this file, and `adr/ADR-0001` |
+| `a8ce109` | `chore(mailbox)`: the six lane briefs and their reports |
+| `07d7266` | `ci`: the comment recording that one `npm test` invocation covers both suites |
+| `1f38842` | `docs(readme)`: the module split, both suites, the platform CLI, and the repository-map fix |
+
+Nothing was pushed. PR #1 remains open — merging this branch supersedes it, and that is a decision for
+the repository owner, not for an agent.
+
+### 10.1 Corrections made in the same pass
+
+| Claim | Was | Now |
+|---|---|---|
+| README repository map | nested the root `src/*.ts` files under `simorgh-platform/`, describing a tree that does not exist | corrected, with the host adapters and both suites listed |
+| mailbox `README.md` | "the repo has **uncommitted** Go work" | the Go workspace is committed (`7a54d64`) and green |
+| `AGENTS.md` | described a single-package Worker; never mentioned the split, the two suites, the CLI, or the Go workspace | rewritten around the real tree, the boundary rule, the environment traps, and a definition of done |
+| `.gitignore` | `.openclaw/` not ignored, although several briefs direct a worker to write a throwaway demo *inside the repo* | ignored |
+
+### 10.2 Added in this pass
+
+- **`docs/adr/ADR-0001`** — the Go workspace's role, decided on evidence (tests before convergence;
+nothing deleted).
+- **`docs/adr/ADR-0002` + `docs/HOST-PORTABILITY.md`** — the Vercel evaluation, and the finding behind it:
+**`SqlPort` is synchronous, so no networked database can implement it.** The portability claim is
+narrower than the README implied — portable across runtimes that can supply a *synchronous* SQL
+implementation. Vercel is therefore deferred, and Bun/Deno is proposed as the cheaper third host.
+- **`docs/OBSERVABILITY.md`** — what exists, what the ledger already answers, and the one real gap:
+**provider latency is recorded nowhere on the TypeScript side** (while the Go side keeps an EMA).
+- **`scripts/security-scan.sh`** — the secrets + dependency gate, wired into CI *and* runnable locally as
+`npm run security:scan`. Verified with a negative control: exit `1` with a planted token, `0` clean.
+- **`.agents/skills/`** — five project skills: `simorgh-architecture`, `simorgh-testing`,
+`simorgh-deploy-boundary`, `simorgh-go-workspace`, `simorgh-lanes`.
