@@ -23,6 +23,10 @@ jobs:
       - run: npm ci
       - name: Typecheck (TypeScript 7 / tsgo)
         run: npm run typecheck
+      # `npm test` runs both suites in order: test:workers (vitest run, workerd pool)
+      # then test:node (vitest run --config vitest.node.config.ts, plain Node).
+      # Both suites are covered by the single `npm test` invocation; no separate
+      # step is needed. See package.json scripts for the split.
       - name: Tests (vitest, workerd pool)
         run: npm test
       - name: Bundle check (wrangler dry-run)
