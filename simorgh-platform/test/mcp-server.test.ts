@@ -193,19 +193,26 @@ describe("platform MCP server", () => {
 
   // ── 2. tools/list ──
 
-  it("tools/list advertises all three platform tools with schemas", async () => {
+  it("tools/list advertises exactly the three platform tools, with schemas", async () => {
     const server = platformMcpHandler();
     const { json } = await serverCall(server, "tools/list");
     const tools = (json.result as { tools: unknown[] }).tools;
     const names = tools.map((t) => (t as { name: string }).name);
-    expect(names).toContain("platform_targets");
-    expect(names).toContain("platform_fleet");
-    expect(names).toContain("platform_ask");
-    // Exactly three — an exact count, not just `toContain`. The first revision also
-    // published `simorgh_status`/`simorgh_ask` as aliases, which meant an agent host
-    // reaching both a platform and a core would see one name with two meanings (the
-    // platform's "ask the whole fleet" vs the core's "ask me"). `toContain` let that
-    // through; the count does not.
+
+    // The set must be EXACTLY these three. The first revision also published
+    // `simorgh_status`/`simorgh_ask` as aliases, so an agent host reaching both a platform
+    // and a core saw one name with two meanings (the platform's "ask the whole fleet" vs
+    // the core's "ask me").
+    //
+    // `toContain` alone does NOT catch that: a fourth name passes it happily. The previous
+    // version of this test carried a comment claiming "an exact count" while asserting only
+    // containment — the guard was described but never written, which is worse than having
+    // none, because the comment stops the next reader from checking. The `toHaveLength`
+    // below is that guard, and the sorted comparison pins the *identities*, not just the
+    // size: three tools is not enough if they are the wrong three.
+    expect(names).toHaveLength(3);
+    expect([...names].sort()).toEqual(["platform_ask", "platform_fleet", "platform_targets"]);
+
     for (const tool of tools) {
       expect(tool).toHaveProperty("inputSchema");
       expect((tool as { name: string; inputSchema: unknown }).inputSchema).toBeDefined();
