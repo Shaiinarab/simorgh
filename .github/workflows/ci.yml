@@ -55,3 +55,19 @@ jobs:
         run: go vet github.com/shaiinarab/simorgh/...
       - name: Test (`go test all` would also run the stdlib's and dependencies' tests)
         run: go test github.com/shaiinarab/simorgh/...
+
+  security:
+    name: Security · secrets scan · dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # `npm ci` is required: the audit half of the scan reads the installed tree.
+      - run: npm ci
+      # Deliberately the SAME script a developer runs locally (`npm run security:scan`), so the gate
+      # is not something that only exists in CI. Zero dependencies, no licence, no SaaS account.
+      - name: Secrets scan + dependency audit
+        run: bash scripts/security-scan.sh
