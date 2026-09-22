@@ -1,6 +1,34 @@
-import { AGENT_TOOLS, runAgentLoop, type AgentTool, type AgentRunResult } from "./agent";
-import { type FlockRunResult } from "./flock";
+import {
+  createToolExecutor,
+  executeAgent as coreExecuteAgent,
+  type AgentTool,
+  type ExecuteAgentResult,
+  type LedgerPort,
+  type PhoenixPorts,
+} from "@simorgh/phoenix-core";
 import type { Tier } from "./security";
+
+// ── The Cloudflare request path ────────────────────────────────────────────────
+//
+// This file used to *be* the pipeline. It re-implemented the same ordering as
+// `phoenix-core/src/execute.ts` — run the agent loop, offload the request context, write
+// the transparency ledger, then fly the flock — and nothing compared the two. That is
+// the duplication with the highest cost here, because the ordering is the Data Trust
+// contract: if the two drift, one deployment logs a request before dialling a provider
+// and the other logs it after, and only one of them still tells the truth when every
+// provider is down.
+//
+// It is now a binding, and only that. Every decision — the tool loop, the ledger write,
+// the offload, the flight, and the order they happen in — comes from the engine.
+//
+// ── Why this host flies through a Durable Object stub ──
+//
+// The engine's own `flyFlock` path takes `cooldownUntil` and `record` as *closures*, and
+// a closure cannot cross Durable Object RPC. The cooldown and observation rows live in
+// the FlockCoordinator's SQLite, reachable only over a stub. So this host uses the
+// engine's `fly` dependency: it supplies the flight, the engine supplies the ordering
+// around it. That is exactly the seam the engine declares for this case, rather than a
+// second pipeline.
 
 export interface ExecuteAgentInput {
   prompt: string;
@@ -11,97 +39,75 @@ export interface ExecuteAgentInput {
   requestId?: string;
 }
 
-export interface ExecuteAgentResult {
-  success: boolean;
-  meta: FlockRunResult["meta"] & {
-    contextRefId: string;
-    loggedToLedger: boolean;
-    tool_iterations: AgentRunResult["meta"]["tool_iterations"];
-    tools_requested: AgentRunResult["meta"]["tools_requested"];
-    tool_observations: AgentRunResult["meta"]["tool_observations"];
-    blocked_tools: string[];
-    requestId: string;
+export type { ExecuteAgentResult };
+
+/**
+ * The Cloudflare bindings, as the engine's ports.
+ *
+ * `fetch` resolves `globalThis.fetch` at call time rather than capturing it — the same
+ * rule `flock.ts` documents, and for the same reason: the Workers test suite replaces
+ * the global with a stub per test, and a captured reference would bypass every one of
+ * them while the tests still passed.
+ */
+function workerPorts(): PhoenixPorts {
+  return {
+    fetch: (url, init) => globalThis.fetch(url, init),
+    sha256: async (value) =>
+      new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))),
+    randomUUID: () => crypto.randomUUID(),
+    now: () => Date.now(),
   };
-  agentResponse: string;
 }
 
-async function executeTool(
-  tool: AgentTool,
-  args: Record<string, unknown>
-): Promise<string> {
-  switch (tool) {
-    case "get_server_time":
-      return new Date().toISOString();
-    case "search_web": {
-      const query = String(args.query ?? "").trim();
-      if (!query) return "No search query supplied.";
-      const url =
-        "https://api.duckduckgo.com/?q=" +
-        encodeURIComponent(query) +
-        "&format=json&no_html=1";
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("search_http_" + response.status);
-      const data = (await response.json()) as { AbstractText?: string };
-      return (
-        data.AbstractText ||
-        'No instant answer found for "' + query + '".'
-      );
-    }
-  }
+/** Read a binding as a secret, or `undefined` when it is not a string. */
+function secretReader(env: Env) {
+  return (name: string): string | undefined => {
+    const value = (env as unknown as Record<string, unknown>)[name];
+    return typeof value === "string" ? value : undefined;
+  };
 }
 
 export async function executeAgent(
   env: Env,
   input: ExecuteAgentInput
 ): Promise<ExecuteAgentResult> {
-  const requestId = input.requestId ?? crypto.randomUUID();
+  const ports = workerPorts();
 
-  const agent = await runAgentLoop(
-    input.prompt,
-    input.tools,
-    (invocation) => executeTool(invocation.tool, invocation.args)
-  );
+  const vault = env.DATA_TRUST_VAULT.get(env.DATA_TRUST_VAULT.idFromName("global"));
+  const flock = env.FLOCK_COORDINATOR.get(env.FLOCK_COORDINATOR.idFromName("global"));
 
-  const refId = crypto.randomUUID();
-  await env.CONTEXT_STORE.put(
-    "ctx_" + refId,
-    JSON.stringify({ prompt: input.prompt, tools: input.tools }),
-    { expirationTtl: 3600 }
-  );
-
-  const vaultId = env.DATA_TRUST_VAULT.idFromName("global");
-  const vault = env.DATA_TRUST_VAULT.get(vaultId);
-  await vault.logEntry({
-    userId: input.userId,
-    tier: input.tier,
-    refId,
-    timestamp: Date.now(),
-    details: JSON.stringify({
-      requestId,
-      tools: input.tools,
-      blockedTools: input.blockedTools ?? [],
-    }),
-  });
-
-  const flockId = env.FLOCK_COORDINATOR.idFromName("global");
-  const flock = env.FLOCK_COORDINATOR.get(flockId);
-  const result = await flock.runFlock(
-    agent.effectivePrompt,
-    input.tools.map(String)
-  );
-
-  return {
-    success: result.meta.answered_by !== "none",
-    meta: {
-      ...result.meta,
-      contextRefId: refId,
-      loggedToLedger: true,
-      tool_iterations: agent.meta.tool_iterations,
-      tools_requested: agent.meta.tools_requested,
-      tool_observations: agent.meta.tool_observations,
-      blocked_tools: input.blockedTools ?? [],
-      requestId,
-    },
-    agentResponse: result.answer,
+  // The Durable Object stub *is* a `LedgerPort` — both methods already return promises,
+  // so no adapter is needed, only the type annotation that says so.
+  const ledger: LedgerPort = {
+    logEntry: (entry) => vault.logEntry(entry),
+    getUserLogs: (userId) => vault.getUserLogs(userId),
   };
+
+  return coreExecuteAgent(
+    {
+      prompt: input.prompt,
+      tools: input.tools,
+      userId: input.userId,
+      tier: input.tier,
+      ...(input.blockedTools ? { blockedTools: input.blockedTools } : {}),
+      ...(input.requestId ? { requestId: input.requestId } : {}),
+    },
+    {
+      ports,
+      secret: secretReader(env),
+      workersAi: env.AI,
+      contextStore: {
+        put: (key, value, options) => env.CONTEXT_STORE.put(key, value, options),
+        get: (key) => env.CONTEXT_STORE.get(key),
+      },
+      ledger,
+      executeTool: createToolExecutor({ fetch: ports.fetch, now: ports.now }),
+      // The DO's own signature is `(prompt, tools)` and it is passed through verbatim,
+      // even though the DO does not read `tools`: the agent loop has already folded every
+      // tool *result* into `prompt`. It is forwarded because the DO's RPC call log is how
+      // a deployment records what was asked for, and because `test/http.test.ts` pins
+      // that contract — dropping it here would narrow a published signature silently.
+      fly: (prompt, tools) => flock.runFlock(prompt, [...tools]),
+    }
+  );
 }

@@ -16,6 +16,13 @@ import { defineConfig } from "vitest/config";
 // with "Cannot find package 'cloudflare:test'" — which is exactly the kind of gap that
 // makes a passing typecheck misleading.
 export default defineConfig({
+  test: {
+    // Scoped to `test/`, which is the Worker's own suite. Without this, vitest's
+    // default glob reaches into the workspace packages and tries to run
+    // phoenix-core's Node tests inside workerd — where they would fail for the exact
+    // reason they exist. The packages have their own config: vitest.node.config.ts.
+    include: ["test/**/*.test.ts"],
+  },
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.toml" },

@@ -17,6 +17,9 @@
     // root resolves to the *pool* API, not the test-side module.
     "types": ["@cloudflare/vitest-pool-workers/types"],
 
+    // The workspace packages import relatively with explicit `.ts` extensions so
+    // plain `node` can run them unbuilt; this project follows those imports.
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,

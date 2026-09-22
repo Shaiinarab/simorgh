@@ -42,6 +42,9 @@ function fakeFlockNamespace() {
       async sweepStale() {
         return 0;
       },
+      async checkRateLimit(_key: string, limit: number, windowMs: number) {
+        return { allowed: true, limit, remaining: limit - 1, resetAt: Date.now() + windowMs };
+      },
     }),
   };
 }
@@ -68,9 +71,17 @@ const post = (body: unknown) =>
     testEnv()
   );
 
+/**
+ * Authenticated GET. The production-readiness change put `/api/v1/context/:refId`
+ * and `/api/v1/user/:userId/logs` behind the same bearer token as `/execute`, so a
+ * test that reads them anonymously asserts 401 and not the behaviour it names.
+ */
+const authedGet = (path: string) =>
+  app.request(path, { headers: { Authorization: "Bearer test-secret" } }, testEnv());
+
 describe("static routes", () => {
   it("GET / identifies the gateway", async () => {
-    const res = await app.request("/", { headers: { Authorization: "Bearer test-secret" } }, testEnv());
+    const res = await app.request("/", undefined, testEnv());
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("Simorgh");
   });
@@ -206,7 +217,7 @@ describe("POST /api/v1/agent/execute", () => {
     const res = await post({ prompt: "remember this", tools: ["get_server_time"] });
     const { meta } = (await res.json()) as { meta: { contextRefId: string } };
 
-    const stored = await app.request(`/api/v1/context/${meta.contextRefId}`, undefined, testEnv());
+    const stored = await authedGet(`/api/v1/context/${meta.contextRefId}`);
     expect(stored.status).toBe(200);
     expect(await stored.json()).toEqual({
       prompt: "remember this",
@@ -214,17 +225,27 @@ describe("POST /api/v1/agent/execute", () => {
     });
   });
 
-  it("404s an unknown context reference", async () => {
-    const res = await app.request("/api/v1/context/does-not-exist", undefined, testEnv());
+  it("404s a well-formed but unknown context reference", async () => {
+    const res = await authedGet("/api/v1/context/00000000-0000-4000-8000-000000000000");
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "not_found" });
+  });
+
+  it("400s a malformed context reference before it reaches KV", async () => {
+    // Shape is checked ahead of the lookup on purpose: without it, any authenticated
+    // caller could probe arbitrary KV keys by guessing reference strings.
+    const res = await authedGet("/api/v1/context/does-not-exist");
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+      "INVALID_CONTEXT_REF"
+    );
   });
 
   it("records the call in the transparency ledger, defaulting identity for anonymous callers", async () => {
     const res = await post({ prompt: "anonymous please", tools: [] });
     const { meta } = (await res.json()) as { meta: { contextRefId: string } };
 
-    const logs = await app.request("/api/v1/user/anonymous/logs", undefined, testEnv());
+    const logs = await authedGet("/api/v1/user/anonymous/logs");
     expect(logs.status).toBe(200);
 
     const body = (await logs.json()) as {
@@ -243,7 +264,7 @@ describe("POST /api/v1/agent/execute", () => {
   it("logs the caller's own identity when given one", async () => {
     await post({ prompt: "identify me", tools: [], userId: "u-ledger", tier: "Pro-Data-Pact" });
 
-    const logs = await app.request("/api/v1/user/u-ledger/logs", undefined, testEnv());
+    const logs = await authedGet("/api/v1/user/u-ledger/logs");
     const body = (await logs.json()) as { count: number; entries: { tier: string }[] };
     expect(body.count).toBe(1);
     expect(body.entries[0].tier).toBe("Pro-Data-Pact");

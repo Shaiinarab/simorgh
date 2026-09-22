@@ -50,7 +50,7 @@ function fakeBird(
 
 /** Build the deps with sane recording defaults so each test states only what it cares about. */
 function deps(
-  birds: Bird[],
+  birds: readonly Bird[],
   opts: {
     env?: FlockEnv;
     cooldowns?: Record<string, number>;
@@ -214,26 +214,35 @@ describe("flyFlock — routing policy", () => {
     expect(after.answer).toBe("hot-answer");
   });
 
-  it("lets a thrown provider error escape the routing loop (adapters must catch their own)", async () => {
+  it("absorbs a thrown provider error, records it, and falls through", async () => {
+    // Behaviour change, inherited from phoenix-core. This test previously asserted the
+    // opposite — that a thrown error escaped the loop and failed the whole request.
+    //
+    // The old contract put the burden on every adapter to catch its own transport
+    // errors, and made one third-party adapter raising an exception a 500 for the
+    // user. A federation exists to survive exactly that, so the engine now wraps the
+    // single `provider.call` in try/catch: the throw degrades to a failed attempt,
+    // `record()` still sees it (so Swarm-State learns the provider is unhealthy), and
+    // the flock moves on to the next bird.
     const records: Array<[string, boolean, string | undefined]> = [];
     const log: CallLog = { calls: [] };
-    await expect(
-      flyFlock(
-        "hi",
-        deps(
-          [
-            fakeBird("boom", 1, { throws: true }, log),
-            fakeBird("survivor", 2, { result: { ok: true, answer: "survivor-answer" } }, log),
-          ],
-          { log, records }
-        )
+    const result = await flyFlock(
+      "hi",
+      deps(
+        [
+          fakeBird("boom", 1, { throws: true }, log),
+          fakeBird("survivor", 2, { result: { ok: true, answer: "survivor-answer" } }, log),
+        ],
+        { log, records }
       )
-    ).rejects.toThrow("boom exploded");
+    );
 
-    // Documents real behaviour: the *adapter* is responsible for catching its own
-    // transport errors (every built-in bird does). A bird that throws escapes the
-    // routing loop — which is why the loop must not be the only line of defence.
-    expect(records).toEqual([]);
+    expect(log.calls).toEqual(["boom", "survivor"]);
+    expect(result.answer).toBe("survivor-answer");
+    expect(records[0]?.[0]).toBe("boom");
+    expect(records[0]?.[1]).toBe(false);
+    expect(records[0]?.[2]).toMatch(/boom exploded/);
+    expect(result.meta.flock_attempts[0]).toMatchObject({ birdId: "boom", ok: false });
   });
 
   it("passes rate_limit through to record() so the caller can back off longer", async () => {
