@@ -25,7 +25,9 @@
     "security:check": "npm run security:scan && tsgo --noEmit && wrangler deploy --dry-run --outdir dist",
     "go:build": "GOFLAGS=-mod=readonly go build all",
     "go:test": "GOFLAGS=-mod=readonly go test github.com/shaiinarab/simorgh/... -count=1",
-    "go:vet": "GOFLAGS=-mod=readonly go vet github.com/shaiinarab/simorgh/..."
+    "go:vet": "GOFLAGS=-mod=readonly go vet github.com/shaiinarab/simorgh/...",
+    "runtime:bun": "bun run simorgh-platform/src/runtimes/bun.ts",
+    "e2e:bun": "bun simorgh-platform/scripts/e2e-bun.ts"
   },
   "keywords": [
     "ai-agents",

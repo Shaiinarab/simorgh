@@ -32,10 +32,15 @@ falling back to the live tree.
 - **Never** run `git commit` / `git push` / `git rebase`. The Lead integrates and commits.
 - Workers touch **only** the files in their brief's Allowlist. Lock them first.
 
-## Status (2026-09-22)
+## Status (2026-09-24)
 
-- **Nine briefs, all integrated.** TASK-001…006 landed in the modularization pass; TASK-007…009 are the
-  audit lanes (Go gateway tests, quality audit, trust-boundary audit).
+- **Ten briefs, all integrated.** TASK-001…006 landed in the modularization pass; TASK-007…009 are the
+  audit lanes (Go gateway tests, quality audit, trust-boundary audit); TASK-010 proves the engine on
+  Bun, a third runtime with a third SQL dialect.
+- **The SQL port is portable across three dialects.** TASK-010 found `bun:sqlite` satisfies the
+  *synchronous* `SqlPort` with **no `phoenix-core` change**, and `createNodePorts` runs unchanged on
+  Bun. The only residual differences (`db.query()` vs `prepare()`, `Uint8Array` bindings) live in the
+  host adapter. Record the verdict in `ADR-0002` so the next host decision does not re-test it.
 - **The Go workspace is committed and green** (`7a54d64 feat(go): land the self-hosted gateway workspace`,
   2026-09-16) — build, vet and test all pass, locally and in CI. An earlier version of this section said
   the Go work was uncommitted; that was wrong. Its role is now decided in `docs/adr/ADR-0001`.

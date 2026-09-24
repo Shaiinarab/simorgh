@@ -1,7 +1,7 @@
 # TASK-010 — prove the engine on Bun, a third runtime with its own SQL dialect
 
 - Owner: any
-- Status: open
+- Status: done (Lead 2026-09-24T12:05)
 - Depends on: nothing · Estimate: 60–90 min · Runner: codex lane (headless)
 
 ## Why this exists
