@@ -38,6 +38,23 @@
 //      is why multi-account support (§13) needed no change to this file: an account is
 //      simply a second value in a row's key.
 //
+//   4. **Cost is a three-state fact, and unknown is not free.** The project's stated
+//      goal is `monetary cost = 0`, and until this section existed `QuotaState` carried
+//      no field for it at all — so a paid-only provider with a generous quota was
+//      indistinguishable from a free one, and `planQuotaRun` would happily route onto it.
+//      That is a correctness bug and a compliance one: an operator who believes they are
+//      on free capacity must never be silently billed. The rule that matters is not
+//      "reject paid" but "**absence of evidence is not evidence of cost zero**", so a
+//      provider nobody has classified is *ineligible* under `FREE_ONLY`, and is reported
+//      by name rather than dropped.
+//
+//      Note the deliberate asymmetry with decision 1, because it looks like an
+//      inconsistency and is not. An unpublished *limit* is unconstrained, because guessing
+//      a cap low would refuse work the fleet could have done. An unpublished *cost* is
+//      not free, because guessing it low spends somebody's money. Same `<= 0` convention
+//      and the same intent — *the column records what we were told, nothing more* — but
+//      opposite failure modes, so opposite directions. `ADR-0005` records the decision.
+//
 // It deliberately does **not** own call or failure counters — `health.ts` does, and
 // duplicating them would recreate the exact "two definitions, nothing comparing them"
 // bug that `ledger.ts` documents having already been paid for once. It owns latency
@@ -85,6 +102,13 @@ export interface QuotaState {
   /** `null` when the provider publishes no token budget. */
   tokens: QuotaWindow | null;
   /**
+   * What running on this account costs. Required, not optional: the compiler is the
+   * cheapest place to make "unknown is not free" un-forgettable. An omitted field would
+   * silently resolve to the one answer an operator never meant, and a type that permits
+   * the omission is a type that permits the bill.
+   */
+  cost: ProviderCost;
+  /**
    * Observed round-trip latency in ms; `0` when nothing has been measured yet.
    *
    * Carried on the state rather than looked up separately so the scheduler has one
@@ -129,6 +153,74 @@ function budgetsFor(state: QuotaState, workload: Workload): Budget[] {
     budgets.push({ kind: "tokens", window: state.tokens, cost: workload.tokens });
   }
   return budgets;
+}
+
+// ── What does this cost? ──────────────────────────────────────────────────────
+
+/**
+ * What running on one provider costs. Three states, not a boolean.
+ *
+ * The third state is the entire reason this is a union. `free` and `paid` are facts an
+ * operator can assert; `unknown` is the *absence* of one, and collapsing it into `free`
+ * is the defect this type exists to prevent. The project's strategic goal is
+ * `monetary cost = 0`, so a mis-classification here is not a scheduling inconvenience —
+ * it is somebody receiving an invoice they never agreed to.
+ *
+ * `paid.usdPerMTokens` is a *reported* figure and deliberately not load-bearing: the
+ * scheduler consumes only `kind` (see `costVerdict`), so an operator who got the unit
+ * wrong loses a number in a status line, never a routing decision. It is carried because
+ * "we know this costs money and roughly how much" is strictly more information than the
+ * boolean it replaces — and a price with nowhere to be written down is a price nobody will
+ * keep up to date.
+ */
+export type ProviderCost =
+  | { kind: "free" }
+  | { kind: "paid"; usdPerMTokens: number }
+  | { kind: "unknown" };
+
+/** Whether the fleet is allowed to spend money. */
+export type CostMode =
+  /** Never route onto a provider that costs money, *or* whose cost nobody has declared. */
+  | "FREE_ONLY"
+  /**
+   * Paid providers are eligible. `unknown` is eligible too — deliberately, because the
+   * operator has already said money is not the constraint. Re-deciding that an
+   * unclassified provider is free would make this mode a lie.
+   */
+  | "PAID_ALLOWED";
+
+/**
+ * The default is `FREE_ONLY`, so a deployment that configures nothing fails closed.
+ *
+ * This is the repo's existing auth rule applied to money: unconfigured credentials are a
+ * `503`, never anonymous-allowed, because an unconfigured deployment should refuse rather
+ * than improvise an answer. Defaulting the other way would turn a missing configuration
+ * into a silent charge. The mode is therefore a parameter with a default rather than
+ * something only the CLI may set.
+ */
+export const DEFAULT_COST_MODE: CostMode = "FREE_ONLY";
+
+/** The verdict for one provider's cost under one mode. */
+export type CostVerdict = { eligible: true } | { eligible: false; reason: string };
+
+/**
+ * May work be routed onto a provider with this cost, under this mode?
+ *
+ * Exported so the reason strings have exactly one definition. A host that pre-filters
+ * candidates before calling `planQuotaRun` must not re-derive them, or "why was my
+ * provider skipped" acquires a second answer that nothing compares to the first — the
+ * trap `ledger.ts` documents having already paid for once.
+ */
+export function costVerdict(cost: ProviderCost, mode: CostMode): CostVerdict {
+  if (mode === "PAID_ALLOWED") return { eligible: true };
+  if (cost.kind === "paid") return { eligible: false, reason: "paid_tier_in_free_only" };
+  // The load-bearing branch. `unknown` is refused under FREE_ONLY because nobody has
+  // established that it is free, and routing onto it is how an operator discovers the
+  // answer by receiving the bill.
+  if (cost.kind === "unknown") {
+    return { eligible: false, reason: "cost_unknown_in_free_only" };
+  }
+  return { eligible: true };
 }
 
 // ── Window arithmetic ─────────────────────────────────────────────────────────
@@ -281,6 +373,10 @@ export interface SchedulePlan {
    * Not decoration. A scheduler that silently drops candidates is indistinguishable
    * from one that lost them, and "why did my task wait four minutes" is the first
    * question an operator asks.
+   *
+   * A candidate refused by the **cost gate** is listed here too, even though it was never
+   * capacity-checked: it was refused, so it is rejected. Hiding it would make a money
+   * decision invisible to the one person who can act on it.
    */
   rejected: { candidateId: CandidateId; reason: string }[];
 }
@@ -295,6 +391,12 @@ export interface PlanOptions {
   urgencyMs?: number;
   /** Decay scale for `futureValue`. Defaults to an hour. */
   horizonMs?: number;
+  /**
+   * Whether the fleet may spend money. Defaults to `DEFAULT_COST_MODE` — `FREE_ONLY` —
+   * because an unconfigured deployment must refuse rather than route onto a provider
+   * nobody has classified as free.
+   */
+  mode?: CostMode;
 }
 
 const DEFAULT_URGENCY_MS = 60_000;
@@ -323,12 +425,19 @@ function sameCandidate(a: CandidateId, b: CandidateId): boolean {
  * four-minute-reset case that motivates it — is driven by frozen clocks in tests with
  * no runtime at all.
  *
- * Callers pass only *eligible* accounts: configured credentials, not cooling down,
- * not already known-tired. That filter is `flyFlock`'s job and `health.ts`'s; this
- * module answers a different question and stays single-purpose.
+ * Callers pass only accounts already cleared on *health*: configured credentials, not
+ * cooling down, not already known-tired. That filter is `flyFlock`'s job and
+ * `health.ts`'s. **Cost is the one exception, and it is filtered here**, because it is a
+ * standing property of the account rather than of its recent behaviour, and because the
+ * scheduler is the only place that knows the operator's `mode`.
  *
  * The policy, in order:
  *
+ *   0. The cost gate, before any capacity arithmetic. Under `FREE_ONLY`, a provider that
+ *      costs money — or whose cost nobody has declared — is not a candidate at all, and is
+ *      reported by name in `rejected`. It comes first because a policy refusal is the
+ *      *binding* reason: telling an operator that a paid provider "exceeds its token
+ *      budget" describes a problem they do not have until they enable paid capacity.
  *   1. Any account that can run now wins, and which one depends on patience:
  *        - a task with **slack** maximises `postSpendValue` — it leaves the pool in
  *          the best state, which is what "maximize useful computation within the
@@ -340,7 +449,16 @@ function sameCandidate(a: CandidateId, b: CandidateId): boolean {
  *   2. Otherwise every eligible account is waiting on a reset, so resume at the
  *      earliest of them. That is the whole of "wait, let B reset, consume B".
  *   3. Otherwise the work cannot be placed, and saying so plainly is the honest
- *      answer — `flock_exhausted` is already this repo's word for it.
+ *      answer — `flock_exhausted` is already this repo's word for it. Under `FREE_ONLY`
+ *      with nothing free in the pool this is also the answer for a fleet that is entirely
+ *      paid: `unavailable`, never "run anyway". A caller can turn `unavailable` into a
+ *      refusal the operator sees; it cannot un-spend the money.
+ *
+ * Under `PAID_ALLOWED`, cost is an *eligibility gate only*. This deliberately does not
+ * rank a free account above a paid one among eligible candidates: that would be a second
+ * objective competing with `postSpendValue`, and an operator who has explicitly allowed
+ * spending has already said capacity preservation is what they want. `ADR-0005` records
+ * the non-decision.
  */
 export function planQuotaRun(
   states: readonly QuotaState[],
@@ -350,6 +468,7 @@ export function planQuotaRun(
 ): SchedulePlan {
   const urgencyMs = options.urgencyMs ?? DEFAULT_URGENCY_MS;
   const horizonMs = options.horizonMs ?? DEFAULT_HORIZON_MS;
+  const mode = options.mode ?? DEFAULT_COST_MODE;
 
   const rejected: { candidateId: CandidateId; reason: string }[] = [];
   const ready: QuotaState[] = [];
@@ -357,6 +476,12 @@ export function planQuotaRun(
   let resumeCandidate: QuotaState | null = null;
 
   for (const state of states) {
+    const cost = costVerdict(state.cost, mode);
+    if (!cost.eligible) {
+      rejected.push({ candidateId: candidateId(state), reason: cost.reason });
+      continue;
+    }
+
     const capacity = capacityFor(state, workload, now);
 
     if (capacity.kind === "ready") {
@@ -490,6 +615,16 @@ export function nextLatencyEma(previous: number, sample: number): number {
  * There are no call or failure counters here on purpose: `bird_health` owns those,
  * and a second copy is a second truth. `ledger.ts` records in detail what happens
  * when two definitions of the same thing exist with nothing comparing them.
+ *
+ * The cost columns follow the same convention as the limits, for the same reason: the
+ * row records what the operator told us and nothing more. `cost_usd <= 0` therefore
+ * means **not published**, and reads back as `unknown` — never as free. A `0` price is
+ * an absent price, not a zero price. That is exactly why `cost_class` exists alongside
+ * it: `cost_class = 'free'` is the only way to *assert* free, and `cost_usd > 0` is the
+ * only way to assert paid. The pair makes every read total — there is no combination of
+ * these two columns that cannot be resolved — and a contradictory row (`cost_usd > 0`
+ * alongside `cost_class = 'free'`) resolves to `paid`, the expensive answer, because a
+ * typo must never be a way to buy capacity for nothing.
  */
 export const QUOTA_SCHEMA = `
   CREATE TABLE IF NOT EXISTS quota_state (
@@ -502,6 +637,8 @@ export const QUOTA_SCHEMA = `
     tok_limit        INTEGER NOT NULL DEFAULT 0,
     tok_used         INTEGER NOT NULL DEFAULT 0,
     tok_reset_at     INTEGER NOT NULL DEFAULT 0,
+    cost_usd         REAL    NOT NULL DEFAULT 0,
+    cost_class       TEXT    NOT NULL DEFAULT 'unknown',
     latency_ema_ms   REAL    NOT NULL DEFAULT 0,
     last_latency_ms  INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (provider_id, account_id, model_id)
@@ -519,36 +656,77 @@ export type QuotaRow = {
   tok_limit: number;
   tok_used: number;
   tok_reset_at: number;
+  cost_usd: number;
+  cost_class: string;
   latency_ema_ms: number;
   last_latency_ms: number;
 };
+
+/** The stored columns alone — what `toProviderCost` needs, and all it needs. */
+export type CostRow = { cost_usd: number; cost_class: string };
 
 const SELECT_ALL = `
   SELECT provider_id, account_id, model_id,
          req_limit, req_used, req_reset_at,
          tok_limit, tok_used, tok_reset_at,
+         cost_usd, cost_class,
          latency_ema_ms, last_latency_ms
     FROM quota_state
 `;
 
-/** Declare or update an account's published limits. A `0` limit means unknown. */
+/**
+ * The three-state value → the two stored columns.
+ *
+ * `free` and `unknown` both store a price of `0` and are told apart by `cost_class`
+ * alone. That asymmetry is the point: `0` is the "nobody published a number" carrier, so
+ * it cannot double as the "and it is free" assertion without making every unclassified row
+ * look free. The split is made once, here, rather than at each write site.
+ */
+function costColumns(cost: ProviderCost): { usd: number; klass: string } {
+  if (cost.kind === "paid") return { usd: cost.usdPerMTokens, klass: "paid" };
+  if (cost.kind === "free") return { usd: 0, klass: "free" };
+  return { usd: 0, klass: "unknown" };
+}
+
+/**
+ * The two stored columns → the three-state value, resolving every combination.
+ *
+ * Read order is the fail-closed direction, and is load-bearing: a published price beats a
+ * claim of being free, so a contradictory row bills rather than sneaks. Anything that is
+ * neither `> 0` nor an explicit `"free"` is `unknown` — which includes the `0` a row has
+ * before any operator has classified its provider, which is what *every* row looks like on
+ * a fresh deployment.
+ */
+export function toProviderCost(row: CostRow): ProviderCost {
+  if (row.cost_usd > 0) return { kind: "paid", usdPerMTokens: row.cost_usd };
+  if (row.cost_class === "free") return { kind: "free" };
+  return { kind: "unknown" };
+}
+
+/** Declare or update an account's published limits and cost. A `0` limit or price means unknown. */
 export function declareQuota(sql: SqlPort, state: QuotaState): void {
+  const cost = costColumns(state.cost);
   sql.exec(
     `INSERT INTO quota_state
-       (provider_id, account_id, model_id, req_limit, req_reset_at, tok_limit, tok_reset_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+       (provider_id, account_id, model_id, req_limit, req_reset_at, tok_limit, tok_reset_at,
+        cost_usd, cost_class)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(provider_id, account_id, model_id) DO UPDATE SET
        req_limit    = excluded.req_limit,
        req_reset_at = excluded.req_reset_at,
        tok_limit    = excluded.tok_limit,
-       tok_reset_at = excluded.tok_reset_at`,
+       tok_reset_at = excluded.tok_reset_at,
+       cost_usd     = excluded.cost_usd,
+       cost_class   = excluded.cost_class`,
     state.providerId,
     state.accountId,
     state.modelId,
     state.requests?.limit ?? 0,
     state.requests?.resetAt ?? 0,
     state.tokens?.limit ?? 0,
-    state.tokens?.resetAt ?? 0
+    state.tokens?.resetAt ?? 0,
+    cost.usd,
+    cost.klass
   );
 }
 
@@ -561,6 +739,10 @@ export function declareQuota(sql: SqlPort, state: QuotaState): void {
  * next scheduling decision must not be made on a number that was already wrong.
  * `windowRemaining` still applies the same roll at read time, so a scheduler reading
  * stored state sees exactly what the pure arithmetic would have computed.
+ *
+ * The UPDATE deliberately does not touch `cost_usd`/`cost_class`: counting a request must
+ * not restate what the provider costs, exactly as it must not restate the declared limits.
+ * Cost changes when an operator re-declares the account, never because work happened.
  */
 export function recordUsage(
   sql: SqlPort,
@@ -615,6 +797,11 @@ export function readAllQuota(sql: SqlPort): QuotaRow[] {
  * budget, and the period is a property of the *provider's* published limits, which
  * the caller knows. Inventing a default here would silently mislabel a per-minute
  * limit as a per-day one in every report that reads the label.
+ *
+ * Cost is the opposite case and *is* stored: it is not a property of the provider's
+ * published limits to be supplied by the caller, but a fact about this account that has to
+ * survive a restart — a gate that only worked on freshly-built states would be a gate that
+ * a Durable Object cold start walks straight through.
  */
 export function toQuotaState(
   row: QuotaRow,
@@ -636,6 +823,7 @@ export function toQuotaState(
       used: row.tok_used,
       resetAt: row.tok_reset_at,
     },
+    cost: toProviderCost(row),
     latencyEmaMs: row.latency_ema_ms,
   };
 }

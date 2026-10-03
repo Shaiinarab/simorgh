@@ -9,8 +9,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_COST_MODE,
   QUOTA_SCHEMA,
   capacityFor,
+  costVerdict,
   declareQuota,
   nextLatencyEma,
   planQuotaRun,
@@ -18,11 +20,13 @@ import {
   readAllQuota,
   readQuota,
   recordUsage,
+  toProviderCost,
   toQuotaState,
   totalRemaining,
   windowCanEverFit,
   windowReadyAt,
   windowRemaining,
+  type ProviderCost,
   type QuotaState,
   type QuotaWindow,
 } from "../src/quota.ts";
@@ -47,7 +51,11 @@ function state(
   providerId: string,
   accountId: string,
   windows: { requests?: QuotaWindow | null; tokens?: QuotaWindow | null } = {},
-  latencyEmaMs = 0
+  latencyEmaMs = 0,
+  // Defaults to free because these 27 cases are capacity cases, and capacity arithmetic
+  // is only meaningful for a provider the fleet is allowed to spend. Cost gets its own
+  // block below, where each state declares its cost outright rather than inheriting one.
+  cost: ProviderCost = { kind: "free" }
 ): QuotaState {
   return {
     providerId,
@@ -55,6 +63,7 @@ function state(
     modelId: `${providerId}-model`,
     requests: windows.requests ?? null,
     tokens: windows.tokens ?? null,
+    cost,
     latencyEmaMs,
   };
 }
@@ -307,6 +316,144 @@ describe("planQuotaRun — capacity preservation", () => {
   });
 });
 
+describe("planQuotaRun — the cost gate", () => {
+  // The fleet's stated goal is `monetary cost = 0`. These pin the gate that makes it true,
+  // and pin the part that makes it safe to operate: an *unclassified* provider is not
+  // evidence of a free one, and must be refused rather than optimistically routed onto.
+  const workload = { requests: 1, tokens: 10_000 };
+  const roomy = { tokens: tokens(1_000_000, 1_000_000, 12 * HOUR) };
+  const id = (providerId: string) => ({
+    providerId,
+    accountId: "default",
+    modelId: `${providerId}-model`,
+  });
+
+  it("rejects a paid provider under FREE_ONLY, by name", () => {
+    const paid = state("paid", "default", roomy, 0, {
+      kind: "paid",
+      usdPerMTokens: 0.5,
+    });
+    const plan = planQuotaRun([paid], workload, NOW);
+
+    expect(plan.action).toBe("unavailable");
+    expect(plan.rejected).toEqual([
+      { candidateId: id("paid"), reason: "paid_tier_in_free_only" },
+    ]);
+  });
+
+  it("rejects an unclassified provider under FREE_ONLY — unknown is not free", () => {
+    // The one that matters. A provider nobody has classified is refused, because routing
+    // onto it is how an operator finds out the answer by receiving the bill. A generous
+    // quota does not soften this: `roomy` would otherwise be a perfect candidate.
+    const unclassified = state("mystery", "default", roomy, 0, { kind: "unknown" });
+    const plan = planQuotaRun([unclassified], workload, NOW);
+
+    expect(costVerdict({ kind: "unknown" }, "FREE_ONLY")).toEqual({
+      eligible: false,
+      reason: "cost_unknown_in_free_only",
+    });
+    expect(plan.action).toBe("unavailable");
+    expect(plan.rejected).toEqual([
+      { candidateId: id("mystery"), reason: "cost_unknown_in_free_only" },
+    ]);
+  });
+
+  it("routes onto that same unclassified provider once the mode allows paid", () => {
+    // Proves the gate is a switch and not a property of the row. If `unknown` were
+    // refused unconditionally, turning paid capacity on would be impossible without
+    // editing stored state — and the stored default is `unknown`, so that would mean
+    // editing every row.
+    const unclassified = state("mystery", "default", roomy, 0, { kind: "unknown" });
+    const plan = planQuotaRun([unclassified], workload, NOW, { mode: "PAID_ALLOWED" });
+
+    expect(plan.action).toBe("run");
+    expect(plan.run).toEqual(id("mystery"));
+    expect(plan.rejected).toEqual([]);
+  });
+
+  it("answers `unavailable`, never `run`, when FREE_ONLY has nothing eligible", () => {
+    // The compliance case: a paid provider and an unclassified one, no free capacity.
+    // "Run anyway" is the failure this whole mode exists to prevent, so it is asserted
+    // on all three fields that could smuggle it in.
+    const paid = state("paid", "default", roomy, 0, {
+      kind: "paid",
+      usdPerMTokens: 1,
+    });
+    const unclassified = state("mystery", "default", roomy, 0, { kind: "unknown" });
+    const plan = planQuotaRun([paid, unclassified], workload, NOW);
+
+    expect(plan.action).toBe("unavailable");
+    expect(plan.run).toBeUndefined();
+    expect(plan.resumeAt).toBeUndefined();
+    expect(plan.rejected).toEqual([
+      { candidateId: id("paid"), reason: "paid_tier_in_free_only" },
+      { candidateId: id("mystery"), reason: "cost_unknown_in_free_only" },
+    ]);
+  });
+
+  it("defaults to FREE_ONLY when the caller configures nothing", () => {
+    // Fail closed, the same way unconfigured auth is a 503 and never anonymous-allowed:
+    // a missing configuration must refuse, not improvise an answer — here, an invoice.
+    const paid = state("paid", "default", roomy, 0, {
+      kind: "paid",
+      usdPerMTokens: 1,
+    });
+
+    expect(DEFAULT_COST_MODE).toBe("FREE_ONLY");
+    expect(planQuotaRun([paid], workload, NOW).action).toBe("unavailable");
+    // Passing other options must not accidentally open the gate either.
+    expect(
+      planQuotaRun([paid], workload, NOW, { urgencyMs: 1, horizonMs: 1 }).action
+    ).toBe("unavailable");
+  });
+
+  it("does not rank free above paid — free only wins by being eligible", () => {
+    // A non-decision, pinned. `PAID_ALLOWED` treats cost as an eligibility gate and
+    // nothing else, so with identical capacity the tie falls to input order. Asserting it
+    // means a future cost-ranking change has to face this test rather than slip in.
+    const free = state("free", "default", roomy);
+    const paid = state("paid", "default", roomy, 0, {
+      kind: "paid",
+      usdPerMTokens: 0.001,
+    });
+
+    // Under FREE_ONLY the paid account is refused outright — not out-ranked.
+    const restricted = planQuotaRun([free, paid], workload, NOW);
+    expect(restricted.run?.providerId).toBe("free");
+    expect(restricted.rejected).toEqual([
+      { candidateId: id("paid"), reason: "paid_tier_in_free_only" },
+    ]);
+
+    // Under PAID_ALLOWED both are eligible and capacity alone decides; the tie goes to
+    // the first, and the loser is described as leaving more capacity — a capacity reason,
+    // not a cost one.
+    const both = planQuotaRun([free, paid], workload, NOW, { mode: "PAID_ALLOWED" });
+    expect(both.run?.providerId).toBe("free");
+    expect(both.rejected).toEqual([
+      { candidateId: id("paid"), reason: "leaves_more_capacity" },
+    ]);
+  });
+
+  it("reports the cost refusal instead of a capacity reason", () => {
+    // Ordering is part of the contract. This account's whole budget is 40k, so a 100k job
+    // is `exceeds_tokens_budget` — a message telling the operator to go and buy more
+    // capacity, when what they actually need is `mode: "PAID_ALLOWED"`.
+    const paid = state("paid", "default", { tokens: tokens(40_000, 40_000, HOUR) }, 0, {
+      kind: "paid",
+      usdPerMTokens: 0.5,
+    });
+    const job = { requests: 1, tokens: 100_000 };
+    const reason = planQuotaRun([paid], job, NOW).rejected[0].reason;
+
+    expect(reason).toBe("paid_tier_in_free_only");
+    expect(reason).not.toContain("exceeds");
+    // …and the capacity reason is what they get once they enable paid.
+    expect(planQuotaRun([paid], job, NOW, { mode: "PAID_ALLOWED" }).rejected[0].reason).toBe(
+      "exceeds_tokens_budget"
+    );
+  });
+});
+
 describe("postSpendValue", () => {
   it("rates a soon-refilling account's capacity as nearly free to consume", () => {
     // High value means "cheap to spend". Capacity that refills in a minute is worth
@@ -360,8 +507,11 @@ describe("persistence", () => {
     modelId: "llama-3.3-70b-versatile",
     requests: { kind: "day", limit: 14_400, used: 0, resetAt: NOW + HOUR },
     tokens: { kind: "day", limit: 1_000_000, used: 0, resetAt: NOW + HOUR },
+    cost: { kind: "free" },
     latencyEmaMs: 0,
   };
+
+  const KINDS = { requests: "day" as const, tokens: "day" as const };
 
   it("round-trips a declared account", () => {
     declareQuota(sql, groq);
@@ -433,6 +583,84 @@ describe("persistence", () => {
     });
     expect(capacityFor(recovered, { requests: 1, tokens: 500 }, NOW)).toEqual({
       kind: "ready",
+    });
+  });
+
+  it("carries a declared cost through declareQuota → readQuota → toQuotaState", () => {
+    // The whole chain, against real SQLite, because a gate that only worked on freshly
+    // built states would be a gate a Durable Object cold start walks straight through.
+    declareQuota(sql, {
+      ...groq,
+      accountId: "paid",
+      cost: { kind: "paid", usdPerMTokens: 0.25 },
+    });
+    declareQuota(sql, { ...groq, accountId: "free", cost: { kind: "free" } });
+
+    const paid = toQuotaState(readQuota(sql, { ...groq, accountId: "paid" })!, KINDS);
+    const free = toQuotaState(readQuota(sql, { ...groq, accountId: "free" })!, KINDS);
+
+    expect(paid.cost).toEqual({ kind: "paid", usdPerMTokens: 0.25 });
+    expect(free.cost).toEqual({ kind: "free" });
+    // …and it reaches the scheduler, which is the only consumer that matters.
+    expect(
+      planQuotaRun([paid], { requests: 1, tokens: 500 }, NOW).rejected[0].reason
+    ).toBe("paid_tier_in_free_only");
+    expect(planQuotaRun([free], { requests: 1, tokens: 500 }, NOW).run).toEqual({
+      providerId: "shahin",
+      accountId: "free",
+      modelId: "llama-3.3-70b-versatile",
+    });
+  });
+
+  it("re-declaring an account updates its cost without touching its usage", () => {
+    // Cost changes when an operator re-declares, never because work happened — the same
+    // separation `recordUsage` keeps for the declared limits.
+    declareQuota(sql, groq);
+    recordUsage(sql, groq, { requests: 1, tokens: 500 }, 200, NOW);
+    declareQuota(sql, { ...groq, cost: { kind: "paid", usdPerMTokens: 3 } });
+
+    const row = readQuota(sql, groq);
+    expect(row?.cost_usd).toBe(3);
+    expect(row?.cost_class).toBe("paid");
+    expect(row?.tok_used).toBe(500);
+    expect(row?.latency_ema_ms).toBeCloseTo(200, 6);
+  });
+
+  it("reads a bare 0 cost column back as unknown, never as free", () => {
+    // `cost_usd` defaults to 0, so this is what every row looks like before an operator
+    // classifies its provider — including the common case of a fleet that was never told.
+    // If `0` read back as free, an entirely unconfigured deployment would present a full
+    // free pool and route onto all of it.
+    declareQuota(sql, { ...groq, cost: { kind: "unknown" } });
+    expect(readQuota(sql, groq)).toMatchObject({
+      cost_usd: 0,
+      cost_class: "unknown",
+    });
+    expect(toQuotaState(readQuota(sql, groq)!, KINDS).cost).toEqual({
+      kind: "unknown",
+    });
+
+    // Same answer when the row is written by hand, behind the API's back.
+    sql.exec(
+      "UPDATE quota_state SET cost_usd = 0, cost_class = '' WHERE provider_id = ?",
+      groq.providerId
+    );
+    expect(toProviderCost(readQuota(sql, groq)!)).toEqual({ kind: "unknown" });
+  });
+
+  it("resolves a contradictory cost row to paid, so a typo cannot buy capacity free", () => {
+    declareQuota(sql, {
+      ...groq,
+      cost: { kind: "paid", usdPerMTokens: 2 },
+    });
+    sql.exec(
+      "UPDATE quota_state SET cost_class = 'free' WHERE provider_id = ?",
+      groq.providerId
+    );
+
+    expect(toQuotaState(readQuota(sql, groq)!, KINDS).cost).toEqual({
+      kind: "paid",
+      usdPerMTokens: 2,
     });
   });
 });
