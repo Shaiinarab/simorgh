@@ -71,3 +71,48 @@ export function consumeRateLimit(
   sql.exec("UPDATE rate_limits SET count = ? WHERE key = ?", nextCount, key);
   return { allowed: true, limit, remaining: Math.max(0, limit - nextCount), resetAt };
 }
+
+/**
+ * Rate-limit response headers, in BOTH the standardised and the legacy form.
+ *
+ * The standardised form comes from `draft-ietf-httpapi-ratelimit-headers`, an active
+ * IETF Internet-Draft in the httpapi working group (v11, 2026-05-23, advancing toward
+ * RFC; it replaces `draft-polli-ratelimit-headers`). It uses RFC 8941 structured fields:
+ *
+ *   RateLimit-Policy: "default";q=100;w=60
+ *   RateLimit: "default";r=15;t=23
+ *
+ * where `q` is the quota, `w` the window in seconds, `r` what remains and `t` seconds to
+ * reset. Cloudflare has emitted this since September 2025 and GitLab, CircleCI and OKX
+ * already send it.
+ *
+ * The legacy `X-RateLimit-*` headers are still emitted alongside it, deliberately. The
+ * draft is not an RFC yet — draft-10 drew an HTTPDIR early review marked "Not ready" —
+ * so a client that only understands the old names must keep working. Both forms are
+ * computed from one decision so they cannot disagree, which is the failure that matters:
+ * a gateway reporting two different quotas is worse than one reporting none.
+ *
+ * `Retry-After` is separate and is RFC 9110, not this draft; it is emitted only when the
+ * request is actually denied.
+ */
+export function rateLimitHeaders(decision: {
+  limit: number;
+  remaining: number;
+  resetAt: number;
+}): Record<string, string> {
+  const now = Math.floor(Date.now() / 1000);
+  const windowSeconds = Math.max(1, Math.ceil((decision.resetAt - now * 1000) / 1000));
+  // RFC 8941 integers carry no fractional part. `resetAt / 1000 - now` emitted
+  // `t=60.7960000038147` for a window of a minute, which is not a valid integer member
+  // and which a strict client must reject as a malformed field — turning a helpful header
+  // into a dropped one. Ceiling is the right rounding for a countdown: rounding down
+  // would tell a client to retry before the window is actually over.
+  const secondsToReset = Math.max(0, Math.ceil(decision.resetAt / 1000) - now);
+  return {
+    "RateLimit-Policy": `"default";q=${decision.limit};w=${windowSeconds}`,
+    RateLimit: `"default";r=${Math.max(0, decision.remaining)};t=${secondsToReset}`,
+    "X-RateLimit-Limit": String(decision.limit),
+    "X-RateLimit-Remaining": String(decision.remaining),
+    "X-RateLimit-Reset": String(Math.ceil(decision.resetAt / 1000)),
+  };
+}

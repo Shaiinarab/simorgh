@@ -46,6 +46,7 @@ import {
   type FetchLike,
   type Provider,
   type SqlPort,
+  rateLimitHeaders,
 } from "@simorgh/phoenix-core";
 import {
   LEDGER_SCHEMA,
@@ -135,9 +136,7 @@ export async function startNodeRuntime(
           },
         },
         headers: {
-          "X-RateLimit-Limit": String(decision.limit),
-          "X-RateLimit-Remaining": String(decision.remaining),
-          "X-RateLimit-Reset": String(Math.ceil(decision.resetAt / 1000)),
+        ...rateLimitHeaders(decision),
           "Retry-After": String(
             Math.max(1, Math.ceil((decision.resetAt - ports.now()) / 1000))
           ),
@@ -171,9 +170,7 @@ export async function startNodeRuntime(
       status: 200,
       payload: result,
       headers: {
-        "X-RateLimit-Limit": String(decision.limit),
-        "X-RateLimit-Remaining": String(decision.remaining),
-        "X-RateLimit-Reset": String(Math.ceil(decision.resetAt / 1000)),
+      ...rateLimitHeaders(decision),
       },
     };
   }

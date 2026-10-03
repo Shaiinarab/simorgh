@@ -4,7 +4,7 @@ import { FlockCoordinator } from "./flock";
 import { DataTrustVault } from "./data-trust";
 import { renderDashboard } from "./dashboard";
 import { AGENT_TOOLS } from "./agent";
-import { flockRetryAfterSeconds } from "@simorgh/phoenix-core";
+import { flockRetryAfterSeconds, rateLimitHeaders } from "@simorgh/phoenix-core";
 import { executeAgent } from "./agent-service";
 import {
   authenticateServiceRequest,
@@ -166,9 +166,7 @@ app.post("/api/v1/agent/execute", async (c) => {
     60_000
   );
 
-  c.header("X-RateLimit-Limit", String(decision.limit));
-  c.header("X-RateLimit-Remaining", String(decision.remaining));
-  c.header("X-RateLimit-Reset", String(Math.ceil(decision.resetAt / 1000)));
+  for (const [k, v] of Object.entries(rateLimitHeaders(decision))) c.header(k, v);
 
   if (!decision.allowed) {
     const retryAfter = Math.max(
