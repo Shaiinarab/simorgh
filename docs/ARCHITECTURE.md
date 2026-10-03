@@ -63,7 +63,7 @@ Every file below exists and is in the build. This is the map to reach for before
 | `parseExecuteBody()` validation: body size, prompt, tools, user ID, tier (`phoenix-core/src/security.ts`) | How SQL is reached — Durable Object `SqlStorage` on Workers, `node:sqlite` on Node |
 | Bearer authentication, constant-time SHA-256 comparison (`phoenix-core/src/security.ts`) | How the result is transported — Hono routes + HTTP on Workers, `node:http` server on Node |
 | Rate-limit counter in SQL (`phoenix-core/src/rate-limit.ts`) | Provider-specific adapters and model registries |
-| Flock status payload shape (`phoenix-core/src/flock.ts`: `FlockStatus`, `ProviderStatus`) | The Workers entry point, Durable Object shell, cron trigger (`simorgh-platform/src/index.ts`) |
+| Flock status payload shape (`phoenix-core/src/flock.ts`: `FlockStatus`, `ProviderStatus`) | The Workers entry point, Durable Object shell, cron trigger (`src/index.ts`) |
 | Ledger shape *and* implementation (`phoenix-core/src/ports.ts`: `LedgerEntry`, `LedgerRow`, `LedgerPort`; `phoenix-core/src/ledger.ts`: `createLedger()`, `LEDGER_SCHEMA`) | Durable Object identity, KV namespace, which `SqlPort` the ledger is bound to |
 | What each tool *does* (`phoenix-core/src/tools.ts`: `createToolExecutor()` — the request, the parsing, the failure text) | How a tool reaches out: the `fetch` port, the clock, and any endpoint override |
 | The request pipeline's **ordering** — agent loop → context offload → ledger write → flight (`phoenix-core/src/execute.ts`) | Whether it flies the providers itself or supplies `fly` (see `FlightDeps`) — see §2.1 |
@@ -90,14 +90,14 @@ Every capability the engine needs arrives through an interface declared in `phoe
 
 | Port | Defined in | What it abstracts | Workers host supplies from | Node host supplies from |
 |------|-----------|-------------------|---------------------------|------------------------|
-| `SqlPort` | `phoenix-core/src/ports.ts` | A SQL database with `exec(query, ...bindings)` returning a cursor | `SqlStorage` (Durable Object) at `simorgh-platform/src/index.ts` | `nodeSqlPort()` wraps `node:sqlite` `DatabaseSync` at `phoenix-core/src/node/index.ts` |
-| `FetchLike` | `phoenix-core/src/ports.ts` | Outbound HTTP: `(url, init?) => Promise<HttpLike>` | `globalThis.fetch` at `simorgh-platform/src/index.ts` | `fetch` via `createNodePorts()` at `phoenix-core/src/node/index.ts` |
+| `SqlPort` | `phoenix-core/src/ports.ts` | A SQL database with `exec(query, ...bindings)` returning a cursor | `SqlStorage` (Durable Object) at `src/index.ts` | `nodeSqlPort()` wraps `node:sqlite` `DatabaseSync` at `phoenix-core/src/node/index.ts` |
+| `FetchLike` | `phoenix-core/src/ports.ts` | Outbound HTTP: `(url, init?) => Promise<HttpLike>` | `globalThis.fetch` at `src/index.ts` | `fetch` via `createNodePorts()` at `phoenix-core/src/node/index.ts` |
 | `HttpLike` | `phoenix-core/src/ports.ts` | Inbound response: `{ ok, status, json(), headers? }` | Cloudflare `Response` (structural) | Node `Response` (structural, from `fetch`) |
-| `PhoenixPorts` | `phoenix-core/src/ports.ts` | All engine capabilities: `fetch`, `sha256`, `randomUUID()`, `now()` | Constructed at `simorgh-platform/src/index.ts` from runtime globals | `createNodePorts()` at `phoenix-core/src/node/index.ts` |
-| `ContextStorePort` | `phoenix-core/src/ports.ts` | Key/value offload with TTL: `put(key, value, {expirationTtl})`, `get(key)` | KV namespace at `simorgh-platform/src/index.ts` | `memoryContextStore()` at `phoenix-core/src/node/index.ts` |
+| `PhoenixPorts` | `phoenix-core/src/ports.ts` | All engine capabilities: `fetch`, `sha256`, `randomUUID()`, `now()` | Constructed at `src/index.ts` from runtime globals | `createNodePorts()` at `phoenix-core/src/node/index.ts` |
+| `ContextStorePort` | `phoenix-core/src/ports.ts` | Key/value offload with TTL: `put(key, value, {expirationTtl})`, `get(key)` | KV namespace at `src/index.ts` | `memoryContextStore()` at `phoenix-core/src/node/index.ts` |
 | *(no new port for quota)* | — | `quota.ts` needs only `SqlPort` and an injected clock | `SqlStorage` (DO) and `node:sqlite` both already satisfy it; the whole capacity model is pure functions over a value type | — |
 | `LedgerPort` | `phoenix-core/src/ports.ts` | Transparency ledger: `logEntry()`, `getUserLogs()` | The `DataTrustVault` Durable Object at `simorgh-platform/src/data-trust.ts`, bound to storage via `createLedger(this.ctx.storage.sql)` | `createLedger(sql)` at `phoenix-core/src/ledger.ts`, re-exported as `sqlLedger` from the `/node` subpath |
-| `WorkersAiPort` | `phoenix-core/src/ports.ts` | Cloudflare Workers AI: `run(model, input)` | Workers AI binding at `simorgh-platform/src/index.ts` | Not supplied — Node host omits it; providers needing it report themselves unavailable |
+| `WorkersAiPort` | `phoenix-core/src/ports.ts` | Cloudflare Workers AI: `run(model, input)` | Workers AI binding at `src/index.ts` | Not supplied — Node host omits it; providers needing it report themselves unavailable |
 
 The Node adapter lives at `phoenix-core/src/node/index.ts` and is exposed as the subpath export `@simorgh/phoenix-core/node` (see `phoenix-core/package.json` `exports`). It is the **only** place in `phoenix-core` that names a `node:` module.
 
@@ -155,7 +155,7 @@ Every change must not break these rules. Each is asserted where noted.
 ### Adding a provider
 
 1. Create a factory returning a `Provider` (interface: `phoenix-core/src/provider.ts`). At minimum: `id`, `name`, `provider`, `model`, `priority`, `call(prompt, ctx)`. Optionally `requires` for secret-gated dormancy.
-2. Add it to the host's provider catalog — Node: `simorgh-platform/src/runtimes/providers.ts` (uses `defaultProviders()`). Workers: inline in the host entry (`simorgh-platform/src/index.ts`).
+2. Add it to the host's provider catalog — Node: `simorgh-platform/src/runtimes/providers.ts` (uses `defaultProviders()`). Workers: inline in the host entry (`src/index.ts`).
 3. If the provider needs a secret, add it to the relevant target's `secrets` in `simorgh-platform/src/targets.ts` and to the deploy step's `needs`.
 
 ### Adding a deployment target

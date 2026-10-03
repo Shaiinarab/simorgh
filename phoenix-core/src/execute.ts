@@ -201,7 +201,16 @@ export async function executeAgent(
       loggedToLedger: true,
       tool_iterations: agent.meta.tool_iterations,
       tools_requested: agent.meta.tools_requested,
-      tool_observations: agent.meta.tool_observations,
+      // Sanitised on the way OUT as well as on the way IN. The findings-framing went into
+      // the prompt untrusted, but this field ships the raw bytes back to the operator and
+      // is surfaced by both the dashboard and the MCP layer — so without this the shield
+      // would neutralise a payload for the model and then hand the same payload to the
+      // human. `ok: false` rows carry an error string rather than tool output, but they
+      // are passed through the same call so there is one sanitiser, not two policies.
+      tool_observations: agent.meta.tool_observations.map((o) => ({
+        ...o,
+        result: sanitizeModelOutput(o.result).text,
+      })),
       blocked_tools: blockedTools,
       requestId,
       sanitizer_findings: sanitized.findings,

