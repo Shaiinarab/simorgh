@@ -18,6 +18,8 @@ export * from "./health.ts";
 export * from "./rate-limit.ts";
 export * from "./quota.ts";
 export * from "./scheduled.ts";
+export * from "./tasks.ts";
+export * from "./swarm.ts";
 export * from "./agent.ts";
 export * from "./security.ts";
 export * from "./execute.ts";

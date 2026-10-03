@@ -143,6 +143,41 @@ export async function flyFlock(
 }
 
 /**
+ * Seconds a caller should wait before retrying an exhausted flock, or `null` when there
+ * is no honest answer.
+ *
+ * Story 5.5 of the PRD asks for "a clear flock-exhausted response with Retry-After".
+ * The trap is the obvious implementation: always emit a number, defaulting to something
+ * like 60. That is a fabrication, and this project degrades honestly rather than
+ * inventing an answer — so `null` is a real return value, and it is the *common* case:
+ *
+ *   - **Every bird in a cooldown** -> the soonest expiry is a real reset time. Emit it.
+ *   - **Some birds dormant, none cooling** -> there is nothing to wait for. The birds
+ *     are dormant because they have no configured secret, so retrying in 60 seconds
+ *     will fail identically. Emitting `Retry-After: 60` would make a client poll a
+ *     configuration problem and call it backpressure. Return `null`; the caller omits
+ *     the header, and the operator reads `GET /api/v1/flock/status` to find out why.
+ *   - **A cooldown already in the past** -> clamp to `floorSeconds`, because a
+ *     `Retry-After: 0` invites an immediate hot loop, which is the opposite of the
+ *     intent.
+ *
+ * `floorSeconds` exists so hosts can share this policy while keeping their own floor:
+ * the Workers edge and the Node core are separate deployments and may want different
+ * minimums. It is not a default because a hidden default is how the lease bug in
+ * `claimTask` happened.
+ */
+export function flockRetryAfterSeconds(
+  cooldownUntils: readonly number[],
+  now: number,
+  floorSeconds: number
+): number | null {
+  const pending = cooldownUntils.filter((t) => t > now);
+  if (pending.length === 0) return null;
+  const soonest = Math.min(...pending);
+  return Math.max(floorSeconds, Math.ceil((soonest - now) / 1000));
+}
+
+/**
  * Assemble the public flock status from provider declarations, configured secrets,
  * and persisted health rows.
  *

@@ -5,7 +5,12 @@
 // themselves are where the interesting bugs have been.
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { describeFlock, flyFlock, type FlyFlockDeps } from "../src/flock.ts";
+import {
+  describeFlock,
+  flockRetryAfterSeconds,
+  flyFlock,
+  type FlyFlockDeps,
+} from "../src/flock.ts";
 import { HEALTH_SCHEMA, readAllHealth, readCooldown, recordObservation } from "../src/health.ts";
 import type { Provider, ProviderCallResult, ProviderContext } from "../src/provider.ts";
 import { openMemorySql } from "../src/node/index.ts";
@@ -253,5 +258,46 @@ describe("ProviderContext", () => {
 
     await flyFlock("ping", deps(sql, [provider], { secrets: { GROQ_API_KEY: "sk-x" } }));
     expect(seenAuth).toBe("sk-x");
+  });
+});
+
+
+// Story 5.5: the retry hint on an exhausted flock. The interesting cases are the ones
+// where the honest answer is "no number at all", because a wrong number here does not
+// merely mislead a human — it makes a client machine poll a problem it cannot fix.
+describe("flockRetryAfterSeconds", () => {
+  it("is null when nothing is cooling down", () => {
+    // Dormant birds, or a fresh fleet: no cooldown means no reset to wait for.
+    expect(flockRetryAfterSeconds([], NOW, 1)).toBeNull();
+    expect(flockRetryAfterSeconds([0, 0], NOW, 1)).toBeNull();
+  });
+
+  it("names the soonest real cooldown, not the average or the last", () => {
+    expect(
+      flockRetryAfterSeconds([NOW + 300_000, NOW + 30_000, NOW + 120_000], NOW, 1)
+    ).toBe(30);
+  });
+
+  it("ignores a cooldown that has already expired", () => {
+    // An expired cooldown is not a reset time. Only future cooldowns bound the wait.
+    expect(flockRetryAfterSeconds([NOW - 60_000], NOW, 1)).toBeNull();
+    expect(flockRetryAfterSeconds([NOW - 60_000, NOW + 20_000], NOW, 1)).toBe(20);
+  });
+
+  it("clamps to the floor rather than emitting a zero that invites a hot loop", () => {
+    // 100ms away would round to 0 seconds. `Retry-After: 0` tells a client to retry
+    // immediately, which is precisely the behaviour backpressure exists to stop.
+    expect(flockRetryAfterSeconds([NOW + 100], NOW, 1)).toBe(1);
+    expect(flockRetryAfterSeconds([NOW + 100], NOW, 30)).toBe(30);
+  });
+
+  it("rounds up, so a client never retries before the reset", () => {
+    expect(flockRetryAfterSeconds([NOW + 1_001], NOW, 1)).toBe(2);
+    expect(flockRetryAfterSeconds([NOW + 2_000], NOW, 1)).toBe(2);
+  });
+
+  it("honours a per-host floor, which is why floorSeconds is not defaulted", () => {
+    expect(flockRetryAfterSeconds([NOW + 5_000], NOW, 1)).toBe(5);
+    expect(flockRetryAfterSeconds([NOW + 5_000], NOW, 10)).toBe(10);
   });
 });

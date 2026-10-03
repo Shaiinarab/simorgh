@@ -4,6 +4,7 @@ import { FlockCoordinator } from "./flock";
 import { DataTrustVault } from "./data-trust";
 import { renderDashboard } from "./dashboard";
 import { AGENT_TOOLS } from "./agent";
+import { flockRetryAfterSeconds } from "@simorgh/phoenix-core";
 import { executeAgent } from "./agent-service";
 import {
   authenticateServiceRequest,
@@ -140,6 +141,12 @@ app.get("/api/v1/flock/status", async (c) => {
   return c.json(await stub.getFlockStatus());
 });
 
+/**
+ * Minimum `Retry-After` for an exhausted flock. One second is enough to break a hot loop
+ * without being so coarse that a 3-second cooldown becomes a minute-long stall.
+ */
+const FLOCK_RETRY_FLOOR_SECONDS = 1;
+
 app.post("/api/v1/agent/execute", async (c) => {
   const denied = await requireServiceAuth(c);
   if (denied) return denied;
@@ -182,16 +189,32 @@ app.post("/api/v1/agent/execute", async (c) => {
     );
   }
 
-  return c.json(
-    await executeAgent(c.env, {
-      prompt: request.prompt,
-      tools: request.tools,
-      userId: request.userId,
-      tier: request.tier,
-      blockedTools: request.blockedTools,
-      requestId: c.res.headers.get("X-Request-Id") ?? undefined,
-    })
-  );
+  const result = await executeAgent(c.env, {
+    prompt: request.prompt,
+    tools: request.tools,
+    userId: request.userId,
+    tier: request.tier,
+    blockedTools: request.blockedTools,
+    requestId: c.res.headers.get("X-Request-Id") ?? undefined,
+  });
+
+  // Story 5.5: exhaustion is backpressure, and backpressure without a machine-readable
+  // retry hint forces every client to invent a backoff. `flockRetryAfterSeconds` returns
+  // null when no bird is cooling down, and the header is then omitted deliberately — see
+  // its comment for why a made-up number would be worse than no number.
+  if (result.meta.error === "flock_exhausted") {
+    const status = await limiter.getFlockStatus();
+    const retryAfter = flockRetryAfterSeconds(
+      status.birds.map((b) => b.cooldownUntil),
+      Date.now(),
+      FLOCK_RETRY_FLOOR_SECONDS
+    );
+    if (retryAfter !== null) {
+      c.header("Retry-After", String(retryAfter));
+    }
+  }
+
+  return c.json(result);
 });
 
 app.get("/api/v1/context/:refId", async (c) => {

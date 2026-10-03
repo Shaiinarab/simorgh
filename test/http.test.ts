@@ -19,13 +19,33 @@ interface FlockCall {
 
 const calls: FlockCall[] = [];
 
-/** A recording stand-in for the FLOCK_COORDINATOR namespace. */
-function fakeFlockNamespace() {
+/**
+ * A recording stand-in for the FLOCK_COORDINATOR namespace.
+ *
+ * `exhausted` exists because the happy-path stand-in made one whole behaviour
+ * untestable: every `/execute` test took the answered branch, so the exhaustion path —
+ * and with it the `Retry-After` header of Story 5.5 — had never been executed at the HTTP
+ * layer by any test in this file. A stand-in that can only say "yes" is not a fixture, it
+ * is a way of never finding out.
+ */
+function fakeFlockNamespace(opts: { exhausted?: boolean; cooldownUntil?: number } = {}) {
+  const exhausted = opts.exhausted === true;
+  const cooldownUntil = opts.cooldownUntil ?? 0;
   return {
     idFromName: (name: string) => name,
     get: () => ({
       async runFlock(prompt: string, tools: string[]) {
         calls.push({ prompt, tools });
+        if (exhausted) {
+          return {
+            meta: {
+              answered_by: "none",
+              flock_attempts: [{ birdId: "stub", ok: false, error: "rate limited" }],
+              error: "flock_exhausted",
+            },
+            answer: "All birds are tired. Please try again shortly.",
+          };
+        }
         return {
           meta: {
             answered_by: "Stub (test)",
@@ -37,7 +57,25 @@ function fakeFlockNamespace() {
         };
       },
       async getFlockStatus() {
-        return { birds: [], timestamp: 0 };
+        // `dormant` is derived from the live secret reader in the real coordinator, so a
+        // minimal bird needs the fields the retry policy actually reads.
+        return {
+          birds: [
+            {
+              id: "stub",
+              name: "Stub",
+              provider: "test",
+              model: "stub-model",
+              dormant: cooldownUntil === 0,
+              status: cooldownUntil > 0 ? "tired" : "healthy",
+              consecutiveFailures: cooldownUntil > 0 ? 1 : 0,
+              totalCalls: 1,
+              totalFailures: cooldownUntil > 0 ? 1 : 0,
+              cooldownUntil,
+            },
+          ],
+          timestamp: 0,
+        };
       },
       async sweepStale() {
         return 0;
@@ -49,18 +87,18 @@ function fakeFlockNamespace() {
   };
 }
 
-function testEnv(): Env {
+function testEnv(flock: unknown = fakeFlockNamespace()): Env {
   return {
     AI: env.AI,
     CONTEXT_STORE: env.CONTEXT_STORE,
     DATA_TRUST_VAULT: env.DATA_TRUST_VAULT,
-    FLOCK_COORDINATOR: fakeFlockNamespace(),
+    FLOCK_COORDINATOR: flock,
     ENVIRONMENT: env.ENVIRONMENT,
     SIMORGH_API_KEY: "test-secret",
   } as unknown as Env;
 }
 
-const post = (body: unknown) =>
+const post = (body: unknown, flock?: unknown) =>
   app.request(
     "/api/v1/agent/execute",
     {
@@ -68,7 +106,7 @@ const post = (body: unknown) =>
       headers: { "Content-Type": "application/json", Authorization: "Bearer test-secret" },
       body: JSON.stringify(body),
     },
-    testEnv()
+    testEnv(flock)
   );
 
 /**
@@ -268,5 +306,79 @@ describe("POST /api/v1/agent/execute", () => {
     const body = (await logs.json()) as { count: number; entries: { tier: string }[] };
     expect(body.count).toBe(1);
     expect(body.entries[0].tier).toBe("Pro-Data-Pact");
+  });
+});
+
+
+// Story 5.5 — an exhausted flock is backpressure, and backpressure a client cannot read
+// is indistinguishable from a gateway that is simply broken. These run at the HTTP layer
+// because the engine-level tests cannot see whether the route emits the header at all.
+describe("flock exhaustion (Story 5.5)", () => {
+  it("tells a cooling flock how long to wait", async () => {
+    // 30s of cooldown left must read as Retry-After: 30, not 29 and not 60.
+    const res = await post(
+      { prompt: "hello" },
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: Date.now() + 30_000 })
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    const body = (await res.json()) as { agentResponse: string; meta: { error?: string } };
+    expect(body.meta.error).toBe("flock_exhausted");
+  });
+
+  it("omits Retry-After when no bird is cooling down, rather than inventing a wait", async () => {
+    // The honest case, and the one a lazy implementation gets wrong. Dormant birds fail
+    // for a reason retrying cannot fix — no API key — so a fabricated 60s would make a
+    // client machine poll a configuration problem and call it backpressure.
+    const res = await post(
+      { prompt: "hello" },
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: 0 })
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Retry-After")).toBeNull();
+    const body = (await res.json()) as { meta: { error?: string } };
+    expect(body.meta.error).toBe("flock_exhausted");
+  });
+
+  it("never emits Retry-After: 0, which would invite an immediate hot loop", async () => {
+    // A cooldown 100ms out rounds to 0 seconds. The header must be clamped to the floor.
+    const res = await post(
+      { prompt: "hello" },
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: Date.now() + 100 })
+    );
+
+    expect(res.headers.get("Retry-After")).toBe("1");
+  });
+
+  it("leaves Retry-After off a successful answer", async () => {
+    // Completeness, not containment: the header must be absent, not merely correct when
+    // present. A `Retry-After` on a 200 would make clients back off a request that
+    // succeeded.
+    const res = await post({ prompt: "hello" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Retry-After")).toBeNull();
+    const body = (await res.json()) as { agentResponse: string };
+    expect(body.agentResponse).toBe("stub-answer");
+  });
+
+  it("keeps the exhaustion answer honest rather than fabricating one", async () => {
+    // The engine's own contract: exhaustion says so in `meta.error` and answers in prose.
+    // A client that only reads the body must still be able to tell this apart from success.
+    const res = await post(
+      { prompt: "hello" },
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: Date.now() + 5_000 })
+    );
+    const body = (await res.json()) as {
+      agentResponse: string;
+      meta: { answered_by: string; error?: string; flock_attempts: unknown[] };
+    };
+
+    expect(body.agentResponse).not.toBe("stub-answer");
+    expect(body.meta.answered_by).toBe("none");
+    expect(body.meta.error).toBe("flock_exhausted");
+    expect(body.meta.flock_attempts).toHaveLength(1);
   });
 });
