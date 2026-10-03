@@ -16,6 +16,8 @@ export * from "./provider.ts";
 export * from "./flock.ts";
 export * from "./health.ts";
 export * from "./rate-limit.ts";
+export * from "./quota.ts";
+export * from "./scheduled.ts";
 export * from "./agent.ts";
 export * from "./security.ts";
 export * from "./execute.ts";

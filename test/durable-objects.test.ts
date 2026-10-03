@@ -113,6 +113,17 @@ describe("DataTrustVault", () => {
     expect((await v.getUserLogs("u-absent")).count).toBe(0);
   });
 
+  it("created the capacity table before the first request, and it crosses RPC", async () => {
+    // "Verify against reality, not against your own fixture." A fresh Durable Object
+    // has applied QUOTA_SCHEMA in its constructor; if it had not, this throws
+    // "no such table: quota_state" exactly as the bird_health assertion above does
+    // for the health table. An empty array — not a throw — is the proof, and the
+    // declared-cloneability of `QuotaRow` over the boundary is the second thing it
+    // pins: an `unknown` or an index signature here would collapse the generated stub
+    // to `never` and fail typecheck instead.
+    expect(await coordinator().getQuotaState()).toEqual([]);
+  });
+
   it("honours explicit action and details over the defaults", async () => {
     const v = vault();
     await v.logEntry({

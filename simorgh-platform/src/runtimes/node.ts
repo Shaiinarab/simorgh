@@ -28,6 +28,7 @@ import {
   AGENT_TOOLS,
   HEALTH_SCHEMA,
   MAX_EXECUTE_BODY_CHARS,
+  QUOTA_SCHEMA,
   RATE_LIMIT_SCHEMA,
   RequestValidationError,
   authenticateServiceRequest,
@@ -97,6 +98,7 @@ export async function startNodeRuntime(
   sql.exec(HEALTH_SCHEMA);
   sql.exec(RATE_LIMIT_SCHEMA);
   sql.exec(LEDGER_SCHEMA);
+  sql.exec(QUOTA_SCHEMA);
 
   const ledger = sqlLedger(sql);
   const contextStore = memoryContextStore(() => ports.now());

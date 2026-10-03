@@ -33,19 +33,31 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   HEALTH_SCHEMA,
+  QUOTA_SCHEMA,
   RATE_LIMIT_SCHEMA,
   consumeRateLimit,
   describeFlock,
   flyFlock as coreFlyFlock,
   openAiCompatibleProvider,
   readAllHealth,
+  readAllQuota,
   readCooldown,
+  SCHEDULED_LEASE_MS,
+  claimTask,
+  failTask,
+  finishTask,
+  listTasks,
+  nextDueTasks,
+  nextWakeAt,
+  SCHEDULED_SCHEMA,
+  scheduleTask,
   recordObservation,
   sweepStale as sweepHealthRows,
   workersAiProvider,
   type Provider,
   type ProviderContext,
   type ProviderStatus,
+  type QuotaRow,
   type RateLimitDecision,
   type SecretReader,
   type FlockAttempt,
@@ -202,6 +214,8 @@ export class FlockCoordinator extends DurableObject<Env> {
     this.ctx.blockConcurrencyWhile(async () => {
       await this.ctx.storage.sql.exec(HEALTH_SCHEMA);
       await this.ctx.storage.sql.exec(RATE_LIMIT_SCHEMA);
+      await this.ctx.storage.sql.exec(QUOTA_SCHEMA);
+      await this.ctx.storage.sql.exec(SCHEDULED_SCHEMA);
     });
   }
 
@@ -264,5 +278,138 @@ export class FlockCoordinator extends DurableObject<Env> {
 
   async sweepStale(now: number): Promise<number> {
     return sweepHealthRows(this.ctx.storage.sql, now);
+  }
+
+  /**
+   * Every declared account's quota, over RPC.
+   *
+   * Exists so the capacity table is reachable from a host rather than only from the
+   * engine's own tests — and, incidentally, so its shape is pinned by the workerd
+   * suite: this returns `QuotaRow`s across a Durable Object boundary, which is where
+   * a stray `unknown` or an index signature would collapse the generated stub to
+   * `never` and break the build rather than the request.
+   */
+  async getQuotaState(): Promise<QuotaRow[]> {
+    return readAllQuota(this.ctx.storage.sql);
+  }
+
+  /**
+   * Schedule a prompt to run through the flock at or after `resumeAt`.
+   *
+   * Re-inserting the same id rewrites the request while the row is still `pending`. Once it
+   * has been claimed, or has finished, the insert is a no-op on state: a run that already
+   * happened cannot be un-happened, and a run in flight cannot be edited underneath its own
+   * executor. See `scheduleTask` for why `running` is as immutable as `done`.
+   */
+  async scheduleDelayed(input: {
+    id: string;
+    prompt: string;
+    tools?: string[];
+    resumeAt: number;
+  }): Promise<{ id: string; resumeAt: number }> {
+    const now = Date.now();
+    scheduleTask(
+      this.ctx.storage.sql,
+      {
+        id: input.id,
+        prompt: input.prompt,
+        tools: input.tools ?? [],
+        resumeAt: input.resumeAt,
+      },
+      now
+    );
+    await this.rearmAlarm(now);
+    return { id: input.id, resumeAt: input.resumeAt };
+  }
+
+  /**
+   * Point the alarm at whatever this table needs next, or clear it when nothing is outstanding.
+   *
+   * The engine owns the *policy* (`nextWakeAt`); only a Durable Object can arm an alarm, so
+   * the binding lives here. Both the insert path and the alarm path funnel through this one
+   * method so they cannot drift — an earlier version inlined "earliest pending" separately in
+   * each, which is exactly how the recovery gap documented on `nextWakeAt` would have been
+   * reintroduced by the next person who edited one of the two copies.
+   */
+  private async rearmAlarm(now: number): Promise<void> {
+    const next = nextWakeAt(this.ctx.storage.sql, now, SCHEDULED_LEASE_MS);
+    if (next === null) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    await this.ctx.storage.setAlarm(next);
+  }
+
+  async listScheduled(): Promise<{
+    id: string; state: string; resume_at: number; attempts: number; result: string | null; error: string | null;
+  }[]> {
+    return listTasks(this.ctx.storage.sql).map((t) => ({
+      id: t.id, state: t.state, resume_at: t.resume_at, attempts: t.attempts, result: t.result, error: t.error,
+    }));
+  }
+
+  /**
+   * The Durable Object alarm handler.
+   *
+   * Awakes at whatever `nextWakeAt` names, claims everything due, and flies each through the
+   * flock *once*. Three layers of idempotence, and each answers a different question:
+   *
+   *   1. **Durable Objects do not re-enter `alarm()` concurrently.** A second alarm is
+   *      delivered only after this one returns, so the loop is serial by construction.
+   *   2. **`claimTask` is a compare-and-set on the expected state.** It reports whether *it*
+   *      performed the transition, so a caller that lost a race runs nothing. Defence in
+   *      depth: the guarantee has to survive a host that one day does deliver two at once.
+   *   3. **A terminal row is never claimable.** `done` and `failed` are absent from the
+   *      claim's `WHERE`, so an alarm arriving after a task completed finds nothing to do.
+   *      This is what makes "an already-completed task is not executed twice" a property of
+   *      the state machine rather than a property of the scheduler's mood.
+   *
+   * A row whose claiming host died loses its lease and is reclaimed on a later pass — a pass
+   * that `rearmAlarm` guarantees will exist, since a `running` row contributes a wake at its
+   * lease expiry. At-least-once, never-forgetting.
+   */
+  async alarm(): Promise<void> {
+    const startedAt = Date.now();
+    const due = nextDueTasks(this.ctx.storage.sql, startedAt, SCHEDULED_LEASE_MS);
+
+    for (const task of due) {
+      if (!claimTask(this.ctx.storage.sql, task.id, startedAt, SCHEDULED_LEASE_MS)) {
+        continue; // lost the race, or already terminal
+      }
+      try {
+        const result = await this.runFlock(task.prompt, parseTools(task.tools));
+        finishTask(this.ctx.storage.sql, task.id, JSON.stringify(result));
+      } catch (e) {
+        // The only way out of a `catch` here is a *thrown* error: `runFlock` does not throw
+        // for a failed provider, because the engine catches those and returns
+        // `flock_exhausted`, which is a result and is stored as one. So this is a host-level
+        // fault, and the row must not be left `running` — an un-closed row is reclaimed and
+        // retried forever against a fault that will never resolve.
+        failTask(this.ctx.storage.sql, task.id, String(e));
+      }
+    }
+
+    // The clock moved: a task that ran for a minute is no longer overdue, and a row claimed
+    // during this pass contributes a *future* lease expiry. Recomputing from a fresh `now` is
+    // what stops the alarm being pinned into the past and spinning.
+    await this.rearmAlarm(Date.now());
+  }
+}
+
+/**
+ * Read a persisted `tools` column back into the flight's second argument.
+ *
+ * A malformed column must not throw. This runs inside the alarm loop, so a `JSON.parse`
+ * failure would not be caught by the `try` around the flight — it would abort the *entire*
+ * alarm and leave every other due row unclaimed until its lease expired. An unreadable tool
+ * record is metadata, so the safe reading is an empty one: it changes what this deployment
+ * records about the run, not what the run does.
+ */
+function parseTools(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === "string") : [];
+  } catch {
+    return [];
   }
 }

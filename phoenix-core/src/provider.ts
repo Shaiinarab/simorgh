@@ -35,6 +35,17 @@ export interface Provider {
   /** Tried in ascending order. */
   priority: number;
   /**
+   * Which of the operator's accounts for this provider this entry dialled.
+   *
+   * Defaults to `"default"` — deliberately, so a single-credential deployment is the
+   * degenerate case of the account model rather than a special case of it, and so
+   * adding a second account changes no existing call site. `phoenix-core/src/quota.ts`
+   * keys its whole table on `(providerId, accountId, modelId)`, which is what turns
+   * several legitimate accounts on one provider into one compute pool instead of
+   * several unrelated rows.
+   */
+  accountId?: string;
+  /**
    * Secret this provider needs. When it is absent the provider is *dormant*: a
    * deployment fact, not a fault, so it is skipped without being cooled down.
    * A provider with no `requires` is always available — that is the zero-KYC
@@ -42,6 +53,14 @@ export interface Provider {
    */
   requires?: string;
   call(prompt: string, ctx: ProviderContext): Promise<ProviderCallResult>;
+}
+
+/** The account a provider entry uses when it does not name one. */
+export const DEFAULT_ACCOUNT_ID = "default";
+
+/** Resolve a provider's account id, applying the documented default. */
+export function accountOf(provider: Provider): string {
+  return provider.accountId ?? DEFAULT_ACCOUNT_ID;
 }
 
 export interface OpenAiCompatibleSpec {
@@ -53,6 +72,8 @@ export interface OpenAiCompatibleSpec {
   /** Full chat-completions URL. */
   endpoint: string;
   requires?: string;
+  /** See `Provider.accountId`. */
+  accountId?: string;
 }
 
 /**
@@ -71,6 +92,7 @@ export function openAiCompatibleProvider(spec: OpenAiCompatibleSpec): Provider {
     model: spec.model,
     priority: spec.priority,
     ...(spec.requires ? { requires: spec.requires } : {}),
+    ...(spec.accountId ? { accountId: spec.accountId } : {}),
     async call(prompt, ctx) {
       const key = spec.requires ? ctx.secret(spec.requires) : undefined;
       if (spec.requires && !key) return { ok: false, error: "dormant" };
