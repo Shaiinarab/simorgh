@@ -39,9 +39,20 @@ is exposing what is already written — not adding an agent, a collector, or a b
 
 ## 3. What is genuinely absent
 
-**a. Latency — recorded nowhere on the TypeScript side.** This is the one real hole. A grep for
-`latency|latencyMs|duration|elapsed` across `phoenix-core/src` and `src` returns **nothing**, and
-`bird_health` has no timing column. Consequences:
+**a. Latency — now recorded, in `quota_state` (2026-10-02).** *Was:* recorded nowhere on the
+TypeScript side — a grep for `latency|latencyMs|duration|elapsed` across `phoenix-core/src` and `src`
+returned **nothing**, and `bird_health` had no timing column. *Now:* `phoenix-core/src/quota.ts`
+writes `latency_ema_ms` / `last_latency_ms` per `(provider, account, model)`, on the Go registry's
+exact `0.7·old + 0.3·new`. Two caveats, both deliberate:
+
+- **It is not on `bird_health`.** Recommendation 1 below proposed that column. It went to
+  `quota_state` instead, because `bird_health` already owns the call and failure counters, and a
+  second copy of a counter is a second truth — the failure mode `ledger.ts` documents having already
+  paid for once. Per-account was the more useful grain anyway.
+- **Only the scheduler's urgent path reads it.** It is not yet exposed on any endpoint, so
+  `docs/STATE-OF-PROJECT.md` still rates observability `⚠️`.
+
+The remaining consequences:
 
 - The flock orders by **priority only**. It has no way to prefer the faster of two healthy providers.
 - Nobody can answer "which provider is slow this week, and did it get slower?" — the only timing
@@ -63,10 +74,9 @@ than only the last, but nothing carries one id across the hop.
 Each is small, and each is answerable by the store that already exists. **Do not add a metrics backend
 for this.**
 
-1. **Record provider latency.** One `latency_ms` column on `bird_health`, written with the observation
-   that is already being written (`recordObservation`). Optionally an EMA alongside it, mirroring the Go
-   side so the two can be compared rather than merely differing. *This is the only schema change
-   proposed, and it is the prerequisite for the flock ever preferring a fast provider.*
+1. ~~**Record provider latency.**~~ **Done**, with a different table: see (a) above for why
+   `quota_state` and not `bird_health`. *The schema prerequisite is now met — what is still missing is
+   the consumer: nothing exposes the EMA on an endpoint, and `flyFlock` still orders by priority only.*
 2. **Expose a derived summary, not new counters.** One route that reads `bird_health` + the ledger and
    returns per-provider success rate, failure count, current cooldown, and last-ok. No aggregation
    daemon: the tables are small and already indexed by primary key.

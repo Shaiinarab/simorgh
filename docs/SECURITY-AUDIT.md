@@ -226,3 +226,58 @@ grep -rn 'apiKey\|API_KEY' --include='*.ts' simorgh-platform/src/fleet-store.ts
 1. **AUTH-002 (IDOR on `/api/v1/user/:userId/logs`)** — An attacker with any valid bearer token can read any user's complete ledger (prompts, tools, tiers). The `userId` is a URL path parameter, making enumeration trivial. This is the highest-value target in the audit because it leaks request history. Fix: derive the user ID from the bearer token claims, not the URL.
 2. **AUTH-001 (unauthenticated `/api/v1/flock/status`)** — Any internet caller can learn which providers are configured and their health, giving a reconnaissance map for targeted attacks on under-configured cores. Fix: add `requireServiceAuth` or explicitly accept the risk in the PRD.
 3. **SSRF-001 (no fleet endpoint validation)** — The platform dials whatever origin is in the fleet file with no validation against private/link-local IP ranges. While fleet file access is local, a compromised operator machine or a supply-chain attack on `simorgh connect` could inject internal targets. Fix: add a private-IP blocklist in `connectorFor` or `fleet-store.ts`.
+
+---
+
+## 4. Risk acceptance — recorded 2026-10-02
+
+**Decision:** the repository owner chose to **defer the six HIGH findings** and proceed with
+capability work, on the grounds that this is a single-operator deployment on free tiers with no
+customer data. The findings above are **not** downgraded, not dismissed, and not closed: they stay
+at their audited severity, and this section records *why* they are being carried.
+
+### The acceptance, and exactly what it covers
+
+| Finding | Carried because | What it would cost to fix |
+|---|---|---|
+| **AUTH-002** IDOR on `/api/v1/user/:userId/logs` | One principal. The "users" in the ledger are request-caller labels, not separate tenants with data of their own to protect. | Derive the id from the token instead of the path — small, but changes the route contract. |
+| **AUTH-003** IDOR on `/api/v1/context/:refId` | Same posture. Context offload is a KV convenience, not an isolation boundary. | Same shape as AUTH-002. |
+| **AUTH-001** unauthenticated `/api/v1/flock/status` | The operator dashboard and `doctor` read it, and the operator needs it before a key is configured. | One `requireServiceAuth` call — but then a fresh deployment cannot show its own status. |
+| **SSRF-001** fleet endpoints unvalidated | The `byo-endpoint` target exists precisely so the operator can dial a core they run. Validating it would narrow a feature that is the point. | A private/link-local IP blocklist in `connectorFor`. |
+| **SEC-001** plaintext fleet API keys | Single-operator file on the operator's own machine, already `0600`-scoped by the OS. | Encrypt at rest — and `packages/crypto` already does exactly this in Go, so the code exists. |
+| **MCP-001** Workers MCP handler auth unresolved | The finding is that the audit *could not locate* the route. It is unverified in either direction. | One verification, then possibly one guard. |
+
+### The condition under which this acceptance is void
+
+**This acceptance expires the moment any of the following becomes true.** Each is a change in the
+deployment's *shape*, not in its traffic, and each turns a single-principal assumption into a false
+one:
+
+1. **A second principal.** Any second real caller — a teammate, a shared bot, a hosted dashboard —
+   turns AUTH-002 and AUTH-003 from theoretical into data disclosure between real accounts. They are
+   the two findings that must be fixed *first*, and they are cheap.
+2. **Provider credentials arriving from anywhere but the operator's own environment.** Per-account
+   credentials are now a first-class concept (`phoenix-core/src/quota.ts`, `Provider.accountId`).
+   The moment an account's secret can be supplied by anything other than the operator's shell or
+   `wrangler secret`, SEC-001's blast radius stops being "my own machine" and starts being "every
+   account I hold".
+3. **Persistent user data on a network-reachable surface.** The ledger currently holds request
+   metadata. The moment it holds anything a principal would not want another principal to read,
+   AUTH-002 is a breach, not a finding.
+4. **A public deployment.** Any core reachable from the open internet makes AUTH-001 a
+   reconnaissance map and SSRF-001 a pivot, regardless of how few users exist.
+
+### What is explicitly *not* deferred
+
+- Authentication **fails closed** (`security.ts`) and stays that way. Unconfigured is `503`, never
+  anonymous-allowed.
+- CORS unset allows **nothing** (`isAllowedOrigin`). Unchanged.
+- The `--yes` deploy gate stays. No env var, no config file, no CI exemption.
+- The boundary test stays. No change may weaken `phoenix-core/test/boundary.test.ts`.
+- No secret may be logged, echoed, committed, or written to a test fixture.
+
+### Re-verification trigger
+
+Any change that touches `src/index.ts` routes, `simorgh-platform/src/connectors/*`,
+`fleet-store.ts`, or the MCP handler registration **must** re-read §1 of this audit before it is
+reviewed. A PR that adds a route is a PR that can widen one of these six.

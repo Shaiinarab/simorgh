@@ -5,7 +5,7 @@ description: How testing works in simorgh-platform — the two suites and what e
 
 # Testing simorgh-platform
 
-The suite is green (**82** workerd + **202** Node) and that number is not the question. This skill is
+The suite is green (**93** workerd + **261** Node) and that number is not the question. This skill is
 about what the green number **cannot** see.
 
 ## Two suites, split by what each can prove
@@ -67,11 +67,13 @@ The counts are recorded in `docs/STATE-OF-PROJECT.md` §3.1 and in the README, p
 a suite that silently *shrinks* is the failure mode that is easiest to miss, and a total can stay green
 while a file disappears. When you add or remove tests, update those numbers.
 
-Current: workerd 10 files/82 — `agent` 17, `flock-routing` 14, `http` 12, `health-storage` 11,
-`durable-objects` 8, `security` 7, `index` 4, `telegram` 4, `rate-limit` 3, `core-wiring` 2.
-Node 17 files/202 — engine 8/89 (`security` 19, `ledger` 14, `tools` 14, `flock` 11, `agent` 9,
-`storage` 9, `execute` 8, `boundary` 5), platform 9/113 (`targets` 17, `preflight` 16, `connectors` 15,
-`integration` 13, `mcp-server` 13, `doctor` 12, `deploy` 11, `fleet` 10, `conformance` 6).
+Current: workerd 11 files/93 — `agent` 17, `flock-routing` 14, `http` 12, `health-storage` 11,
+`durable-scheduled` 10, `durable-objects` 9, `security` 7, `index` 4, `telegram` 4, `rate-limit` 3,
+`core-wiring` 2.
+Node 19 files/261 — engine 10/148 (`scheduled` 32, `quota` 27, `security` 19, `ledger` 14, `tools` 14,
+`flock` 11, `agent` 9, `storage` 9, `execute` 8, `boundary` 5), platform 9/113 (`targets` 17,
+`preflight` 16, `connectors` 15, `integration` 13, `mcp-server` 13, `doctor` 12, `deploy` 11, `fleet` 10,
+`conformance` 6).
 
 ## Commands that check the *assembled* thing
 

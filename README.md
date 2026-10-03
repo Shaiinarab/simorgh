@@ -199,7 +199,7 @@ simorgh-platform/
 │   ├── security.ts         #   host adapter → engine security
 │   ├── telegram.ts         #   Telegram client + webhook (secret-token verified)
 │   └── dashboard.ts        #   Self-contained Mission Control HTML (inline CSS/JS, no build)
-├── test/                   # 10 files, 82 tests — the workerd suite (vitest.config.ts)
+├── test/                   # 11 files, 93 tests — the workerd suite (vitest.config.ts)
 ├── packages/               # Go workspace modules
 │   ├── config/             #   provider config load/validate
 │   ├── crypto/             #   AES-256-GCM sealing, argon2id key derivation

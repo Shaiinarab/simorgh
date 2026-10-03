@@ -28,6 +28,7 @@ Every file below exists and is in the build. This is the map to reach for before
 | `security.ts` | Bearer auth, constant-time compare, `parseExecuteBody()` validation, CORS allow-list |
 | `rate-limit.ts` | The per-user SQL counter |
 | `health.ts` | `bird_health` upsert, cooldown reads, the stale sweep |
+| `quota.ts` | **Free-compute capacity.** Quota windows, reset horizons, `capacityFor`, `postSpendValue`, `planQuotaRun`, the `quota_state` table, and the latency EMA. Pure over `(states, workload, now)` — see [`adr/ADR-0003`](adr/ADR-0003-free-compute-capacity.md) |
 | `ledger.ts` | `createLedger()` / `LEDGER_SCHEMA` — the transparency ledger, on any `SqlPort` |
 | `models.ts` | The model catalog |
 | `node/index.ts` | The Node adapter (`node:sqlite`, `node:crypto`). The package's only `node:` import. |
@@ -94,6 +95,7 @@ Every capability the engine needs arrives through an interface declared in `phoe
 | `HttpLike` | `phoenix-core/src/ports.ts` | Inbound response: `{ ok, status, json(), headers? }` | Cloudflare `Response` (structural) | Node `Response` (structural, from `fetch`) |
 | `PhoenixPorts` | `phoenix-core/src/ports.ts` | All engine capabilities: `fetch`, `sha256`, `randomUUID()`, `now()` | Constructed at `simorgh-platform/src/index.ts` from runtime globals | `createNodePorts()` at `phoenix-core/src/node/index.ts` |
 | `ContextStorePort` | `phoenix-core/src/ports.ts` | Key/value offload with TTL: `put(key, value, {expirationTtl})`, `get(key)` | KV namespace at `simorgh-platform/src/index.ts` | `memoryContextStore()` at `phoenix-core/src/node/index.ts` |
+| *(no new port for quota)* | — | `quota.ts` needs only `SqlPort` and an injected clock | `SqlStorage` (DO) and `node:sqlite` both already satisfy it; the whole capacity model is pure functions over a value type | — |
 | `LedgerPort` | `phoenix-core/src/ports.ts` | Transparency ledger: `logEntry()`, `getUserLogs()` | The `DataTrustVault` Durable Object at `simorgh-platform/src/data-trust.ts`, bound to storage via `createLedger(this.ctx.storage.sql)` | `createLedger(sql)` at `phoenix-core/src/ledger.ts`, re-exported as `sqlLedger` from the `/node` subpath |
 | `WorkersAiPort` | `phoenix-core/src/ports.ts` | Cloudflare Workers AI: `run(model, input)` | Workers AI binding at `simorgh-platform/src/index.ts` | Not supplied — Node host omits it; providers needing it report themselves unavailable |
 
@@ -135,7 +137,16 @@ Every change must not break these rules. Each is asserted where noted.
 4. **Each port is declared exactly once, in `ports.ts`** — caught by `phoenix-core/test/boundary.test.ts` ("declares every port it needs in ports.ts and nowhere else"). Checks that `SqlPort`, `PhoenixPorts`, `ContextStorePort`, `LedgerPort`, `WorkersAiPort` interfaces are defined only in `ports.ts`. Reason: a port defined twice is two ports, and the Node adapter and Workers host silently drift.
 5. **Relative imports carry an explicit `.ts` extension** — Reason: plain `node` must execute the sources unbuilt. Node strips types natively but resolves files literally, so an extensionless specifier fails with `ERR_MODULE_NOT_FOUND`. The bundlers (esbuild via wrangler, vite via test pools) accept the extension too. Confirmed in both `phoenix-core/tsconfig.json` and `simorgh-platform/tsconfig.json` comments.
 6. **No TypeScript-only runtime syntax** — no parameter properties, no `enum`, no `namespace` — because Node's type stripping refuses them (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`). This bit `RequestValidationError`: the class at `phoenix-core/src/security.ts` uses `readonly` fields assigned in the constructor rather than parameter properties, which is why it survives stripping. If it had used `constructor(private status: ...)` syntax, it would break at runtime on plain Node.
-7. **The `birdId` / `birds` / `answered_by` field names are a published API contract and stay** — even though the engine's internal vocabulary is "provider" (`phoenix-core/src/flock.ts` uses `providerId`, `byPriority()`, `ProviderStatus`). The wire fields come from `FlockAttempt.birdId`, `FlockStatus.birds`, and `FlockMeta.answered_by`. Reason: `/api/v1/flock/status` is documented in `README.md` and a dashboard reads it. Renaming wire fields is a breaking API change with no bearing on modularization. The bridge is `toAskResult()` in `simorgh-platform/src/connectors/types.ts`, which maps `birdId` → `providerId` at the seam.
+7. **`quota_state` owns capacity and latency; `bird_health` owns calls and failures** — Reason: a
+   second copy of a counter is a second truth, and `ledger.ts` records what happens when two
+   definitions of the same thing exist with nothing comparing them. Latency is in `quota_state`
+   because `bird_health` never recorded it and `docs/OBSERVABILITY.md` names that as the one real
+   measurement gap. Asserted by review, not yet by a test.
+8. **An unpublished quota limit is unconstrained, never zero** — Reason: `limit <= 0` means the
+   provider has not told us there is a cap. Reading it as "no capacity" would make the scheduler
+   refuse work it could have done. Asserted in `quota.test.ts` ("treats an unpublished limit as
+   unconstrained").
+9. **The `birdId` / `birds` / `answered_by` field names are a published API contract and stay** — even though the engine's internal vocabulary is "provider" (`phoenix-core/src/flock.ts` uses `providerId`, `byPriority()`, `ProviderStatus`). The wire fields come from `FlockAttempt.birdId`, `FlockStatus.birds`, and `FlockMeta.answered_by`. Reason: `/api/v1/flock/status` is documented in `README.md` and a dashboard reads it. Renaming wire fields is a breaking API change with no bearing on modularization. The bridge is `toAskResult()` in `simorgh-platform/src/connectors/types.ts`, which maps `birdId` → `providerId` at the seam.
 
 ---
 

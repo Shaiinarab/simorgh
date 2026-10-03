@@ -1,7 +1,7 @@
 # Simorgh — project scope and current state
 
 **Written:** 2026-09-22 · **Branch:** `feat/phoenix-core-modularization`, stacked on `e0053fc` (= the
-head of PR #1, `origin/production-readiness-v0-3`) · **Status:** all TS suites green (82 + 202), the Go
+head of PR #1, `origin/production-readiness-v0-3`) · **Status:** all TS suites green (93 + 261), the Go
 workspace green, verified twice (host + clean container)
 
 > **Read this as a claim set, not a fact set.** Every number and path below was true when written and
@@ -76,8 +76,8 @@ Every row below was executed, not inferred. Commands are copy-pasteable from the
 | # | Claim | Command | Result |
 |---|---|---|---|
 | 1 | Types pass across all three configs | `npm run typecheck` | clean (0 errors) |
-| 2 | The Workers app works in workerd | `npm run test:workers` | **82 passed** (10 files) |
-| 3 | The engine + platform pass on plain Node | `npm run test:node` | **202 passed** (17 files) |
+| 2 | The Workers app works in workerd | `npm run test:workers` | **93 passed** (11 files) |
+| 3 | The engine + platform pass on plain Node | `npm run test:node` | **261 passed** (19 files) |
 | 4 | The platform reaches a live core **over REST and MCP**, and the answers match | `npm run e2e:ask` | **10/10 checks** |
 | 5 | A real core boots **unbuilt** and answers | `npm run simorgh -- smoke` | 5/5 checks (health, flock status, auth-fails-closed, execute-degrades-honestly, mcp-initialize) |
 | 6 | The engine runs on a different runtime | `freebuff2 bash -lc 'cd … && npx vitest run --config vitest.node.config.ts'` | **202 passed on Node 22.23** (host is Node 26.7) |
@@ -88,12 +88,13 @@ the same mounted tree, and passed identically. That is the portability claim act
 
 ### 3.1 Exact suite composition (so a regression is visible as a number)
 
-**workerd — 10 files, 82 tests:** `agent` 17 · `flock-routing` 14 · `http` 12 · `health-storage` 11 ·
-`durable-objects` 8 · `security` 7 · `index` 4 · `telegram` 4 · `rate-limit` 3 · `core-wiring` 2
+**workerd — 11 files, 93 tests:** `agent` 17 · `flock-routing` 14 · `http` 12 · `health-storage` 11 ·
+`durable-scheduled` 10 · `durable-objects` 9 · `security` 7 · `index` 4 · `telegram` 4 · `rate-limit` 3 ·
+`core-wiring` 2
 (the last is a 2-test probe proving the workspace package resolves *inside workerd*).
 
-**Node — 17 files, 202 tests.** Engine (8 files, 89): `security` 19 · `ledger` 14 · `tools` 14 ·
-`flock` 11 · `agent` 9 · `storage` 9 · `execute` 8 · `boundary` 5.
+**Node — 19 files, 261 tests.** Engine (10 files, 148): `scheduled` 32 · `quota` 27 · `security` 19 ·
+`ledger` 14 · `tools` 14 · `flock` 11 · `agent` 9 · `storage` 9 · `execute` 8 · `boundary` 5.
 Platform (9 files, 113): `targets` 17 · `preflight` 16 · `connectors` 15 · `integration` 13 ·
 `mcp-server` 13 · `doctor` 12 · `deploy` 11 · `fleet` 10 · `conformance` 6.
 
