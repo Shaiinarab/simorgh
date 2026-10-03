@@ -16,9 +16,13 @@ fly together as one Simorgh, and when one bird tires, the flock reroutes.**
 
 ## Quick Start
 
+Package manager is **upm**, runtime is **Node**. There is no `package-lock.json`; `upm.lock` is
+committed and is the reproducible build input. `npm run <script>` still works — `npm` here is only
+running a package.json script, not installing anything.
+
 ```bash
-# install dependencies
-npm install
+# install dependencies (upm — https://github.com/unjs/upm)
+upm install
 
 # typecheck — TypeScript 7 (tsgo, the native Go port)
 npm run typecheck

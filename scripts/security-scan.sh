@@ -58,8 +58,42 @@ else
 fi
 
 # ── 2. dependencies ───────────────────────────────────────────────────────────
-section "2. shipped dependencies (npm audit --omit=dev)"
-if ! AUDIT=$(npm audit --omit=dev 2>&1); then
+#
+# The project is installed by upm and locks with `upm.lock`. upm deliberately does NOT
+# proxy `npm audit` ("npm does not understand upm's `node_modules` layout or `upm.lock`"),
+# so running the audit against the installed tree is not possible any more.
+#
+# The gate is kept, because dropping it would be exactly the "weakened a security check"
+# move AGENTS.md forbids. What changed is only where the lockfile comes from: npm resolves
+# a THROWAWAY tree in a temp directory from `package.json` alone, and audits that. The
+# inputs are the same declared dependencies; the repo still ships no `package-lock.json`.
+#
+# Two things this deliberately does NOT do:
+#   * it does not treat an audit it could not run as a pass. A network failure must fail
+#     the gate loudly — a gate that quietly passes when it cannot check is worse than no
+#     gate, because it reports safety it never verified;
+#   * it does not run lifecycle scripts to build the throwaway tree.
+section "2. shipped dependencies (npm audit --omit=dev, resolved in a scratch dir)"
+
+AUDIT_DIR="${TMPDIR:-/tmp}/simorgh-audit-$$"
+cleanup() { rm -rf "$AUDIT_DIR"; }
+trap cleanup EXIT
+mkdir -p "$AUDIT_DIR/phoenix-core" || { say "  ✗ cannot create $AUDIT_DIR"; exit 9; }
+
+# The workspace must travel with the manifest: `workspace:*` is unresolvable without it,
+# and npm rejects the spec with EUNSUPPORTEDPROTOCOL rather than falling back.
+cp package.json "$AUDIT_DIR/" || exit 9
+cp phoenix-core/package.json "$AUDIT_DIR/phoenix-core/" || exit 9
+
+say "  resolving a throwaway tree from package.json (no lifecycle scripts)…"
+if ! RESOLVE=$(cd "$AUDIT_DIR" && npm install --package-lock-only --ignore-scripts --no-audit --no-fund 2>&1); then
+  say "  ✗ dependency resolution FAILED — the audit could not run, so the gate fails."
+  say "$RESOLVE" | tail -5 | sed 's/^/    /'
+  FAIL=1
+elif [ ! -f "$AUDIT_DIR/package-lock.json" ]; then
+  say "  ✗ resolution reported success but wrote no lockfile — treating as a failure."
+  FAIL=1
+elif ! AUDIT=$(cd "$AUDIT_DIR" && npm audit --omit=dev 2>&1); then
   say "$AUDIT" | sed 's/^/  /'
   FAIL=1
 else

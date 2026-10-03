@@ -18,9 +18,20 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          # upm requires Node 22.3+ (docs/adr/ADR-0004-toolchain-upm.md).
           node-version: 22
-          cache: npm
-      - run: npm ci
+      - run: npm i -g upm --min-release-age 0
+      # upm's shared store is ~/.upm/store; caching it is what makes a repeat install
+      # cheap. `node_modules` is not cached: upm links it from the store with hardlinks,
+      # and a cached link tree is a second thing that can disagree with `upm.lock`.
+      - name: Cache the upm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.upm/store
+          key: upm-${{ runner.os }}-${{ hashFiles('upm.lock') }}
+      # `--frozen-lockfile` fails if upm.lock is missing or stale. It never selects a
+      # version, so a CI build cannot silently drift onto a newer dependency.
+      - run: upm install --frozen-lockfile
       - name: Typecheck (TypeScript 7 / tsgo)
         run: npm run typecheck
       # `npm test` runs both suites in order: test:workers (vitest run, workerd pool)
@@ -30,7 +41,7 @@ jobs:
       - name: Tests (vitest, workerd pool)
         run: npm test
       - name: Bundle check (wrangler dry-run)
-        run: npx wrangler deploy --dry-run --outdir dist
+        run: upx wrangler deploy --dry-run --outdir dist
 
   go:
     name: Go · build · vet · tests
@@ -61,13 +72,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # setup-node is still required: the scratch audit shells out to npm. No `cache: npm`
+      # and no install step, because there is no package-lock.json to cache and this job
+      # does not install the project.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      # `npm ci` is required: the audit half of the scan reads the installed tree.
-      - run: npm ci
-      # Deliberately the SAME script a developer runs locally (`npm run security:scan`), so the gate
-      # is not something that only exists in CI. Zero dependencies, no licence, no SaaS account.
+      # `scripts/security-scan.sh` resolves its own throwaway
+      # tree from package.json to audit it, because upm does not proxy `npm audit` and
+      # npm cannot read `upm.lock`. That is why this job needs no package-manager step at
+      # all -- and why the gate still works with no `package-lock.json` in the repository.
+      #
+      # Deliberately the SAME script a developer runs locally (`npm run security:scan`), so
+      # the gate is not something that only exists in CI. Zero dependencies, no licence, no
+      # SaaS account.
       - name: Secrets scan + dependency audit
         run: bash scripts/security-scan.sh

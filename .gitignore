@@ -38,3 +38,9 @@ mailbox/.state/
 # .openclaw/tmp/<name>.ts *inside the repo*, so this path is expected to appear — it must never be
 # committed. Real temp files belong at the workspace root (.openclaw/tmp), not here.
 .openclaw/
+
+# Package manager: upm (see docs/adr/ADR-0004-toolchain-upm.md). `upm.lock` IS committed --
+# it is the reproducible build input. `package-lock.json` is deliberately absent: it would
+# be a second, competing resolution of the same manifest, which is the "two truths nothing
+# compares them" failure this repo already paid for once in ledger.ts.
+package-lock.json

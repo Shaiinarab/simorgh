@@ -1,142 +1,140 @@
-# ADR-0004 — the toolchain stays on npm: upm cannot adopt this repository's lockfile
+# ADR-0004 — upm is the package manager; Node is the only runtime; Bun is gone
 
-- **Status:** accepted
-- **Date:** 2026-10-02
-- **Decides:** which JavaScript package manager this repository uses
-- **Decided against:** `upm` ([unjs/upm](https://github.com/unjs/upm)), which was proposed as the
-  package manager on the grounds that it is small, fast, MIT-licensed, and written by the maintainer
-  of Nitro/Nuxt
-- **Amends:** nothing. **Relates to:** `ADR-0003` (the capacity layer), which the toolchain change was
-  meant to unblock
+- **Status:** accepted (2026-10-03). **Supersedes:** the 2026-10-02 draft of this ADR, which decided
+  *against* upm and *for* keeping both the npm lockfile and the Bun host. Both halves were reversed by
+  the repository owner after the blocking evidence was laid out, and the migration was then carried out
+  and verified. The draft's analysis is kept below under "Why this was hard", because the reasons are
+  what shaped the final shape of the change.
+- **Decides:** which JavaScript package manager this repository uses, how many runtimes it supports, and
+  what happened to the dependency-audit security gate
+- **Decided for:** [`upm`](https://github.com/unjs/upm) (MIT, `unjs`, by the Nitro/Nuxt maintainer)
+- **Decided against:** npm as an installer, pnpm, Yarn, Bun (as both runtime and package manager)
+- **Relates to:** `ADR-0002` (host portability), `ADR-0003` (the capacity layer)
 
-## Context
+## Decision
 
-`upm` is a real project, and the proposal was made in good faith. Verified directly against the
-repository's own README rather than a third-party description:
+1. **`upm` installs; `upm.lock` is the committed lockfile.** No `package-lock.json` exists, and it is
+   gitignored so a tool cannot quietly reintroduce a second resolution of the same manifest.
+2. **Node is the only JavaScript runtime.** The Bun host is deleted.
+3. **The dependency-audit gate is rebuilt, not dropped.** `npm audit` cannot read `upm.lock`, so the
+   gate resolves a *throwaway* tree in a temp directory from `package.json` alone and audits that.
 
-| Property | Value | Source |
-|---|---|---|
-| Repository | `unjs/upm`, MIT | `github.com/unjs/upm` |
-| Version installed here | `1.4.0` | `upm --version` |
-| Requires | Node.js 22.3+ | README, *Get started* |
-| Stability | **"IMPORTANT: Prerelease: upm is not stable yet"** | README, above *Get started* |
-| Lockfiles it can *read* | `package-lock.json`, `pnpm-lock.yaml`, `bun.lock` — **"out of the box"** | README, header |
-| Lockfiles it *cannot* read | any that **"include workspaces, patches, or git or file dependencies"** | README, *Other package managers' lockfiles* |
-| `npm audit` | **not passed through** — *"npm does not understand upm's `node_modules` layout or `upm.lock`"* | README, *npm commands* |
-| Lifecycle scripts | **skipped by design** during install | README, *Run scripts* |
-| `update` command | does not exist | README, *Add and remove packages* |
+## What the migration actually required
 
-Simorgh is `"workspaces": ["phoenix-core", "simorgh-platform"]` — a workspace monorepo — and its CI
-security gate is `npm audit --omit=dev` inside `scripts/security-scan.sh`, run identically by a
-developer and by the `security` job in `.github/workflows/ci.yml`.
+The interesting part is not the decision — it is the three things upm needed that this repository did
+not have. Each was found by running it, not by reading about it.
 
-## The blocking finding
-
-The migration was attempted, not assumed away. With a probe copy of the project's `package.json` and
-`package-lock.json`:
+### 1. upm cannot read a workspace lockfile (and this repo has no choice)
 
 ```
 $ upm install
 upm: upm does not read workspaces from package-lock.json: delete it to switch to upm (ELOCK)
 ```
 
-That is the whole problem in one line. upm cannot read a workspace lockfile, and this repository has
-exactly one. Switching therefore requires **deleting `package-lock.json`**, and every consequence
-below follows from that single deletion.
+This is not an upm bug; it is the documented behaviour, and it is correct. A lockfile-only install has
+no way to know which packages are workspaces. The consequence is that **every dependency had to be
+re-resolved from scratch** — the exact step the committed lockfile existed to prevent.
 
-## Why not
+### 2. upm links a workspace into the root only if the root declares it
 
-### 1. Adopting it removes the dependency-audit security gate
+npm links every workspace into the root `node_modules` unconditionally. upm does not: *"The root only
+gets a link to a workspace if it declares that dependency."* So after the first successful install,
+`import('@simorgh/phoenix-core')` failed with `ERR_MODULE_NOT_FOUND` — the engine, the entire package,
+invisible.
 
-Not "may weaken it" — removes it. `npm audit` cannot read `upm.lock` or upm's `node_modules` layout,
-and upm deliberately refuses to proxy `audit`. So the CI `security` job's dependency half becomes
-either an error or, worse, a check that reports nothing and passes.
+The fix is a real manifest change, not a workaround:
 
-This repository treats that gate as load-bearing. `AGENTS.md` forbids weakening a security check to
-make something pass, and `scripts/security-scan.sh` is deliberately the *same code* in CI and on a
-developer's machine. Disabling it to adopt a prerelease package manager is a bad trade, and it is the
-kind of quiet capability loss that a green CI badge hides.
+```json
+"dependencies": { "@simorgh/phoenix-core": "workspace:*" }
+```
 
-The alternative — keep `npm audit` by keeping a `package-lock.json` up to date alongside `upm.lock` —
-means maintaining two resolution truths by hand, which is the exact failure mode
-`docs/adr/ADR-0001` was written to stop.
+`workspace:*` pins it to the local package, so a same-named registry release can never win.
 
-### 2. The dependency tree would be re-resolved from scratch
+### 3. `simorgh-platform/` was listed as a workspace but has no `package.json`
 
-Deleting the lockfile re-resolves every transitive dependency. upm's own defaults change what gets
-picked: a **1-day minimum release age**, and lifecycle scripts skipped. Neither can be evaluated here
-because the full install did not complete — see *What could not be verified*.
+It is a source directory with its own `tsconfig.json`, not a package: nothing publishes it and nothing
+links it. npm tolerated the entry silently. upm reported `1 ws` — the honest count. Listing a
+non-package as a workspace was always a lie in the manifest, and it has been removed.
 
-### 3. Skipping lifecycle scripts is an unverified risk for this toolchain
+### 4. The audit gate had to be rebuilt
 
-upm skips dependency lifecycle scripts by design, as a supply-chain defence. That defence is
-reasonable and this repository would benefit from it. But `vitest` transforms through **esbuild** and
-`wrangler` runs **workerd/miniflare**; both ship native binaries that are commonly installed by a
-postinstall step. If either needs one, the entire test suite and the Cloudflare bundle stop working —
-and that failure would appear on a fresh clone in CI, not here.
+upm refuses to proxy `npm audit` ("npm does not understand upm's `node_modules` layout or `upm.lock`").
+The naive reading is "the security gate is gone". It is not gone — `scripts/security-scan.sh` now
+resolves a throwaway tree from `package.json` and audits that. Two properties were designed in:
 
-### 4. upm is a prerelease with no `update`
+- **It fails closed.** If resolution fails, or reports success without writing a lockfile, the gate
+  **fails**. A gate that quietly passes when it cannot check is worse than no gate, because it reports
+  safety it never verified.
+- **It is the same script locally and in CI**, which is why the `security` job needs no install step
+  at all: there is no lockfile to install from, and the audit resolves its own input.
 
-The README states it plainly, and there is no `update` command: recovering from a bad resolution means
-deleting `upm.lock` and `node_modules` and resolving again, by hand.
+## Verification
 
-## What was verified, and what was not
+Measured on this box, not inferred:
 
-**Verified on this box, this session:**
+| Check | Before | After |
+|---|---|---|
+| `upm install` cold (empty store) | — | 339 s, 93 pkgs |
+| `upm install` warm (lockfile + store present) | — | **271 ms** |
+| `npm install --package-lock-only` (scratch, for the audit) | — | 55 s |
+| typecheck (3 configs) | PASS | PASS |
+| workerd suite | 93 | **93** |
+| node suite | 261 | **261** |
+| security gate | PASS | **PASS** (`found 0 vulnerabilities`) |
+| `wrangler deploy --dry-run` | PASS | PASS |
+| Go build / vet / test | PASS | PASS |
 
-- `upm` installs and runs: `npm i -g upm` → `1.4.0`, on Node v26.7.0.
-- upm's registry access works: `upm resolve vitest` returned a real tarball URL and integrity hash
-  from `registry.npmjs.org`, so the `ENETWORK` seen during the full install was a transient body
-  timeout rather than a proxy incompatibility. The `https_proxy` on this box is honoured.
-- The `ELOCK` rejection above, reproduced verbatim.
+**The load-bearing verification is that both suites are unchanged at 93 and 261 after a complete
+`rm -rf node_modules`.** upm skips dependency lifecycle scripts by design, and this toolchain depends
+on native binaries — `vitest` transforms through esbuild, `wrangler` runs workerd. That the suite count
+is identical is the evidence that skipping lifecycle scripts costs this project nothing. It was the
+single largest risk in the migration and it did not materialise.
 
-**Not verified — and deliberately not guessed:**
+Note that the engine's own test counts are a poor regression signal on their own: they would be
+identical if a whole file had silently disappeared. The file counts (11 workerd, 19 node) are the real
+guard, which is why they are recorded in the docs.
 
-- Whether a from-scratch `upm install` produces a working `vitest` / `wrangler` tree without
-  lifecycle scripts. The full resolve timed out before completion, and the documented npm mirror
-  (`mirror.atlantiscloud.ir/npm`, per `mailbox/README.md`) is unreachable from this box.
-- Whether any dependency in this tree genuinely requires a lifecycle script.
+## Why this was hard (the draft's analysis, kept)
 
-Both are answerable with one successful install on a network that is not timing out. Neither is
-answerable by reasoning, and this repository does not guess about its own toolchain.
+**upm is a prerelease.** Its README says so in capitals, and it has no `update` command: recovering from
+a bad resolution means deleting `upm.lock` and `node_modules` and resolving again.
+
+**It fetches full packuments.** On this box, `wrangler`'s full packument does not arrive through the
+proxy at all (several attempts, all timed out), while npm's *abbreviated* one resolves in 10 s and
+upm's cold install eventually succeeds in 339 s. If a future resolution stalls, this is the first thing
+to suspect, and `--verbose` is where to see it. This is also why the cold-install number is 60× the
+warm one and why CI caches `~/.upm/store` rather than `node_modules`.
+
+**Its README documents no proxy support.** Empirically the `http_proxy` on this box *is* honoured, so
+this works here. It is not guaranteed elsewhere.
 
 ## Consequences
 
-**What this costs**
+**What it costs**
 
-- The repository keeps `npm`. upm is installed globally but **not adopted**, so nothing in CI, the
-  scripts, or the docs changes.
-- The stated strategic benefit — a smaller, faster, script-skipping installer — is forgone for now.
+- Every dependency was re-resolved, so the tree is not byte-identical to the old `package-lock.json`.
+  Both suites, typecheck, and the Cloudflare bundle are green on the new resolution, which is the
+  strongest statement available without a per-package diff.
+- npm remains a **dev dependency of the build** — `npm audit` and `npm i -g upm` in CI. It is no longer
+  used to install this project. That is a deliberate, narrow exception, not a loose end.
 
-**What this prevents**
+**What it prevents**
 
-- Silently deleting a working lockfile and a working security gate in the same change.
-- Recording a migration as done because `upm --version` printed a number.
+- Two lockfiles. A second resolution of one manifest, with nothing comparing them, is the failure mode
+  `ledger.ts` was written to document having already paid for once.
+- A second JavaScript runtime. The Bun host was removed, so "run the suite on a third runtime" is no
+  longer something a new contributor can do by accident.
 
-**How it can be revisited — the unblockers, in order**
+**How the Bun removal is recoverable**
 
-1. A successful from-scratch `upm install` on this box, followed by `npm test`, `npm run typecheck`
-   and `npm run cf:dry-run` all passing **without** lifecycle scripts. That answers risk 3 with
-   evidence rather than argument.
-2. A replacement for `npm audit --omit=dev` that understands `upm.lock` — or an accepted decision to
-   run the audit in a separate job that installs with npm purely for the audit. Until one of those
-   exists, the migration stays blocked, regardless of how good upm is.
-3. upm reaching a stable release.
+`simorgh-platform/src/runtimes/bun.ts` and `simorgh-platform/scripts/e2e-bun.ts` are at commit
+`5c53dfe`, and the finding that host produced is recorded and unaffected: **`bun:sqlite` satisfied the
+synchronous `SqlPort` with no change to `phoenix-core`**, proving the engine is not Node-shaped. What
+was deleted is the artifact, not the conclusion. `ADR-0002` and `docs/HOST-PORTABILITY.md` both say so
+at the point where they used to make Bun a live recommendation.
 
-If all three land, this ADR should be superseded rather than amended: the decision was about a
-prerelease's limits, and those limits are what would change.
+**How this can be revisited**
 
-## On the Bun runtime, which this ADR does **not** touch
-
-A migration proposal for `upm` also proposed removing Bun. That is a separate question with a
-separate answer, and conflating the two would lose a real result.
-
-`simorgh-platform/src/runtimes/bun.ts` is not a package-manager assumption. It is the third runtime
-host that `ADR-0002` explicitly named as the cheap, load-bearing portability test, landed deliberately
-in `5c53dfe` from `TASK-010`, and it exists because `bun:sqlite` is a **third SQL dialect**. It is the
-thing that proved `SqlPort` is not Node-shaped. The repository has no `bun.lock`, no `bunfig`, no
-`bun install`, and no lifecycle script invoking bun — `git grep -i bun` over the tracked tree returns
-only documentation, the runtime adapter, its e2e script, and the TASK-010 brief and report.
-
-**Bun stays.** Node is the product runtime and `npm` is the package manager; Bun is an *additional
-host* used to test the boundary, exactly as `ADR-0002` intended.
+If upm gains a stable release and an audit story that reads `upm.lock` natively, the scratch-resolve
+half of `scripts/security-scan.sh` becomes unnecessary. Until then it is load-bearing, and it is the
+one piece of npm this repository keeps.

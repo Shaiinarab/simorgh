@@ -351,7 +351,8 @@ nothing deleted).
 - **`docs/adr/ADR-0002` + `docs/HOST-PORTABILITY.md`** — the Vercel evaluation, and the finding behind it:
 **`SqlPort` is synchronous, so no networked database can implement it.** The portability claim is
 narrower than the README implied — portable across runtimes that can supply a *synchronous* SQL
-implementation. Vercel is therefore deferred, and Bun/Deno is proposed as the cheaper third host.
+implementation. Vercel is therefore deferred. Deno 2 is the cheaper third host still untested; the Bun host that
+answered this question was built, proven, and then removed by owner decision (`5c53dfe`).
 - **`docs/OBSERVABILITY.md`** — what exists, what the ledger already answers, and the one real gap:
 **provider latency is recorded nowhere on the TypeScript side** (while the Go side keeps an EMA).
 - **`scripts/security-scan.sh`** — the secrets + dependency gate, wired into CI *and* runnable locally as

@@ -36,6 +36,11 @@ itself is the constraint.
 1. **Vercel is not the next host.** A file-backed SQLite in `/tmp` is explicitly rejected: it would make
    the transparency ledger — an append-only architectural contract, written *before* the flight —
    silently best-effort and per-instance. A ledger that quietly loses rows is worse than no ledger.
+> **Status of step 2: done, then removed.** The Bun host was built (`TASK-010`, commit
+> `5c53dfe`), passed 10/10 e2e checks, and established the finding: `bun:sqlite` satisfies the
+> synchronous `SqlPort` with **no `phoenix-core` change**. The repository owner then removed it
+> so the toolchain would have exactly one runtime. The evidence in this ADR is unaffected.
+
 2. **Next portability test: Bun or Deno 2.** Same suite (`vitest.node.config.ts`), same engine, a
    runtime neither of the two current hosts is. This is the cheap test of the likelier failure — that
    the engine is accidentally Node-shaped (a `node:` leak, a Node-only global, a dialect assumption) —

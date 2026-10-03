@@ -39,8 +39,15 @@ these unbuilt. Match that style.
 
 ## Commands
 
+The package manager is **upm** ([unjs/upm](https://github.com/unjs/upm)) and the runtime is
+**Node**. There is no `package-lock.json` and there will not be one — `upm.lock` is the committed,
+reproducible build input. See `docs/adr/ADR-0004-toolchain-upm.md` for why, including what had to
+change in the manifest and what had to be rebuilt in the security gate.
+
 ```bash
-npm install                     # once; node_modules is not committed
+upm install                     # once; node_modules is not committed
+upm install --frozen-lockfile   # CI: fail rather than resolve
+upm run typecheck               # or: upm run test, upm exec <bin>, upx <bin>
 npm run typecheck               # 3 configs: root, phoenix-core, simorgh-platform
 npm test                        # BOTH suites — workers first, then node
 npm run test:workers            # workerd: the Cloudflare app
@@ -50,7 +57,7 @@ npx vitest run --config vitest.node.config.ts <file>   # one file, scoped
 npm run e2e:ask                 # the CLI reaches a live core over REST *and* MCP
 npm run platform:smoke          # boots a real core on an ephemeral port, probes it, exits 0/1
 npm run simorgh -- <cmd>        # targets | plan | deploy | serve | connect | ask | status | doctor
-npm run security:scan           # secrets scan + npm audit --omit=dev (the CI security gate)
+npm run security:scan           # secrets scan + dependency audit (the CI security gate)
 npm run cf:dry-run              # wrangler bundle check
 
 npm run go:build                # Go workspace (all 8 modules)
@@ -79,6 +86,13 @@ never re-run hoping.
   For scoped runs use the module-path pattern: `go test github.com/shaiinarab/simorgh/...`.
 - **Never use `mirror.kargadan.ir` as a Go module proxy** — it serves tampered modules (a verified
   `go.sum` SECURITY ERROR). Use `proxy.golang.org` or vendored deps.
+- **`package-lock.json` must not come back.** It is gitignored on purpose. A second lockfile is a
+  second resolution of the same manifest, and nothing would compare them — the same
+  "two definitions, nothing comparing them" trap `ledger.ts` documents. If a tool regenerates it,
+  delete it rather than committing it.
+- **There is one JavaScript runtime: Node.** Bun was removed on 2026-10-03 (commit `5c53dfe` has the
+  third-runtime host it used to prove `SqlPort` is not Node-shaped). Do not reintroduce it as a
+  runtime, a package manager, or a dependency.
 - **`deploy --mode cli` requires `--yes`.** No env var, no config file, no CI exemption. That is the
   point: a doomed plan must never start, because a half-applied deploy is the most expensive state a
   deployer can leave behind.
@@ -155,7 +169,10 @@ A change is done when **all** of these hold. Copy this into the PR description a
 
 ## Never do
 
-- Do not hand-edit `worker-configuration.d.ts`, `package-lock.json`, or `go.work.sum`.
+- Do not hand-edit `worker-configuration.d.ts`, `upm.lock`, or `go.work.sum`. Each is generated
+  from its source (`wrangler types`, `upm install`, `go mod tidy`); hand-written additions go in
+  `env.d.ts`. `upm.lock` is committed, which makes it the one lockfile in the repo that a
+  careless edit can quietly desynchronise from `package.json`.
 - Do not disable `remoteBindings: false` in `vitest.config.ts`; it is what keeps the suite hermetic and
   runnable without a Cloudflare account.
 - Do not add a `vendor/` directory to work around the `GOFLAGS` trap — override per command instead.

@@ -91,7 +91,7 @@ So the honest statement of the portability claim is narrower than the docs imply
 > `phoenix-core` is portable across runtimes **that can supply a synchronous SQL implementation** —
 > not across hosts in general.
 
-That is still a real achievement: it covers workerd, Node, Bun (`bun:sqlite`), and Deno 2
+That is still a real achievement: it covers workerd, Node, and Deno 2
 (`node:sqlite`). It excludes every serverless host without durable local storage, which is most of them.
 **`SqlPort`'s shape, not a missing adapter, is what stands between the engine and a networked host.**
 
@@ -101,7 +101,7 @@ That is still a real achievement: it covers workerd, Node, Bun (`bun:sqlite`), a
 |---|---|---|---|---|
 | A | Write a Vercel adapter with a file-backed SQLite in `/tmp` | low | nothing — the DB is per-instance and wiped, so it is not a core, it is a demo that silently loses the ledger | **reject.** It would make the transparency ledger — an architectural contract — quietly best-effort. |
 | B | Make `SqlPort` async, add a Turso/Neon port, then a Vercel host | medium — ripples through every statement in the engine | genuinely: the engine runs where storage is remote | **defer**, but this is the real work. See ADR-0002. |
-| C | Test portability on **Bun or Deno 2** first | low | that the engine is not implicitly Node-shaped (no `node:` leakage, no Node-only global, no Node-only SQL dialect assumption) | **do this next** |
+| C | Test portability on **Deno 2** first | low | that the engine is not implicitly Node-shaped (no `node:` leakage, no Node-only global, no Node-only SQL dialect assumption) | **do this next** |
 | D | Skip Vercel; keep two hosts | zero | nothing new | honest fallback if C finds nothing |
 
 ### Why C before B
@@ -120,7 +120,10 @@ which is the whole reason to do it first.
 ## 6. Recommendation
 
 1. **Do not build the Vercel adapter yet.**
-2. **Do C**: add a Bun or Deno 2 host and run `vitest.node.config.ts` against it. If the engine needs
+2. ~~**Do C**: add a Bun or Deno 2 host and run `vitest.node.config.ts` against it.~~ **Done** for
+   Bun via `TASK-010` — `bun:sqlite` satisfied `SqlPort` with no engine change, which is the
+   finding C existed to produce. The host was later removed by owner decision (commit `5c53dfe`
+   has it); Deno 2 is still untested. If the engine needs
    changes to fit a third *local-storage* runtime, that is the boundary finding worth having, and it is
    cheap.
 3. **Then decide on B** with ADR-0002's cost known, and only if a serverless host is actually wanted.
@@ -148,3 +151,11 @@ External, checked 2026-09-22:
   per day.
 - Vercel changelog, Jan 2026 — cron count raised to 100 per project on every plan (so the *count* is no
   longer the constraint; the Hobby *frequency* is).
+
+
+> **Update 2026-10-03 — the Bun host was removed by owner decision.** The finding
+> below still stands and is still the reason this document exists: `bun:sqlite` proved
+> `SqlPort` is not Node-shaped, with no change to `phoenix-core`. What changed is the
+> artifact, not the conclusion — `simorgh-platform/src/runtimes/bun.ts` and its e2e script
+> are deleted, and are recoverable at commit `5c53dfe`. **Bun is not part of the toolchain:**
+> there is no `bun.lock`, no `bunfig`, no `bun install`, and no script that invokes it.
