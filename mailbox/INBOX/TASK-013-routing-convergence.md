@@ -4,6 +4,37 @@
 - Status: open
 - Depends on: nothing · Estimate: 60–90 min · Runner: freebuff CLI agent (host, parallel with the Lead)
 
+
+## 0. Start here: introduce yourself
+
+Your **first** action is a short introduction into `mailbox/OUTBOX/TASK-013-INTRO.md`
+(≤40 lines): who you are, the role you are taking, what you reach for first and why, your
+honest read on whether this brief is well-specified, and what you would ask a maintainer.
+
+## 1. Orient yourself before you start
+
+**Read first:** `AGENTS.md` (especially **Environment traps** and the **Definition of
+Done**), then the files named below. `AGENTS.md` records three cases of an all-green suite
+hiding a real defect; that is the standard you are being held to.
+
+**Skills** — catalog at `/home/shai/personal/projects/docs/skills-catalog.md`; read each
+SKILL.md before use:
+
+- - `golang-patterns`, `golang-testing` — for reading and judging the Go side
+- `contract-first` — for deciding whether the two runtimes need a shared value model
+- `deepwiki`, `context7` — for checking how comparable gateways model this
+- `search-first` — forces the reuse check first
+
+**Harnesses** — `/home/shai/personal/projects/harnesses/`:
+
+- `agents/personas/` — read two or three persona files. They show how this workspace scopes a
+  specialist: explicit triggers, named MCPs, named skills. That is the house style.
+- `self-bench/BENCH-GUIDE.md` — for a stateless task loop if your work is multi-iteration.
+
+**Ground rules:** never hard-delete (use `.openclaw/tmp/` for scratch, `_archive/` at the
+workspace root for real removals); no `npm install`/`npm ci` (the package manager is **upm**);
+no `git commit`/`push`/`rebase` — the Lead integrates.
+
 ## Why this exists
 
 Simorgh runs the same engine on two runtimes, and the repo has an accepted ADR saying they must not
