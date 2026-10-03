@@ -45,6 +45,32 @@ export const LEDGER_SCHEMA = `
 export const LEDGER_PAGE_LIMIT = 100;
 
 /**
+ * The action vocabulary.
+ *
+ * `action` is deliberately an unconstrained `TEXT` column, and that is now load-bearing
+ * rather than merely permissive: it is what lets a *third* kind of row exist alongside the
+ * request record, without a migration and without widening the column every time the
+ * pipeline learns a new thing worth writing down. `ledger.test.ts` already pins that an
+ * arbitrary action (`"ask"`) round-trips, and `getUserLogs` filters on nothing — it
+ * `SELECT *`s and hands every row back — so an action nobody has seen at read time is
+ * returned verbatim like any other, and `/api/v1/user/{id}/logs` needs no change to show it.
+ *
+ * So this is an additive vocabulary, not an enum:
+ *
+ *   * `"execute"` — the request record. Written *before* the flock is dialled; see the
+ *     header comment and `execute.ts`. Still the default when no action is supplied.
+ *   * `SHIELD_BLOCK_ACTION` — the model-output shield fired: something was neutralised on
+ *     the way back. Written *after* the flight, because that fact does not exist until an
+ *     answer comes back, and writing it for every request would mean recording a
+ *     speculative row that is wrong almost every time.
+ *
+ * The asymmetry is the whole design, and it is why the request row keeps its place: "this
+ * request happened and here is what it was allowed to do" must hold even when every provider
+ * is down, while "the shield caught something" plainly cannot hold when nothing answered.
+ */
+export const SHIELD_BLOCK_ACTION = "shield_block";
+
+/**
  * The ledger on any `SqlPort`.
  *
  * Append-only: `logEntry` inserts, `getUserLogs` reads, and there is deliberately no

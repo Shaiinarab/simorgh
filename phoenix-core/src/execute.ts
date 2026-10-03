@@ -1,15 +1,16 @@
 // ── The request pipeline ──────────────────────────────────────────────────────
 //
 // One execute call, end to end: run the vetted tools, offload the request context,
-// write the transparency ledger, then fly the flock. Every side effect goes through
-// a port, so this function is the *whole* request path and it is identical on the
-// Cloudflare edge and in a self-hosted Node process.
+// write the transparency ledger, fly the flock, then shield the answer. Every side
+// effect goes through a port, so this function is the *whole* request path and it is
+// identical on the Cloudflare edge and in a self-hosted Node process.
 //
 // Hosts supply the ports and get back a structured-cloneable result. Nothing here
 // imports a runtime, and nothing here knows which provider answered.
 
 import { runAgentLoop, type AgentTool, type ToolInvocation, type ToolObservation } from "./agent.ts";
 import { flyFlock, type FlockRunResult } from "./flock.ts";
+import { SHIELD_BLOCK_ACTION } from "./ledger.ts";
 import type {
   ContextStorePort,
   LedgerPort,
@@ -18,6 +19,7 @@ import type {
   WorkersAiPort,
 } from "./ports.ts";
 import type { Provider } from "./provider.ts";
+import { sanitizeModelOutput } from "./security.ts";
 
 export interface ExecuteAgentInput {
   prompt: string;
@@ -96,6 +98,13 @@ export interface ExecuteAgentResult {
     tool_observations: ToolObservation[];
     blocked_tools: string[];
     requestId: string;
+    /**
+     * What the output shield neutralised in the answer, in rule order. Empty for the
+     * ordinary case, and empty *because nothing was found* rather than because
+     * sanitization was skipped — the two are distinguishable from here, which is what
+     * lets a dashboard show a shield that is working instead of one that is off.
+     */
+    sanitizer_findings: string[];
   };
   agentResponse: string;
 }
@@ -147,6 +156,43 @@ export async function executeAgent(
         now: deps.ports.now(),
       });
 
+  // ── The answer comes back, and it is untrusted like everything else ──────────
+  //
+  // A model persuaded by a tool result, or simply wrong, can hand back `<script>`, a
+  // fake `{"success":true}` blob, or text that reads as though it were the system. This
+  // is the one place in the engine where that answer is produced, so sanitizing here
+  // covers both hosts at once — the Cloudflare binding and the self-hosted Node process —
+  // instead of relying on each host's own renderer to be careful later.
+  const sanitized = sanitizeModelOutput(result.answer);
+
+  // ── Where the original answer is kept: nowhere ──────────────────────────────
+  //
+  // Stated rather than left implicit, because "log what was blocked" is the obvious
+  // instinct and it is the wrong one here. Persisting the raw answer would write the
+  // exact bytes this shield just decided were dangerous into the one store a human reads
+  // back through `/api/v1/user/{id}/logs`, and put them one missing `textContent` away
+  // from executing. So what is kept is the *shape* of the attack — `sanitizer_findings`,
+  // which answers "did the shield do its job, and what kind of thing did it catch" — and
+  // the cleaned text. Byte-for-byte forensics is the trade, and it is the right way
+  // round: the operator needs to know an attempt happened far more than they need to
+  // re-read the payload.
+  if (sanitized.findings.length > 0) {
+    // After the flight, not before. The request row above keeps its place — "this request
+    // happened and here is what it was allowed to do" has to hold even when every provider
+    // is down, and moving it later would break exactly that. This row answers a different
+    // question, one that cannot be true until an answer exists: there is nothing to shield
+    // on a failed flight, and writing the row speculatively would mean logging a block for
+    // every request in the gateway.
+    await deps.ledger.logEntry({
+      userId: input.userId,
+      tier: input.tier,
+      refId,
+      timestamp: deps.ports.now(),
+      action: SHIELD_BLOCK_ACTION,
+      details: JSON.stringify({ requestId, findings: sanitized.findings }),
+    });
+  }
+
   return {
     success: result.meta.answered_by !== "none",
     meta: {
@@ -158,7 +204,8 @@ export async function executeAgent(
       tool_observations: agent.meta.tool_observations,
       blocked_tools: blockedTools,
       requestId,
+      sanitizer_findings: sanitized.findings,
     },
-    agentResponse: result.answer,
+    agentResponse: sanitized.text,
   };
 }
