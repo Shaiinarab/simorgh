@@ -87,9 +87,9 @@ merely *assumed* in the other. Now the order exists once.
 | Check | Command | Result |
 |---|---|---|
 | Types, all three configs | `npm run typecheck` | **clean, 0 errors** |
-| Workers host in workerd | `npm test` (workers half) | **82 passed / 10 files** |
-| Engine + platform on Node | `npm test` (node half) | **202 passed / 17 files** |
-| Engine on **Bun** (3rd runtime) | `npm run e2e:bun` | **10/10 checks** |
+| Workers host in workerd | `npm test` (workers half) | **93 passed / 11 files** |
+| Engine + platform on Node | `npm test` (node half) | **261 passed / 19 files** |
+| ~~Engine on **Bun** (3rd runtime)~~ | *removed 2026-10-03* | 10/10 at the time; `bun:sqlite` satisfied the synchronous `SqlPort` with no engine change. Host deleted, finding kept — `ADR-0002` |
 | A real core boots unbuilt and answers | `npm run platform:smoke` | **5/5 checks, exit 0** |
 | Go workspace builds | `go build all` | exit 0 |
 | Go tests | `go test github.com/shaiinarab/simorgh/...` | **6 packages `ok`** (incl. `gateway/internal/server`), 3 have no tests |
@@ -127,7 +127,7 @@ The container run matters: it is the portability claim actually tested rather th
 | Connector conformance kit | ✅ | Runs both connectors against one double; fails a deliberately broken one |
 | Fleet + failover across cores | ✅ | Reports *every* failure, not just the last |
 | `doctor` (diagnose a broken fleet) | ✅ | Stable codes, never throws on an unhealthy fleet |
-| **3rd-runtime proof (Bun)** | ✅ | New today — see §4 |
+| **3rd-runtime proof (Bun)** | ✅ *(artifact removed 2026-10-03)* | Established that `SqlPort` is not Node-shaped. The host is deleted and the toolchain is Node-only; the conclusion stands — see §4 and `ADR-0002` |
 | Observability | ⚠️ | Request IDs + structured errors. **No metrics, no tracing, no provider latency recorded anywhere on the TS side** |
 | Test coverage | ⚠️ | Suites are green but **no coverage provider is installed**, so coverage cannot be measured at all |
 | **Go gateway in the fleet** | ❌ | See §5.1 — the product's central promise is unmet for the Go runtime |
