@@ -9,9 +9,13 @@ import { executeAgent } from "./agent-service";
 import {
   authenticateServiceRequest,
   isAllowedOrigin,
+  MAX_EXECUTE_BODY_CHARS,
+  MAX_PROMPT_CHARS,
+  MAX_TOOLS,
   parseExecuteBody,
   RequestValidationError,
 } from "./security";
+import { connectorReadiness, toolSurface } from "./platform";
 import { handleTelegramWebhook } from "./telegram";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -140,6 +144,156 @@ app.get("/api/v1/flock/status", async (c) => {
   // the last snapshot answers (marked `source: "kv-cache"`) instead of a 500. The
   // route itself is intentionally unauthenticated; see SECURITY.md AUTH-001.
   return c.json(await readFlockStatus(c.env));
+});
+
+/** The one Durable Object every control-plane read goes to. */
+function flockStub(env: Env) {
+  return env.FLOCK_COORDINATOR.get(env.FLOCK_COORDINATOR.idFromName("global"));
+}
+
+/**
+ * The connector matrix, as the dashboard's Platforms tab reads it.
+ *
+ * Bearer-gated even though the page also server-renders the same matrix: the page
+ * is a rendering an operator looks at, this is a payload a client acts on, and the
+ * readiness booleans say which secrets exist in the deployment. `connectorReadiness`
+ * is shared by both, so the tab and this endpoint cannot drift apart.
+ */
+app.get("/api/v1/platform/connectors", async (c) => {
+  const denied = await requireServiceAuth(c);
+  if (denied) return denied;
+
+  return c.json({
+    schemaVersion: 1,
+    connectors: connectorReadiness(c.env),
+    tools: toolSurface(),
+  });
+});
+
+app.get("/api/v1/quota", async (c) => {
+  const denied = await requireServiceAuth(c);
+  if (denied) return denied;
+
+  return c.json(await flockStub(c.env).getQuotaState());
+});
+
+app.get("/api/v1/schedule", async (c) => {
+  const denied = await requireServiceAuth(c);
+  if (denied) return denied;
+
+  return c.json(await flockStub(c.env).listScheduled());
+});
+
+/** Max id length, mirrored by the `id` pattern below. */
+const MAX_SCHEDULE_ID_CHARS = 64;
+
+/**
+ * How far ahead a client may schedule.
+ *
+ * An unbounded `resumeAt` is a row that sits on the dashboard looking scheduled while
+ * doing nothing: a year out never fires, and a timestamp in the past fires on the next
+ * alarm — neither is an error the scheduler reports. Bounding it here turns both into
+ * a refusal the caller can see, rather than a silent no-op the operator cannot.
+ */
+const MAX_RESUME_HORIZON_MS = 30 * 24 * 60 * 60 * 1000;
+
+interface ParsedScheduleRequest {
+  id: string;
+  prompt: string;
+  tools: string[];
+  resumeAt: number;
+}
+
+/**
+ * Validate a schedule request. Same bounds and same posture as `parseExecuteBody`:
+ * a schedule is a delayed execute, so it earns the identical prompt and tool caps,
+ * and unknown tools are dropped rather than refused.
+ */
+function parseScheduleBody(raw: string): ParsedScheduleRequest {
+  if (raw.length > MAX_EXECUTE_BODY_CHARS) {
+    throw new RequestValidationError(
+      413,
+      "request_too_large",
+      "Request body exceeds " + MAX_EXECUTE_BODY_CHARS + " characters."
+    );
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("body_not_object");
+    }
+    body = parsed as Record<string, unknown>;
+  } catch {
+    throw new RequestValidationError(400, "invalid_json", "Request body must be valid JSON.");
+  }
+
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  if (!new RegExp(`^[A-Za-z0-9._:-]{1,${MAX_SCHEDULE_ID_CHARS}}$`).test(id)) {
+    throw new RequestValidationError(
+      400,
+      "invalid_schedule_id",
+      "id must be 1-" + MAX_SCHEDULE_ID_CHARS + " characters of [A-Za-z0-9._:-]."
+    );
+  }
+
+  const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+  if (prompt.length === 0) {
+    throw new RequestValidationError(400, "invalid_prompt", "prompt must be a non-empty string.");
+  }
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    throw new RequestValidationError(
+      413,
+      "prompt_too_large",
+      "prompt exceeds " + MAX_PROMPT_CHARS + " characters."
+    );
+  }
+
+  const rawTools = body.tools;
+  if (
+    rawTools !== undefined &&
+    (!Array.isArray(rawTools) || rawTools.some((tool) => typeof tool !== "string"))
+  ) {
+    throw new RequestValidationError(400, "invalid_tools", "tools must be an array of strings.");
+  }
+  const requested = (rawTools as string[] | undefined) ?? [];
+  if (requested.length > MAX_TOOLS) {
+    throw new RequestValidationError(
+      400,
+      "too_many_tools",
+      "At most " + MAX_TOOLS + " tools may be requested."
+    );
+  }
+  const available = new Set<string>(AGENT_TOOLS);
+  const tools = requested.filter((tool) => available.has(tool));
+
+  const resumeAt = body.resumeAt;
+  const now = Date.now();
+  if (typeof resumeAt !== "number" || !Number.isFinite(resumeAt)) {
+    throw new RequestValidationError(
+      400,
+      "invalid_resume_at",
+      "resumeAt must be an epoch-millisecond number."
+    );
+  }
+  if (resumeAt < now - 60_000 || resumeAt > now + MAX_RESUME_HORIZON_MS) {
+    throw new RequestValidationError(
+      400,
+      "resume_at_out_of_range",
+      "resumeAt must fall within the next 30 days, and no more than a minute in the past."
+    );
+  }
+
+  return { id, prompt, tools, resumeAt: Math.round(resumeAt) };
+}
+
+app.post("/api/v1/schedule", async (c) => {
+  const denied = await requireServiceAuth(c);
+  if (denied) return denied;
+
+  const request = parseScheduleBody(await c.req.text());
+  return c.json(await flockStub(c.env).scheduleDelayed(request), 201);
 });
 
 /**

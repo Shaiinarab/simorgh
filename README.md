@@ -174,8 +174,17 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 | `GET`  | `/api/v1/flock/status` | Live Swarm-State: which birds are awake/tired/dormant. If the Durable Object is unreachable, the last KV snapshot answers instead, marked `"source": "kv-cache"` with its original `timestamp` — stale and labelled, never a 500 and never an invented flock. |
 | `GET`  | `/api/v1/context/:refId` | Retrieve an offloaded request payload from KV. |
 | `GET`  | `/api/v1/user/:userId/logs` | Data-Trust transparency: a user's ledger entries. |
-| `GET`  | `/dashboard` | Self-contained Mission Control UI. |
+| `GET`  | `/api/v1/quota` | Every declared account's quota row, over RPC from the Durable Object. |
+| `GET`  | `/api/v1/schedule` | The Durable Object's scheduled flights, with state, attempts and outcome. |
+| `POST` | `/api/v1/schedule` | Schedule a prompt to run through the flock at or after `resumeAt`. Bounds are the execute bounds plus a 30-day horizon. |
+| `GET`  | `/api/v1/platform/connectors` | The connector matrix — Cloudflare, Telegram, GitHub — with readiness derived from the live environment, and the tool surface. |
+| `GET`  | `/dashboard` | The unified control plane: flock, scheduler, quota, connectors, tools and chat. Unauthenticated, ships no secret, and bearer-gates its own calls. |
 | `GET`  | `/` | Health text. |
+
+Everything under `/api/*` except `/api/v1/flock/status` is bearer-gated and **fails
+closed**: with no `SIMORGH_API_KEY` configured the answer is `503 AUTH_NOT_CONFIGURED`,
+never an open route. The dashboard asks the operator for the key and keeps it in
+`localStorage`; the server never embeds it in the page.
 
 ---
 
