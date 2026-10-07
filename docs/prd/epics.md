@@ -196,7 +196,7 @@ State propagated via context offload or headers; no data loss on cold starts.
 Bird call counts, failure rates, cooldown events exported via `/api/v1/flock/status` and dashboard.
 
 - **Acceptance:** call/failure/cooldown metrics exposed
-- **PRD status:** in progress — the endpoint exports `totalCalls`/`totalFailures`/`cooldownUntil`; the dashboard does not render them yet
+- **PRD status:** shipped — the endpoint exports `totalCalls`/`totalFailures`/`cooldownUntil`, and the unified control plane renders them as per-bird columns plus a headline call/failure/failure-rate/cooldown row
 
 ### Story 5.5: Backpressure handling
 
