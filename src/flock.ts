@@ -68,6 +68,105 @@ import {
 
 export type { FlockAttempt, FlockMeta, FlockRunResult, FlockStatus };
 
+// ── Status with a KV fallback (Story 5.2) ─────────────────────────────────────
+
+/**
+ * A flock status served from the KV snapshot because the Durable Object could not
+ * be reached.
+ *
+ * `source` exists only on the degraded path. The published wire contract is
+ * `{ birds, timestamp }` and a live answer must stay byte-identical to what it was
+ * before this story — so absence of `source` IS the live marker, and seeing
+ * `"kv-cache"` is how a dashboard tells a stale picture from a fresh one. The
+ * snapshot's `timestamp` is when the picture was actually true, which is what makes
+ * the fallback honestly eventual rather than quietly wrong.
+ */
+export interface CachedFlockStatus extends FlockStatus {
+  source: "kv-cache";
+}
+
+/**
+ * What callers see: the published shape, plus an *optional* marker. Intersection
+ * rather than a union so `status.source` reads without narrowing — a union would
+ * make every consumer narrow before it could tell a fresh picture from a stale one,
+ * and most would just cast, which is how the marker would end up ignored.
+ */
+export type HostFlockStatus = FlockStatus & { source?: "kv-cache" };
+
+/** One key, overwritten on every successful live read. */
+export const FLOCK_STATUS_SNAPSHOT_KEY = "flock_status:snapshot";
+
+/**
+ * The slice of a KV namespace this fallback needs. Declared structurally so the
+ * function can be driven by a Map-backed stand-in in tests, exactly like the engine's
+ * ports — `env.CONTEXT_STORE` satisfies it.
+ */
+export interface SnapshotStore {
+  get(key: string, type: "json"): Promise<unknown>;
+  put(key: string, value: string): Promise<void>;
+}
+
+/**
+ * Read the flock status, falling back to the last KV snapshot when the DO is
+ * unreachable (Story 5.2: "If DO is unavailable, fall back to KV-cached bird health
+ * with eventual consistency").
+ *
+ * The cache is written on success and never synthesised, so a fallback answer is a
+ * real past answer, not a guess. The three failure rules are each the opposite of a
+ * trap this repo has already paid for:
+ *
+ *  - a snapshot *write* failure never fails a live read: a cache that cannot be
+ *    written degrades freshness, not availability;
+ *  - a snapshot *read* failure surfaces as the DO's own error, because the operator
+ *    needs the root cause, not a secondary one from the cache;
+ *  - no snapshot rethrows the original DO error — returning an empty flock from
+ *    nothing would be exactly the fabrication this gateway refuses to do.
+ */
+export async function flockStatusWithFallback(
+  readLive: () => Promise<FlockStatus>,
+  snapshots: SnapshotStore
+): Promise<HostFlockStatus> {
+  let liveError: unknown;
+  try {
+    const status = await readLive();
+    try {
+      await snapshots.put(FLOCK_STATUS_SNAPSHOT_KEY, JSON.stringify(status));
+    } catch {
+      // Best-effort: freshness degrades, availability does not.
+    }
+    return status;
+  } catch (e) {
+    liveError = e;
+  }
+
+  let snapshot: unknown = null;
+  try {
+    snapshot = await snapshots.get(FLOCK_STATUS_SNAPSHOT_KEY, "json");
+  } catch {
+    // Swallow: the DO error below is the reason the operator is here.
+  }
+
+  if (
+    snapshot !== null &&
+    typeof snapshot === "object" &&
+    Array.isArray((snapshot as FlockStatus).birds)
+  ) {
+    return { ...(snapshot as FlockStatus), source: "kv-cache" };
+  }
+
+  throw liveError;
+}
+
+/**
+ * The deployment-wired entry point used by the status route and the Telegram
+ * `/status` command: same fallback, bound to this Worker's own namespace and KV.
+ */
+export function readFlockStatus(env: Env): Promise<HostFlockStatus> {
+  const id = env.FLOCK_COORDINATOR.idFromName("global");
+  const stub = env.FLOCK_COORDINATOR.get(id);
+  return flockStatusWithFallback(() => stub.getFlockStatus(), env.CONTEXT_STORE);
+}
+
 /** One provider's line in the public flock status payload. */
 export type BirdStatus = ProviderStatus;
 

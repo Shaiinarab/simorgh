@@ -1,4 +1,5 @@
 import { executeAgent } from "./agent-service";
+import { readFlockStatus } from "./flock";
 import { constantTimeEqual } from "./security";
 
 const TELEGRAM_MAX_TEXT = 4096;
@@ -78,9 +79,10 @@ async function sendTelegramMessage(
 }
 
 async function getFlockStatus(env: Env): Promise<string> {
-  const id = env.FLOCK_COORDINATOR.idFromName("global");
-  const stub = env.FLOCK_COORDINATOR.get(id);
-  const status = await stub.getFlockStatus();
+  // Story 5.2: the KV fallback applies here too — an operator asking the bot for
+  // flock status while the Durable Object is down gets the last known picture,
+  // rather than a webhook failure.
+  const status = await readFlockStatus(env);
   return status.birds
     .map(
       (bird) =>

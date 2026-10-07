@@ -171,7 +171,7 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 | Method | Route | Purpose |
 |--------|-------|---------|
 | `POST` | `/api/v1/agent/execute` | Run the agent (tool loop + flock failover). |
-| `GET`  | `/api/v1/flock/status` | Live Swarm-State: which birds are awake/tired/dormant. |
+| `GET`  | `/api/v1/flock/status` | Live Swarm-State: which birds are awake/tired/dormant. If the Durable Object is unreachable, the last KV snapshot answers instead, marked `"source": "kv-cache"` with its original `timestamp` — stale and labelled, never a 500 and never an invented flock. |
 | `GET`  | `/api/v1/context/:refId` | Retrieve an offloaded request payload from KV. |
 | `GET`  | `/api/v1/user/:userId/logs` | Data-Trust transparency: a user's ledger entries. |
 | `GET`  | `/dashboard` | Self-contained Mission Control UI. |

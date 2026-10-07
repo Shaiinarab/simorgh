@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { FlockCoordinator } from "./flock";
+import { FlockCoordinator, readFlockStatus } from "./flock";
 import { DataTrustVault } from "./data-trust";
 import { renderDashboard } from "./dashboard";
 import { AGENT_TOOLS } from "./agent";
@@ -136,9 +136,10 @@ app.get("/health", (c) => {
 app.get("/dashboard", (c) => c.html(renderDashboard(c.env)));
 
 app.get("/api/v1/flock/status", async (c) => {
-  const id = c.env.FLOCK_COORDINATOR.idFromName("global");
-  const stub = c.env.FLOCK_COORDINATOR.get(id);
-  return c.json(await stub.getFlockStatus());
+  // Story 5.2: read through the KV fallback — if the Durable Object is unreachable,
+  // the last snapshot answers (marked `source: "kv-cache"`) instead of a 500. The
+  // route itself is intentionally unauthenticated; see SECURITY.md AUTH-001.
+  return c.json(await readFlockStatus(c.env));
 });
 
 /**
