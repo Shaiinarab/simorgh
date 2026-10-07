@@ -21,7 +21,8 @@
     "e2e:ask": "node simorgh-platform/scripts/e2e-ask.ts",
     "cf:dry-run": "wrangler deploy --dry-run --outdir dist",
     "security:scan": "bash scripts/security-scan.sh",
-    "security:check": "npm run security:scan && tsgo --noEmit && wrangler deploy --dry-run --outdir dist",
+    "dashboard:check": "bash scripts/dashboard-client-check.sh",
+    "security:check": "npm run security:scan && npm run dashboard:check && tsgo --noEmit && wrangler deploy --dry-run --outdir dist",
     "go:build": "GOFLAGS=-mod=readonly go build all",
     "go:test": "GOFLAGS=-mod=readonly go test github.com/shaiinarab/simorgh/... -count=1",
     "go:vet": "GOFLAGS=-mod=readonly go vet github.com/shaiinarab/simorgh/..."
