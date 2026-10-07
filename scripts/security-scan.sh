@@ -86,7 +86,28 @@ cp package.json "$AUDIT_DIR/" || exit 9
 cp phoenix-core/package.json "$AUDIT_DIR/phoenix-core/" || exit 9
 
 say "  resolving a throwaway tree from package.json (no lifecycle scripts)…"
-if ! RESOLVE=$(cd "$AUDIT_DIR" && npm install --package-lock-only --ignore-scripts --no-audit --no-fund 2>&1); then
+resolve_tree() {
+  (cd "$AUDIT_DIR" && npm install --package-lock-only --ignore-scripts --no-audit --no-fund "$@") 2>&1
+}
+
+# Plain resolve first, always: it is the resolution semantics this gate was written
+# against. The retry exists because npm 10.9.8's arborist crashes in `#loadPeerSet`
+# ("Cannot read properties of null (reading 'edgesOut')") on this peer graph —
+# reproducibly, warm or cold cache (verified 2026-10-06, fb3 container). A gate that
+# cannot produce a tree audits nothing, so on that specific crash we retry with
+# `--legacy-peer-deps`, which skips the broken peer-set walk. The trade is stated, not
+# hidden: the lock is slightly narrower (auto-installed peers are omitted), which is
+# honest to record against "the audit never runs at all".
+if RESOLVE=$(resolve_tree); then
+  RESOLVED=1
+elif RESOLVE=$(resolve_tree --legacy-peer-deps); then
+  say "  … plain resolve hit arborist #loadPeerSet; retried with --legacy-peer-deps (npm $(npm --version))"
+  RESOLVED=1
+else
+  RESOLVED=
+fi
+
+if [ -z "$RESOLVED" ]; then
   say "  ✗ dependency resolution FAILED — the audit could not run, so the gate fails."
   say "$RESOLVE" | tail -5 | sed 's/^/    /'
   FAIL=1
