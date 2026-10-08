@@ -1,7 +1,7 @@
 # TASK-012 — Native Compute Audit: measure, then recommend *against* Rust unless proven
 
 - Owner: fb2
-- Status: open
+- Status: done (Lead 2026-10-08T10:56)
 - Depends on: nothing · Estimate: 60–90 min · Runner: freebuff CLI agent (podman)
 
 

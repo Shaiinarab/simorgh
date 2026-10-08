@@ -1,7 +1,7 @@
 # TASK-013 — Routing convergence: where TypeScript and Go actually disagree
 
 - Owner: any
-- Status: open
+- Status: done (Lead 2026-10-08T10:56)
 - Depends on: nothing · Estimate: 60–90 min · Runner: freebuff CLI agent (host, parallel with the Lead)
 
 

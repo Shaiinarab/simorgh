@@ -1,0 +1,1387 @@
+{
+  "machine": {
+    "node": "v26.7.0",
+    "platform": "linux 5.15.0-198-generic",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i5-3570 CPU @ 3.40GHz",
+    "cores": 4,
+    "memGiB": "15.6",
+    "pinned": "no (taskset -c 2 for cleaner numbers)"
+  },
+  "negativeControl": "FIRED (a planted wrong expectation was caught and thrown)",
+  "assertionsRun": 21,
+  "loadavgAtPassA": "2.99, 3.35, 3.76",
+  "note": "Block-amortised timing: each sample is a block of `block` calls lasting ~500us, so one kernel preemption moves a sample by <10%. N is total calls. netMedianUs = medianUs minus the measured empty-loop overhead.",
+  "passes": [
+    {
+      "pass": "A",
+      "loadavg": "2.99, 3.35, 3.76",
+      "overheadPerCallUs": 0.001,
+      "overheadN": 29484000,
+      "results": [
+        {
+          "label": "planQuotaRun.n=3",
+          "n": 1281600,
+          "samples": 2400,
+          "block": 534,
+          "medianUs": 0.694,
+          "p95Us": 0.828,
+          "p99Us": 1.017,
+          "meanUs": 0.692,
+          "wallMs": 887,
+          "netMedianUs": 0.693,
+          "netP95Us": 0.827
+        },
+        {
+          "label": "planQuotaRun.n=8",
+          "n": 638400,
+          "samples": 2400,
+          "block": 266,
+          "medianUs": 1.66,
+          "p95Us": 2.144,
+          "p99Us": 4.885,
+          "meanUs": 1.759,
+          "wallMs": 1123,
+          "netMedianUs": 1.659,
+          "netP95Us": 2.143
+        },
+        {
+          "label": "planQuotaRun.n=64",
+          "n": 88800,
+          "samples": 2400,
+          "block": 37,
+          "medianUs": 12.818,
+          "p95Us": 18,
+          "p99Us": 43.231,
+          "meanUs": 14.394,
+          "wallMs": 1279,
+          "netMedianUs": 12.817,
+          "netP95Us": 17.999
+        },
+        {
+          "label": "planQuotaRun.urgent.n=8",
+          "n": 571200,
+          "samples": 2400,
+          "block": 238,
+          "medianUs": 1.766,
+          "p95Us": 2.494,
+          "p99Us": 6.918,
+          "meanUs": 1.99,
+          "wallMs": 1137,
+          "netMedianUs": 1.765,
+          "netP95Us": 2.493
+        },
+        {
+          "label": "postSpendValue",
+          "n": 4994400,
+          "samples": 2400,
+          "block": 2081,
+          "medianUs": 0.191,
+          "p95Us": 0.281,
+          "p99Us": 0.753,
+          "meanUs": 0.225,
+          "wallMs": 1123,
+          "netMedianUs": 0.19,
+          "netP95Us": 0.28
+        },
+        {
+          "label": "windowRemaining",
+          "n": 27038400,
+          "samples": 2400,
+          "block": 11266,
+          "medianUs": 0.007,
+          "p95Us": 0.007,
+          "p99Us": 0.007,
+          "meanUs": 0.007,
+          "wallMs": 186,
+          "netMedianUs": 0.006,
+          "netP95Us": 0.006
+        },
+        {
+          "label": "capacityFor",
+          "n": 4569600,
+          "samples": 2400,
+          "block": 1904,
+          "medianUs": 0.181,
+          "p95Us": 0.301,
+          "p99Us": 0.679,
+          "meanUs": 0.209,
+          "wallMs": 956,
+          "netMedianUs": 0.18,
+          "netP95Us": 0.3
+        },
+        {
+          "label": "nextLatencyEma",
+          "n": 26258400,
+          "samples": 2400,
+          "block": 10941,
+          "medianUs": 0.01,
+          "p95Us": 0.01,
+          "p99Us": 0.012,
+          "meanUs": 0.01,
+          "wallMs": 267,
+          "netMedianUs": 0.009,
+          "netP95Us": 0.009
+        },
+        {
+          "label": "sanitize.clean.1KB",
+          "n": 367200,
+          "samples": 2400,
+          "block": 153,
+          "medianUs": 3.093,
+          "p95Us": 3.556,
+          "p99Us": 4.605,
+          "meanUs": 3.185,
+          "wallMs": 1170,
+          "netMedianUs": 3.092,
+          "netP95Us": 3.555
+        },
+        {
+          "label": "sanitize.clean.4KB",
+          "n": 100800,
+          "samples": 2400,
+          "block": 42,
+          "medianUs": 11.307,
+          "p95Us": 12.686,
+          "p99Us": 15.044,
+          "meanUs": 11.686,
+          "wallMs": 1178,
+          "netMedianUs": 11.306,
+          "netP95Us": 12.685
+        },
+        {
+          "label": "sanitize.clean.16KB",
+          "n": 26400,
+          "samples": 2400,
+          "block": 11,
+          "medianUs": 44.105,
+          "p95Us": 45.249,
+          "p99Us": 46.208,
+          "meanUs": 44.302,
+          "wallMs": 1170,
+          "netMedianUs": 44.104,
+          "netP95Us": 45.248
+        },
+        {
+          "label": "sanitize.clean.128KB",
+          "n": 14400,
+          "samples": 2400,
+          "block": 6,
+          "medianUs": 85.789,
+          "p95Us": 87.294,
+          "p99Us": 88.759,
+          "meanUs": 86.048,
+          "wallMs": 1239,
+          "netMedianUs": 85.788,
+          "netP95Us": 87.293
+        },
+        {
+          "label": "sanitize.adversarial.4KB",
+          "n": 9600,
+          "samples": 2400,
+          "block": 4,
+          "medianUs": 126.076,
+          "p95Us": 134.953,
+          "p99Us": 187.264,
+          "meanUs": 129.202,
+          "wallMs": 1241,
+          "netMedianUs": 126.075,
+          "netP95Us": 134.952
+        },
+        {
+          "label": "sanitize.adversarial.16KB",
+          "n": 2400,
+          "samples": 2400,
+          "block": 1,
+          "medianUs": 503.482,
+          "p95Us": 669.747,
+          "p99Us": 729.213,
+          "meanUs": 516.468,
+          "wallMs": 1240,
+          "netMedianUs": 503.481,
+          "netP95Us": 669.746
+        },
+        {
+          "label": "parseExecuteBody.8192chars",
+          "n": 175200,
+          "samples": 2400,
+          "block": 73,
+          "medianUs": 6.582,
+          "p95Us": 9.146,
+          "p99Us": 9.777,
+          "meanUs": 6.771,
+          "wallMs": 1187,
+          "netMedianUs": 6.581,
+          "netP95Us": 9.145
+        },
+        {
+          "label": "parseExecuteBody.31990chars",
+          "n": 64800,
+          "samples": 2400,
+          "block": 27,
+          "medianUs": 16.938,
+          "p95Us": 24.354,
+          "p99Us": 26.49,
+          "meanUs": 17.557,
+          "wallMs": 1138,
+          "netMedianUs": 16.937,
+          "netP95Us": 24.353
+        },
+        {
+          "label": "buildSynthesisPrompt.4x2KB",
+          "n": 127200,
+          "samples": 2400,
+          "block": 53,
+          "medianUs": 9.031,
+          "p95Us": 14.844,
+          "p99Us": 20.678,
+          "meanUs": 9.939,
+          "wallMs": 1265,
+          "netMedianUs": 9.03,
+          "netP95Us": 14.843
+        },
+        {
+          "label": "markUntrusted.8KB",
+          "n": 168000,
+          "samples": 2400,
+          "block": 70,
+          "medianUs": 6.446,
+          "p95Us": 9.877,
+          "p99Us": 11.141,
+          "meanUs": 6.849,
+          "wallMs": 1151,
+          "netMedianUs": 6.445,
+          "netP95Us": 9.876
+        },
+        {
+          "label": "constantTimeEqual.sha256",
+          "n": 98400,
+          "samples": 2400,
+          "block": 41,
+          "medianUs": 8.863,
+          "p95Us": 11.46,
+          "p99Us": 21.247,
+          "meanUs": 13.992,
+          "wallMs": 1377,
+          "netMedianUs": 8.862,
+          "netP95Us": 11.459
+        },
+        {
+          "label": "describeFlock.n=8",
+          "n": 2414400,
+          "samples": 2400,
+          "block": 1006,
+          "medianUs": 0.463,
+          "p95Us": 1.112,
+          "p99Us": 1.351,
+          "meanUs": 0.511,
+          "wallMs": 1233,
+          "netMedianUs": 0.462,
+          "netP95Us": 1.111
+        },
+        {
+          "label": "oneExecuteRequest.answer=1KB",
+          "n": 16800,
+          "samples": 2400,
+          "block": 7,
+          "medianUs": 65.618,
+          "p95Us": 74.283,
+          "p99Us": 184.021,
+          "meanUs": 69.739,
+          "wallMs": 1172,
+          "netMedianUs": 65.617,
+          "netP95Us": 74.282
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=1KB",
+          "n": 28800,
+          "samples": 2400,
+          "block": 12,
+          "medianUs": 38.606,
+          "p95Us": 44.623,
+          "p99Us": 104.738,
+          "meanUs": 41.107,
+          "wallMs": 1184,
+          "netMedianUs": 38.605,
+          "netP95Us": 44.622
+        },
+        {
+          "label": "oneExecuteRequest.answer=4KB",
+          "n": 14400,
+          "samples": 2400,
+          "block": 6,
+          "medianUs": 73.902,
+          "p95Us": 78.699,
+          "p99Us": 194.793,
+          "meanUs": 76.586,
+          "wallMs": 1103,
+          "netMedianUs": 73.901,
+          "netP95Us": 78.698
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=4KB",
+          "n": 26400,
+          "samples": 2400,
+          "block": 11,
+          "medianUs": 39.278,
+          "p95Us": 45.448,
+          "p99Us": 109.406,
+          "meanUs": 41.81,
+          "wallMs": 1104,
+          "netMedianUs": 39.277,
+          "netP95Us": 45.447
+        },
+        {
+          "label": "oneExecuteRequest.answer=16KB",
+          "n": 12000,
+          "samples": 2400,
+          "block": 5,
+          "medianUs": 108.513,
+          "p95Us": 113.812,
+          "p99Us": 247.867,
+          "meanUs": 111.588,
+          "wallMs": 1339,
+          "netMedianUs": 108.512,
+          "netP95Us": 113.811
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=16KB",
+          "n": 26400,
+          "samples": 2400,
+          "block": 11,
+          "medianUs": 41.63,
+          "p95Us": 48.724,
+          "p99Us": 119.792,
+          "meanUs": 44.586,
+          "wallMs": 1177,
+          "netMedianUs": 41.629,
+          "netP95Us": 48.723
+        },
+        {
+          "label": "oneExecuteRequest.answer=128KB",
+          "n": 7200,
+          "samples": 2400,
+          "block": 3,
+          "medianUs": 165.074,
+          "p95Us": 214.653,
+          "p99Us": 465.944,
+          "meanUs": 173.472,
+          "wallMs": 1249,
+          "netMedianUs": 165.073,
+          "netP95Us": 214.652
+        },
+        {
+          "label": "oneExecuteRequest.adversarial=128KB",
+          "n": 2400,
+          "samples": 2400,
+          "block": 1,
+          "medianUs": 1418.496,
+          "p95Us": 1517.978,
+          "p99Us": 2775.445,
+          "meanUs": 1469.77,
+          "wallMs": 3528,
+          "netMedianUs": 1418.495,
+          "netP95Us": 1517.977
+        }
+      ]
+    },
+    {
+      "pass": "B",
+      "loadavg": "3.93, 3.53, 3.81",
+      "overheadPerCallUs": 0.006,
+      "overheadN": 28903200,
+      "results": [
+        {
+          "label": "planQuotaRun.n=3",
+          "n": 1454400,
+          "samples": 2400,
+          "block": 606,
+          "medianUs": 0.695,
+          "p95Us": 1.725,
+          "p99Us": 2.178,
+          "meanUs": 0.768,
+          "wallMs": 1118,
+          "netMedianUs": 0.689,
+          "netP95Us": 1.719
+        },
+        {
+          "label": "planQuotaRun.n=8",
+          "n": 676800,
+          "samples": 2400,
+          "block": 282,
+          "medianUs": 1.541,
+          "p95Us": 3.857,
+          "p99Us": 4.846,
+          "meanUs": 1.727,
+          "wallMs": 1169,
+          "netMedianUs": 1.535,
+          "netP95Us": 3.851
+        },
+        {
+          "label": "planQuotaRun.n=64",
+          "n": 91200,
+          "samples": 2400,
+          "block": 38,
+          "medianUs": 12.19,
+          "p95Us": 30.733,
+          "p99Us": 38.738,
+          "meanUs": 13.904,
+          "wallMs": 1268,
+          "netMedianUs": 12.184,
+          "netP95Us": 30.727
+        },
+        {
+          "label": "planQuotaRun.urgent.n=8",
+          "n": 607200,
+          "samples": 2400,
+          "block": 253,
+          "medianUs": 1.757,
+          "p95Us": 4.404,
+          "p99Us": 5.5,
+          "meanUs": 2.006,
+          "wallMs": 1218,
+          "netMedianUs": 1.751,
+          "netP95Us": 4.398
+        },
+        {
+          "label": "postSpendValue",
+          "n": 4994400,
+          "samples": 2400,
+          "block": 2081,
+          "medianUs": 0.185,
+          "p95Us": 0.499,
+          "p99Us": 0.629,
+          "meanUs": 0.208,
+          "wallMs": 1038,
+          "netMedianUs": 0.179,
+          "netP95Us": 0.493
+        },
+        {
+          "label": "windowRemaining",
+          "n": 27919200,
+          "samples": 2400,
+          "block": 11633,
+          "medianUs": 0.007,
+          "p95Us": 0.007,
+          "p99Us": 0.008,
+          "meanUs": 0.007,
+          "wallMs": 208,
+          "netMedianUs": 0.001,
+          "netP95Us": 0.001
+        },
+        {
+          "label": "capacityFor",
+          "n": 6043200,
+          "samples": 2400,
+          "block": 2518,
+          "medianUs": 0.174,
+          "p95Us": 0.444,
+          "p99Us": 0.533,
+          "meanUs": 0.192,
+          "wallMs": 1160,
+          "netMedianUs": 0.168,
+          "netP95Us": 0.438
+        },
+        {
+          "label": "nextLatencyEma",
+          "n": 26464800,
+          "samples": 2400,
+          "block": 11027,
+          "medianUs": 0.01,
+          "p95Us": 0.01,
+          "p99Us": 0.011,
+          "meanUs": 0.01,
+          "wallMs": 267,
+          "netMedianUs": 0.004,
+          "netP95Us": 0.004
+        },
+        {
+          "label": "sanitize.clean.1KB",
+          "n": 384000,
+          "samples": 2400,
+          "block": 160,
+          "medianUs": 3.092,
+          "p95Us": 3.157,
+          "p99Us": 3.219,
+          "meanUs": 3.106,
+          "wallMs": 1193,
+          "netMedianUs": 3.086,
+          "netP95Us": 3.151
+        },
+        {
+          "label": "sanitize.clean.4KB",
+          "n": 105600,
+          "samples": 2400,
+          "block": 44,
+          "medianUs": 11.335,
+          "p95Us": 11.575,
+          "p99Us": 11.767,
+          "meanUs": 11.367,
+          "wallMs": 1201,
+          "netMedianUs": 11.329,
+          "netP95Us": 11.569
+        },
+        {
+          "label": "sanitize.clean.16KB",
+          "n": 26400,
+          "samples": 2400,
+          "block": 11,
+          "medianUs": 44.24,
+          "p95Us": 45.232,
+          "p99Us": 45.645,
+          "meanUs": 44.311,
+          "wallMs": 1170,
+          "netMedianUs": 44.234,
+          "netP95Us": 45.226
+        },
+        {
+          "label": "sanitize.clean.128KB",
+          "n": 14400,
+          "samples": 2400,
+          "block": 6,
+          "medianUs": 85.848,
+          "p95Us": 87.507,
+          "p99Us": 88.527,
+          "meanUs": 85.99,
+          "wallMs": 1239,
+          "netMedianUs": 85.842,
+          "netP95Us": 87.501
+        },
+        {
+          "label": "sanitize.adversarial.4KB",
+          "n": 9600,
+          "samples": 2400,
+          "block": 4,
+          "medianUs": 125.123,
+          "p95Us": 130.452,
+          "p99Us": 301.707,
+          "meanUs": 129.094,
+          "wallMs": 1240,
+          "netMedianUs": 125.117,
+          "netP95Us": 130.446
+        },
+        {
+          "label": "sanitize.adversarial.16KB",
+          "n": 2400,
+          "samples": 2400,
+          "block": 1,
+          "medianUs": 498.704,
+          "p95Us": 517.151,
+          "p99Us": 1182.222,
+          "meanUs": 510.02,
+          "wallMs": 1224,
+          "netMedianUs": 498.698,
+          "netP95Us": 517.145
+        },
+        {
+          "label": "parseExecuteBody.8192chars",
+          "n": 172800,
+          "samples": 2400,
+          "block": 72,
+          "medianUs": 6.627,
+          "p95Us": 7.062,
+          "p99Us": 17.075,
+          "meanUs": 6.93,
+          "wallMs": 1198,
+          "netMedianUs": 6.621,
+          "netP95Us": 7.056
+        },
+        {
+          "label": "parseExecuteBody.31990chars",
+          "n": 67200,
+          "samples": 2400,
+          "block": 28,
+          "medianUs": 16.912,
+          "p95Us": 18.644,
+          "p99Us": 44.39,
+          "meanUs": 17.783,
+          "wallMs": 1195,
+          "netMedianUs": 16.906,
+          "netP95Us": 18.638
+        },
+        {
+          "label": "buildSynthesisPrompt.4x2KB",
+          "n": 112800,
+          "samples": 2400,
+          "block": 47,
+          "medianUs": 9.189,
+          "p95Us": 25.25,
+          "p99Us": 30.569,
+          "meanUs": 10.315,
+          "wallMs": 1164,
+          "netMedianUs": 9.183,
+          "netP95Us": 25.244
+        },
+        {
+          "label": "markUntrusted.8KB",
+          "n": 163200,
+          "samples": 2400,
+          "block": 68,
+          "medianUs": 6.619,
+          "p95Us": 16.807,
+          "p99Us": 20.578,
+          "meanUs": 7.329,
+          "wallMs": 1197,
+          "netMedianUs": 6.613,
+          "netP95Us": 16.801
+        },
+        {
+          "label": "constantTimeEqual.sha256",
+          "n": 117600,
+          "samples": 2400,
+          "block": 49,
+          "medianUs": 8.762,
+          "p95Us": 9.48,
+          "p99Us": 18.558,
+          "meanUs": 13.593,
+          "wallMs": 1599,
+          "netMedianUs": 8.756,
+          "netP95Us": 9.474
+        },
+        {
+          "label": "describeFlock.n=8",
+          "n": 1776000,
+          "samples": 2400,
+          "block": 740,
+          "medianUs": 0.48,
+          "p95Us": 1.309,
+          "p99Us": 2.407,
+          "meanUs": 0.572,
+          "wallMs": 1016,
+          "netMedianUs": 0.474,
+          "netP95Us": 1.303
+        },
+        {
+          "label": "oneExecuteRequest.answer=1KB",
+          "n": 16800,
+          "samples": 2400,
+          "block": 7,
+          "medianUs": 64.764,
+          "p95Us": 69.151,
+          "p99Us": 240.72,
+          "meanUs": 68.852,
+          "wallMs": 1157,
+          "netMedianUs": 64.758,
+          "netP95Us": 69.145
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=1KB",
+          "n": 28800,
+          "samples": 2400,
+          "block": 12,
+          "medianUs": 38.517,
+          "p95Us": 43.409,
+          "p99Us": 151.215,
+          "meanUs": 42.338,
+          "wallMs": 1220,
+          "netMedianUs": 38.511,
+          "netP95Us": 43.403
+        },
+        {
+          "label": "oneExecuteRequest.answer=4KB",
+          "n": 14400,
+          "samples": 2400,
+          "block": 6,
+          "medianUs": 73.946,
+          "p95Us": 78.297,
+          "p99Us": 280.598,
+          "meanUs": 77.966,
+          "wallMs": 1123,
+          "netMedianUs": 73.94,
+          "netP95Us": 78.291
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=4KB",
+          "n": 28800,
+          "samples": 2400,
+          "block": 12,
+          "medianUs": 39.39,
+          "p95Us": 44.926,
+          "p99Us": 154.002,
+          "meanUs": 43.634,
+          "wallMs": 1257,
+          "netMedianUs": 39.384,
+          "netP95Us": 44.92
+        },
+        {
+          "label": "oneExecuteRequest.answer=16KB",
+          "n": 9600,
+          "samples": 2400,
+          "block": 4,
+          "medianUs": 108.04,
+          "p95Us": 115.342,
+          "p99Us": 404.209,
+          "meanUs": 113.874,
+          "wallMs": 1094,
+          "netMedianUs": 108.034,
+          "netP95Us": 115.336
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=16KB",
+          "n": 26400,
+          "samples": 2400,
+          "block": 11,
+          "medianUs": 41.301,
+          "p95Us": 47.835,
+          "p99Us": 165.194,
+          "meanUs": 45.816,
+          "wallMs": 1210,
+          "netMedianUs": 41.295,
+          "netP95Us": 47.829
+        },
+        {
+          "label": "oneExecuteRequest.answer=128KB",
+          "n": 7200,
+          "samples": 2400,
+          "block": 3,
+          "medianUs": 164.477,
+          "p95Us": 191.174,
+          "p99Us": 697.184,
+          "meanUs": 175.717,
+          "wallMs": 1266,
+          "netMedianUs": 164.471,
+          "netP95Us": 191.168
+        },
+        {
+          "label": "oneExecuteRequest.adversarial=128KB",
+          "n": 2400,
+          "samples": 2400,
+          "block": 1,
+          "medianUs": 1446.661,
+          "p95Us": 1694.083,
+          "p99Us": 3411.618,
+          "meanUs": 1524.269,
+          "wallMs": 3659,
+          "netMedianUs": 1446.655,
+          "netP95Us": 1694.077
+        }
+      ]
+    },
+    {
+      "pass": "C",
+      "loadavg": "4.24, 3.67, 3.84",
+      "overheadPerCallUs": 0.006,
+      "overheadN": 28980000,
+      "results": [
+        {
+          "label": "planQuotaRun.n=3",
+          "n": 1485600,
+          "samples": 2400,
+          "block": 619,
+          "medianUs": 0.698,
+          "p95Us": 2.515,
+          "p99Us": 2.935,
+          "meanUs": 0.818,
+          "wallMs": 1215,
+          "netMedianUs": 0.692,
+          "netP95Us": 2.509
+        },
+        {
+          "label": "planQuotaRun.n=8",
+          "n": 607200,
+          "samples": 2400,
+          "block": 253,
+          "medianUs": 1.565,
+          "p95Us": 2.413,
+          "p99Us": 7.062,
+          "meanUs": 1.838,
+          "wallMs": 1117,
+          "netMedianUs": 1.559,
+          "netP95Us": 2.407
+        },
+        {
+          "label": "planQuotaRun.n=64",
+          "n": 93600,
+          "samples": 2400,
+          "block": 39,
+          "medianUs": 11.522,
+          "p95Us": 40.043,
+          "p99Us": 46.864,
+          "meanUs": 13.421,
+          "wallMs": 1257,
+          "netMedianUs": 11.516,
+          "netP95Us": 40.037
+        },
+        {
+          "label": "planQuotaRun.urgent.n=8",
+          "n": 576000,
+          "samples": 2400,
+          "block": 240,
+          "medianUs": 1.644,
+          "p95Us": 2.524,
+          "p99Us": 7.485,
+          "meanUs": 1.924,
+          "wallMs": 1109,
+          "netMedianUs": 1.638,
+          "netP95Us": 2.518
+        },
+        {
+          "label": "postSpendValue",
+          "n": 4932000,
+          "samples": 2400,
+          "block": 2055,
+          "medianUs": 0.178,
+          "p95Us": 0.28,
+          "p99Us": 0.839,
+          "meanUs": 0.212,
+          "wallMs": 1046,
+          "netMedianUs": 0.172,
+          "netP95Us": 0.274
+        },
+        {
+          "label": "windowRemaining",
+          "n": 27981600,
+          "samples": 2400,
+          "block": 11659,
+          "medianUs": 0.008,
+          "p95Us": 0.008,
+          "p99Us": 0.009,
+          "meanUs": 0.008,
+          "wallMs": 230,
+          "netMedianUs": 0.002,
+          "netP95Us": 0.002
+        },
+        {
+          "label": "capacityFor",
+          "n": 5721600,
+          "samples": 2400,
+          "block": 2384,
+          "medianUs": 0.165,
+          "p95Us": 0.634,
+          "p99Us": 0.761,
+          "meanUs": 0.197,
+          "wallMs": 1126,
+          "netMedianUs": 0.159,
+          "netP95Us": 0.628
+        },
+        {
+          "label": "nextLatencyEma",
+          "n": 26539200,
+          "samples": 2400,
+          "block": 11058,
+          "medianUs": 0.01,
+          "p95Us": 0.01,
+          "p99Us": 0.011,
+          "meanUs": 0.01,
+          "wallMs": 268,
+          "netMedianUs": 0.004,
+          "netP95Us": 0.004
+        },
+        {
+          "label": "sanitize.clean.1KB",
+          "n": 384000,
+          "samples": 2400,
+          "block": 160,
+          "medianUs": 3.074,
+          "p95Us": 3.147,
+          "p99Us": 3.224,
+          "meanUs": 3.097,
+          "wallMs": 1189,
+          "netMedianUs": 3.068,
+          "netP95Us": 3.141
+        },
+        {
+          "label": "sanitize.clean.4KB",
+          "n": 105600,
+          "samples": 2400,
+          "block": 44,
+          "medianUs": 11.285,
+          "p95Us": 11.556,
+          "p99Us": 11.834,
+          "meanUs": 11.339,
+          "wallMs": 1198,
+          "netMedianUs": 11.279,
+          "netP95Us": 11.55
+        },
+        {
+          "label": "sanitize.clean.16KB",
+          "n": 26400,
+          "samples": 2400,
+          "block": 11,
+          "medianUs": 44.249,
+          "p95Us": 45.408,
+          "p99Us": 49.555,
+          "meanUs": 44.731,
+          "wallMs": 1181,
+          "netMedianUs": 44.243,
+          "netP95Us": 45.402
+        },
+        {
+          "label": "sanitize.clean.128KB",
+          "n": 14400,
+          "samples": 2400,
+          "block": 6,
+          "medianUs": 85.845,
+          "p95Us": 88.494,
+          "p99Us": 93.154,
+          "meanUs": 86.515,
+          "wallMs": 1246,
+          "netMedianUs": 85.839,
+          "netP95Us": 88.488
+        },
+        {
+          "label": "sanitize.adversarial.4KB",
+          "n": 9600,
+          "samples": 2400,
+          "block": 4,
+          "medianUs": 125.034,
+          "p95Us": 134.21,
+          "p99Us": 408.207,
+          "meanUs": 129.871,
+          "wallMs": 1247,
+          "netMedianUs": 125.028,
+          "netP95Us": 134.204
+        },
+        {
+          "label": "sanitize.adversarial.16KB",
+          "n": 2400,
+          "samples": 2400,
+          "block": 1,
+          "medianUs": 499.632,
+          "p95Us": 534.024,
+          "p99Us": 1598.985,
+          "meanUs": 518.752,
+          "wallMs": 1245,
+          "netMedianUs": 499.626,
+          "netP95Us": 534.018
+        },
+        {
+          "label": "parseExecuteBody.8192chars",
+          "n": 170400,
+          "samples": 2400,
+          "block": 71,
+          "medianUs": 6.67,
+          "p95Us": 7.288,
+          "p99Us": 24.01,
+          "meanUs": 7.157,
+          "wallMs": 1220,
+          "netMedianUs": 6.664,
+          "netP95Us": 7.282
+        },
+        {
+          "label": "parseExecuteBody.31990chars",
+          "n": 64800,
+          "samples": 2400,
+          "block": 27,
+          "medianUs": 16.956,
+          "p95Us": 18.911,
+          "p99Us": 63.339,
+          "meanUs": 18.34,
+          "wallMs": 1189,
+          "netMedianUs": 16.95,
+          "netP95Us": 18.905
+        },
+        {
+          "label": "buildSynthesisPrompt.4x2KB",
+          "n": 117600,
+          "samples": 2400,
+          "block": 49,
+          "medianUs": 8.981,
+          "p95Us": 33.199,
+          "p99Us": 39.668,
+          "meanUs": 10.676,
+          "wallMs": 1256,
+          "netMedianUs": 8.975,
+          "netP95Us": 33.193
+        },
+        {
+          "label": "markUntrusted.8KB",
+          "n": 163200,
+          "samples": 2400,
+          "block": 68,
+          "medianUs": 6.481,
+          "p95Us": 22.426,
+          "p99Us": 27.08,
+          "meanUs": 7.446,
+          "wallMs": 1216,
+          "netMedianUs": 6.475,
+          "netP95Us": 22.42
+        },
+        {
+          "label": "constantTimeEqual.sha256",
+          "n": 132000,
+          "samples": 2400,
+          "block": 55,
+          "medianUs": 8.852,
+          "p95Us": 13.635,
+          "p99Us": 57.81,
+          "meanUs": 14.755,
+          "wallMs": 1948,
+          "netMedianUs": 8.846,
+          "netP95Us": 13.629
+        },
+        {
+          "label": "describeFlock.n=8",
+          "n": 1924800,
+          "samples": 2400,
+          "block": 802,
+          "medianUs": 0.471,
+          "p95Us": 2.435,
+          "p99Us": 2.95,
+          "meanUs": 0.591,
+          "wallMs": 1139,
+          "netMedianUs": 0.465,
+          "netP95Us": 2.429
+        },
+        {
+          "label": "oneExecuteRequest.answer=1KB",
+          "n": 16800,
+          "samples": 2400,
+          "block": 7,
+          "medianUs": 64.757,
+          "p95Us": 69.741,
+          "p99Us": 314.876,
+          "meanUs": 70.245,
+          "wallMs": 1180,
+          "netMedianUs": 64.751,
+          "netP95Us": 69.735
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=1KB",
+          "n": 28800,
+          "samples": 2400,
+          "block": 12,
+          "medianUs": 38.399,
+          "p95Us": 43.702,
+          "p99Us": 199.592,
+          "meanUs": 43.86,
+          "wallMs": 1264,
+          "netMedianUs": 38.393,
+          "netP95Us": 43.696
+        },
+        {
+          "label": "oneExecuteRequest.answer=4KB",
+          "n": 14400,
+          "samples": 2400,
+          "block": 6,
+          "medianUs": 73.733,
+          "p95Us": 78.775,
+          "p99Us": 366.81,
+          "meanUs": 79.756,
+          "wallMs": 1149,
+          "netMedianUs": 73.727,
+          "netP95Us": 78.769
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=4KB",
+          "n": 26400,
+          "samples": 2400,
+          "block": 11,
+          "medianUs": 39.304,
+          "p95Us": 45.228,
+          "p99Us": 210.138,
+          "meanUs": 44.998,
+          "wallMs": 1188,
+          "netMedianUs": 39.298,
+          "netP95Us": 45.222
+        },
+        {
+          "label": "oneExecuteRequest.answer=16KB",
+          "n": 9600,
+          "samples": 2400,
+          "block": 4,
+          "medianUs": 107.904,
+          "p95Us": 114.392,
+          "p99Us": 521.317,
+          "meanUs": 114.353,
+          "wallMs": 1098,
+          "netMedianUs": 107.898,
+          "netP95Us": 114.386
+        },
+        {
+          "label": "oneExecuteRequest.noShield.answer=16KB",
+          "n": 26400,
+          "samples": 2400,
+          "block": 11,
+          "medianUs": 41.515,
+          "p95Us": 51.763,
+          "p99Us": 215.172,
+          "meanUs": 48.802,
+          "wallMs": 1289,
+          "netMedianUs": 41.509,
+          "netP95Us": 51.757
+        },
+        {
+          "label": "oneExecuteRequest.answer=128KB",
+          "n": 7200,
+          "samples": 2400,
+          "block": 3,
+          "medianUs": 164.151,
+          "p95Us": 185.82,
+          "p99Us": 829.543,
+          "meanUs": 174.851,
+          "wallMs": 1259,
+          "netMedianUs": 164.145,
+          "netP95Us": 185.814
+        },
+        {
+          "label": "oneExecuteRequest.adversarial=128KB",
+          "n": 2400,
+          "samples": 2400,
+          "block": 1,
+          "medianUs": 1350.238,
+          "p95Us": 1502.873,
+          "p99Us": 3610.327,
+          "meanUs": 1433.284,
+          "wallMs": 3441,
+          "netMedianUs": 1350.232,
+          "netP95Us": 1502.867
+        }
+      ]
+    }
+  ],
+  "stability": [
+    {
+      "label": "planQuotaRun.n=3",
+      "mediansUs": [
+        0.694,
+        0.695,
+        0.698
+      ],
+      "worstSpreadPct": 0.6
+    },
+    {
+      "label": "planQuotaRun.n=8",
+      "mediansUs": [
+        1.66,
+        1.541,
+        1.565
+      ],
+      "worstSpreadPct": 7.7
+    },
+    {
+      "label": "planQuotaRun.n=64",
+      "mediansUs": [
+        12.818,
+        12.19,
+        11.522
+      ],
+      "worstSpreadPct": 11.2
+    },
+    {
+      "label": "planQuotaRun.urgent.n=8",
+      "mediansUs": [
+        1.766,
+        1.757,
+        1.644
+      ],
+      "worstSpreadPct": 7.4
+    },
+    {
+      "label": "postSpendValue",
+      "mediansUs": [
+        0.191,
+        0.185,
+        0.178
+      ],
+      "worstSpreadPct": 7.3
+    },
+    {
+      "label": "windowRemaining",
+      "mediansUs": [
+        0.007,
+        0.007,
+        0.008
+      ],
+      "worstSpreadPct": 14.3
+    },
+    {
+      "label": "capacityFor",
+      "mediansUs": [
+        0.181,
+        0.174,
+        0.165
+      ],
+      "worstSpreadPct": 9.7
+    },
+    {
+      "label": "nextLatencyEma",
+      "mediansUs": [
+        0.01,
+        0.01,
+        0.01
+      ],
+      "worstSpreadPct": 0
+    },
+    {
+      "label": "sanitize.clean.1KB",
+      "mediansUs": [
+        3.093,
+        3.092,
+        3.074
+      ],
+      "worstSpreadPct": 0.6
+    },
+    {
+      "label": "sanitize.clean.4KB",
+      "mediansUs": [
+        11.307,
+        11.335,
+        11.285
+      ],
+      "worstSpreadPct": 0.4
+    },
+    {
+      "label": "sanitize.clean.16KB",
+      "mediansUs": [
+        44.105,
+        44.24,
+        44.249
+      ],
+      "worstSpreadPct": 0.3
+    },
+    {
+      "label": "sanitize.clean.128KB",
+      "mediansUs": [
+        85.789,
+        85.848,
+        85.845
+      ],
+      "worstSpreadPct": 0.1
+    },
+    {
+      "label": "sanitize.adversarial.4KB",
+      "mediansUs": [
+        126.076,
+        125.123,
+        125.034
+      ],
+      "worstSpreadPct": 0.8
+    },
+    {
+      "label": "sanitize.adversarial.16KB",
+      "mediansUs": [
+        503.482,
+        498.704,
+        499.632
+      ],
+      "worstSpreadPct": 1
+    },
+    {
+      "label": "parseExecuteBody.8192chars",
+      "mediansUs": [
+        6.582,
+        6.627,
+        6.67
+      ],
+      "worstSpreadPct": 1.3
+    },
+    {
+      "label": "parseExecuteBody.31990chars",
+      "mediansUs": [
+        16.938,
+        16.912,
+        16.956
+      ],
+      "worstSpreadPct": 0.3
+    },
+    {
+      "label": "buildSynthesisPrompt.4x2KB",
+      "mediansUs": [
+        9.031,
+        9.189,
+        8.981
+      ],
+      "worstSpreadPct": 2.3
+    },
+    {
+      "label": "markUntrusted.8KB",
+      "mediansUs": [
+        6.446,
+        6.619,
+        6.481
+      ],
+      "worstSpreadPct": 2.7
+    },
+    {
+      "label": "constantTimeEqual.sha256",
+      "mediansUs": [
+        8.863,
+        8.762,
+        8.852
+      ],
+      "worstSpreadPct": 1.2
+    },
+    {
+      "label": "describeFlock.n=8",
+      "mediansUs": [
+        0.463,
+        0.48,
+        0.471
+      ],
+      "worstSpreadPct": 3.7
+    },
+    {
+      "label": "oneExecuteRequest.answer=1KB",
+      "mediansUs": [
+        65.618,
+        64.764,
+        64.757
+      ],
+      "worstSpreadPct": 1.3
+    },
+    {
+      "label": "oneExecuteRequest.noShield.answer=1KB",
+      "mediansUs": [
+        38.606,
+        38.517,
+        38.399
+      ],
+      "worstSpreadPct": 0.5
+    },
+    {
+      "label": "oneExecuteRequest.answer=4KB",
+      "mediansUs": [
+        73.902,
+        73.946,
+        73.733
+      ],
+      "worstSpreadPct": 0.3
+    },
+    {
+      "label": "oneExecuteRequest.noShield.answer=4KB",
+      "mediansUs": [
+        39.278,
+        39.39,
+        39.304
+      ],
+      "worstSpreadPct": 0.3
+    },
+    {
+      "label": "oneExecuteRequest.answer=16KB",
+      "mediansUs": [
+        108.513,
+        108.04,
+        107.904
+      ],
+      "worstSpreadPct": 0.6
+    },
+    {
+      "label": "oneExecuteRequest.noShield.answer=16KB",
+      "mediansUs": [
+        41.63,
+        41.301,
+        41.515
+      ],
+      "worstSpreadPct": 0.8
+    },
+    {
+      "label": "oneExecuteRequest.answer=128KB",
+      "mediansUs": [
+        165.074,
+        164.477,
+        164.151
+      ],
+      "worstSpreadPct": 0.6
+    },
+    {
+      "label": "oneExecuteRequest.adversarial=128KB",
+      "mediansUs": [
+        1418.496,
+        1446.661,
+        1350.238
+      ],
+      "worstSpreadPct": 7.1
+    }
+  ]
+}

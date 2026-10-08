@@ -1,7 +1,7 @@
 # TASK-015 — Research: the free-tier capacity math for 1M users
 
 - Owner: any
-- Status: open
+- Status: done (Lead 2026-10-08T10:56)
 - Depends on: nothing · Estimate: 150–240 min · Runner: **research specialist** agent
 
 ## 0. Start here: introduce yourself

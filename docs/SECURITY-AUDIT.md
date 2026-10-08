@@ -115,6 +115,14 @@
 - **Impact:** Provider API keys on the Go side are sealed with AES-256-GCM under argon2id-derived keys. The TypeScript fleet file has no encryption at all. A host compromise on the Node side exposes all recorded core API keys in plaintext; the same compromise on the Go side exposes sealed ciphertext. The asymmetry means the Node side is the weak link.
 - **Recommended fix:** Add encryption at rest for the fleet file on the TypeScript side, matching the Go standard. At minimum, use OS keychain storage for the `apiKey` field.
 
+### RES-001 — Unbounded provider answer could exhaust the Workers CPU budget *(FIXED 2026-10-08)*
+- **Severity:** high (availability), fixed
+- **Evidence:** `phoenix-core/src/provider.ts:122` returned `data.choices?.[0]?.message?.content ?? ""` with no length bound, and that value reached `sanitizeModelOutput` on every answer (`phoenix-core/src/execute.ts:166`) and every tool result (`:212`). Every *inbound* field was already capped (`MAX_PROMPT_CHARS`, `MAX_EXECUTE_BODY_CHARS`, `MAX_TOOLS`, `MAX_USER_ID_CHARS`); nothing bounded the way out.
+- **Impact:** The sanitize passes are linear in input length, so an upstream — a hostile endpoint, a compromised key, or merely a misbehaving provider — chose how much CPU a request spends. Measured, not assumed (`bench/native-audit`, `docs/research/NATIVE-COMPUTE-AUDIT.md`): at a 128 KB answer the sanitizer cost **4.71 ms median and 11.72 ms p99**, against a **10 ms CPU limit per request** on the Workers Free plan. The p99 exceeded the entire per-request budget on its own, so a single oversized response could exhaust the CPU allowance for a request rather than merely slow it.
+- **Fix:** `MAX_MODEL_OUTPUT_CHARS = 32_000` in `phoenix-core/src/security.ts`, applied as the **first** step of `sanitizeModelOutput` — before any pattern runs, since truncating afterwards would already have spent the CPU the cap exists to save. The value matches `MAX_EXECUTE_BODY_CHARS` deliberately, keeping one length policy instead of two that drift. Recorded as an `output_truncated` finding so the strip stays auditable rather than a silent mutation. Six tests in `phoenix-core/test/security.test.ts`, including the boundary case (an answer exactly at the cap is byte-identical, so the no-op guarantee survives) and the case that matters most for a length cap — that dangerous markup inside the retained prefix is still neutralised, so the bound is not a sanitiser bypass.
+- **Verification:** Negative control run — with the cap removed, 5 of the 6 new tests fail; restored, all 48 pass. `boundary.test.ts` still green (the cap adds no runtime binding), both suites green (129 workerd + 368 node), `typecheck` clean.
+- **Residual, stated rather than hidden:** cutting the tail can leave an unterminated construct such as `<a href="` with no `>`. That is inert for a consumer rendering the text as text or markdown, and it is the same class of gap already documented for downstream renderers this function cannot see.
+
 ### SEC-003 — No secrets found in source files
 - **Severity:** info (positive finding)
 - **Evidence:** `grep -rInE '(ghp_|gho_|ghu_|ghs_|ghr_|sk-ant-|AIza[0-9A-Za-z_-]{20,}|xox[bpas]-|-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16})'` — no matches
@@ -217,10 +225,11 @@ grep -rn 'apiKey\|API_KEY' --include='*.ts' simorgh-platform/src/fleet-store.ts
 
 | Severity | Count |
 |----------|-------|
-| High | 6 (AUTH-001, AUTH-002, AUTH-003, SSRF-001, MCP-001, SEC-001) |
+| High | 6 open (AUTH-001, AUTH-002, AUTH-003, SSRF-001, MCP-001, SEC-001) |
 | Medium | 8 (AUTH-004, INJ-001, SSRF-002, DEP-001, DEP-002, MCP-002, SEC-002, RATE-001) |
 | Low | 4 (INJ-002, ERR-001, ERR-002, TELE-003) |
 | Info | 7 (MCP-003, SEC-003, SEC-004, ERR-003, DEPS-001, TELE-001, TELE-002) |
+| High, **fixed** | 1 (RES-001, 2026-10-08) |
 
 *Counts recounted from each finding's own `**Severity:**` line (2026-10-03). The table was
 wrong in three of four rows: it undercounted High by one while listing six, counted `INJ-002`
@@ -228,6 +237,13 @@ as Medium when its finding declares Low, and omitted `MCP-002` and `SEC-002` fro
 entirely. A hand-maintained summary of a machine-checkable list is exactly the kind of thing
 that drifts, and a security document that miscounts its own HIGH findings is worse than no
 summary — §4 accepts six of them, so a reader counting five would not know what was agreed to.*
+
+**RES-001 was found after this audit, by measurement rather than reading** — the `bench/native-audit`
+lane (2026-10-07) timed the response-side sanitizer and found the outbound path had no length
+bound at all, where the audit above had checked the inbound path and found four caps and moved
+on. It is listed as fixed and separate from the six §4 accepts, so it is never mistaken for
+something that was agreed to. The general lesson is the audit's own: a security document that
+counts one direction of a flow is a description of half a flow.*
 
 **Three findings to fix first:**
 1. **AUTH-002 (IDOR on `/api/v1/user/:userId/logs`)** — An attacker with any valid bearer token can read any user's complete ledger (prompts, tools, tiers). The `userId` is a URL path parameter, making enumeration trivial. This is the highest-value target in the audit because it leaks request history. Fix: derive the user ID from the bearer token claims, not the URL.

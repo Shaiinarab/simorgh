@@ -25,6 +25,13 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 
+# Serena LSP cache — a per-machine index, not source. Untracked on purpose: it appeared
+# as untracked noise at the repo root and under packages/config/ on 2026-10-08, and a
+# cache directory is exactly the kind of thing that gets swept into a commit by a
+# `git add -A`. The config (.serena/project.yml) is deliberately NOT ignored — that is
+# the part worth sharing.
+.serena/
+
 # BMAD state
 .bmad/cache/
 

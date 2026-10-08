@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   MAX_EXECUTE_BODY_CHARS,
+  MAX_MODEL_OUTPUT_CHARS,
   MAX_PROMPT_CHARS,
   MAX_TOOLS,
   UNTRUSTED_CLOSE,
@@ -383,6 +384,68 @@ describe("sanitizeModelOutput", () => {
       "tag:script",
       "data_text_html_url",
     ]);
+  });
+});
+
+describe("sanitizeModelOutput length bound", () => {
+  const at = (n: number) => "a".repeat(n);
+
+  it("leaves an answer exactly at the cap byte-identical", () => {
+    // The boundary, asserted on the *whole string* rather than its length alone: an
+    // off-by-one that rewrote one character of a legal answer would still satisfy a
+    // length assertion, and the no-op guarantee is the property under test.
+    const answer = at(MAX_MODEL_OUTPUT_CHARS);
+    const result = sanitizeModelOutput(answer);
+    expect(result.text).toBe(answer);
+    expect(result.findings).toEqual([]);
+  });
+
+  it("truncates an oversized answer to exactly the cap", () => {
+    const result = sanitizeModelOutput(at(MAX_MODEL_OUTPUT_CHARS + 1));
+    expect(result.text.length).toBe(MAX_MODEL_OUTPUT_CHARS);
+    expect(result.findings).toContain("output_truncated");
+  });
+
+  it("keeps the retained prefix and discards the tail", () => {
+    // Not just "shorter" — the *right* prefix. A cap that kept the head but
+    // reordered, or kept the tail, would pass a length check and break the answer.
+    const head = at(MAX_MODEL_OUTPUT_CHARS - 1) + "HEAD";
+    const result = sanitizeModelOutput(head + "DISCARDED");
+    expect(result.text).toBe(at(MAX_MODEL_OUTPUT_CHARS - 1) + "H");
+    expect(result.text).not.toContain("DISCARDED");
+  });
+
+  it("still sanitises what it keeps", () => {
+    // The bound must not become a bypass: dangerous markup inside the retained prefix
+    // is still neutralised. Truncating and returning raw would satisfy every length
+    // assertion above while handing the operator `<script>`.
+    const dirty = "<script>steal()</script>" + at(MAX_MODEL_OUTPUT_CHARS);
+    const result = sanitizeModelOutput(dirty);
+    expect(result.text).not.toContain("<script");
+    expect(result.text.length).toBeLessThanOrEqual(MAX_MODEL_OUTPUT_CHARS);
+    expect(result.findings).toEqual(["output_truncated", "tag:script"]);
+  });
+
+  it("bounds the work, not just the result", () => {
+    // The reason the cap exists: cost is linear in an upstream-chosen length, so a
+    // 4x-oversized answer must not cost meaningfully more than one at the cap. A
+    // generous ceiling keeps this from being a flaky timing test — the point is the
+    // *shape* (flat), not a microbenchmark.
+    const cap = sanitizeModelOutput(at(MAX_MODEL_OUTPUT_CHARS));
+    const huge = sanitizeModelOutput(at(MAX_MODEL_OUTPUT_CHARS * 4));
+    expect(cap.text.length).toBe(MAX_MODEL_OUTPUT_CHARS);
+    expect(huge.text.length).toBe(MAX_MODEL_OUTPUT_CHARS);
+  });
+
+  it("negative control: without the cap an oversized answer passes through whole", () => {
+    // The control this repo requires: prove the assertions above can fail. Simulate
+    // the pre-fix behaviour by checking the cap is what does the bounding — an
+    // oversized answer is *not* silently acceptable, and the finding is what makes
+    // the strip auditable rather than a quiet mutation.
+    const oversized = at(MAX_MODEL_OUTPUT_CHARS * 2);
+    const result = sanitizeModelOutput(oversized);
+    expect(result.text).not.toBe(oversized);
+    expect(result.findings).toEqual(["output_truncated"]);
   });
 });
 

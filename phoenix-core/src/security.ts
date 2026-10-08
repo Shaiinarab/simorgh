@@ -242,6 +242,31 @@ export function isAllowedOrigin(origin: string, configured: string | undefined):
 //      and the ledger records it, so a strip is a decision somebody can audit rather
 //      than a silent mutation of somebody's answer.
 
+/**
+ * The largest model answer this gateway will carry, in characters.
+ *
+ * Every *inbound* field has a cap (`MAX_PROMPT_CHARS`, `MAX_EXECUTE_BODY_CHARS`,
+ * `MAX_TOOLS`, `MAX_USER_ID_CHARS`). The way *out* had none: `provider.ts` returns
+ * whatever the upstream sent, so a hostile or merely broken endpoint decides how much
+ * CPU this process spends. Measured on that gap, not assumed —
+ * `bench/native-audit` (2026-10-07, `docs/research/NATIVE-COMPUTE-AUDIT.md`):
+ *
+ * | answer size | `sanitizeModelOutput` median | p99   | share of the 10 ms Workers Free CPU limit |
+ * |-------------|-------------------------------|-------|---------------------------------------------|
+ * | realistic   | 3.1–9.7 µs                    | —     | well under 1%                               |
+ * | 128 KB      | 4.71 ms                       | 11.72 ms | **47% median, 117% p99**                 |
+ *
+ * So an oversized answer was not a cosmetic problem: at p99 it exceeded the entire
+ * per-request CPU budget on its own, which is an availability defect reachable by
+ * whoever controls the upstream response — not by a bug in this repo. The cap is the
+ * fix; a faster loop is not, because the cost is linear in a length an adversary picks.
+ *
+ * 32,000 matches `MAX_EXECUTE_BODY_CHARS` deliberately: an answer larger than the
+ * largest request this gateway accepts was never a real answer, and reusing the number
+ * keeps one length policy rather than two that drift.
+ */
+export const MAX_MODEL_OUTPUT_CHARS = 32_000;
+
 /** One finding per rule, not one per occurrence: 50 script tags is one thing wrong. */
 export interface SanitizedModelOutput {
   /**
@@ -379,7 +404,19 @@ export function sanitizeModelOutput(text: string): SanitizedModelOutput {
     if (!findings.includes(id)) findings.push(id);
   };
 
-  let out = text;
+  // Bounded *first*, before any pattern runs. Order is the whole point: the passes
+  // below are linear in input length, so truncating after them would have already
+  // spent the CPU this cap exists to save. Recorded as a finding rather than applied
+  // silently, so a strip stays an auditable decision (see rule 2 above).
+  //
+  // Stated rather than hidden: cutting the tail can leave an unterminated construct —
+  // `<a href="` with no `>`. That is inert in a consumer that renders the text as
+  // text or as markdown, and it is the same class of residual gap this function
+  // already documents for downstream renderers it cannot see.
+  const bounded = text.length > MAX_MODEL_OUTPUT_CHARS ? text.slice(0, MAX_MODEL_OUTPUT_CHARS) : text;
+  if (bounded !== text) record("output_truncated");
+
+  let out = bounded;
 
   out = scrub(out, CONTROL_CHARS, "", "control_characters", record);
   out = scrub(out, TAG_BLOCK, "", "unicode_tag_smuggling", record);
