@@ -29,9 +29,21 @@ describe("FlockCoordinator", () => {
     // "no such table: bird_health" — so this single assertion covers both.
     const status = await coordinator().getFlockStatus();
 
-    expect(status.birds).toHaveLength(3);
-    expect(status.birds.map((b) => b.id)).toEqual(["shahin", "bulbul", "homa"]);
-    expect(status.birds.map((b) => b.priority)).toEqual([10, 20, 30]);
+    // The one place the roster is pinned literally, and deliberately so. `/api/v1/flock/status`
+    // is a published contract and `docs/ARCHITECTURE.md` invariant #9 makes the wire field
+    // names one too, so *completeness* is the property here: `toEqual`, not `toContain`.
+    // Five birds since Gemini and OpenRouter joined — both keyed, both slotted ahead of Homā
+    // so the key-free bird stays reachable. The priority list is pinned exactly for the same
+    // reason: priorities must be unique and ascending, and only the whole list says that.
+    expect(status.birds).toHaveLength(5);
+    expect(status.birds.map((b) => b.id)).toEqual([
+      "shahin",
+      "gemini",
+      "bulbul",
+      "openrouter",
+      "homa",
+    ]);
+    expect(status.birds.map((b) => b.priority)).toEqual([10, 15, 20, 25, 30]);
     expect(status.timestamp).toBeGreaterThan(0);
   });
 
@@ -47,6 +59,28 @@ describe("FlockCoordinator", () => {
     expect(byId.bulbul.dormant).toBe(true);
     expect(byId.homa.dormant).toBe(false);
     expect(byId.homa.status).toBe("healthy");
+  });
+
+  it("offers exactly one bird that answers with no key at all, and it is Homā", async () => {
+    // The zero-KYC guarantee, asserted directly instead of implied by a roster literal.
+    //
+    // Every other assertion about the roster says *which* birds exist; this one says what
+    // they are for. With an empty environment, `dormant` is derived from the live secret
+    // reader, so a bird declares itself unavailable iff it needs a key it was not given.
+    // That makes the count of non-dormant birds the machine-readable form of the promise:
+    // whatever else is registered, exactly one thing can answer on a fresh deploy, and it
+    // is the one that needs nothing.
+    //
+    // Not a tautology, and here is what catches it: registering a second key-free bird —
+    // or moving Homā behind a keyed one — turns this red, and so does
+    // `test/flock-routing.test.ts`'s attempt log. A roster pin alone would not, because a
+    // roster pin is happy to accept an unreachable flock as long as the ids line up.
+    const birds = (await coordinator().getFlockStatus()).birds;
+
+    const answerable = birds.filter((b) => !b.dormant);
+
+    expect(answerable.map((b) => b.id)).toEqual(["homa"]);
+    expect(birds.filter((b) => b.dormant).every((b) => b.status === "dormant")).toBe(true);
   });
 
   it("starts with clean counters", async () => {
@@ -111,6 +145,17 @@ describe("DataTrustVault", () => {
     expect((await v.getUserLogs("u-a")).entries[0].ref_id).toBe("ctx_a");
     expect((await v.getUserLogs("u-b")).entries[0].ref_id).toBe("ctx_b");
     expect((await v.getUserLogs("u-absent")).count).toBe(0);
+  });
+
+  it("created the capacity table before the first request, and it crosses RPC", async () => {
+    // "Verify against reality, not against your own fixture." A fresh Durable Object
+    // has applied QUOTA_SCHEMA in its constructor; if it had not, this throws
+    // "no such table: quota_state" exactly as the bird_health assertion above does
+    // for the health table. An empty array — not a throw — is the proof, and the
+    // declared-cloneability of `QuotaRow` over the boundary is the second thing it
+    // pins: an `unknown` or an index signature here would collapse the generated stub
+    // to `never` and fail typecheck instead.
+    expect(await coordinator().getQuotaState()).toEqual([]);
   });
 
   it("honours explicit action and details over the defaults", async () => {

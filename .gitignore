@@ -25,6 +25,13 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 
+# Serena LSP cache — a per-machine index, not source. Untracked on purpose: it appeared
+# as untracked noise at the repo root and under packages/config/ on 2026-10-08, and a
+# cache directory is exactly the kind of thing that gets swept into a commit by a
+# `git add -A`. The config (.serena/project.yml) is deliberately NOT ignored — that is
+# the part worth sharing.
+.serena/
+
 # BMAD state
 .bmad/cache/
 
@@ -33,3 +40,14 @@ mailbox/.state/
 
 # Local scratch
 *.bak
+
+# Agent scratch. Several mailbox briefs direct a worker to write a throwaway demo to
+# .openclaw/tmp/<name>.ts *inside the repo*, so this path is expected to appear — it must never be
+# committed. Real temp files belong at the workspace root (.openclaw/tmp), not here.
+.openclaw/
+
+# Package manager: upm (see docs/adr/ADR-0004-toolchain-upm.md). `upm.lock` IS committed --
+# it is the reproducible build input. `package-lock.json` is deliberately absent: it would
+# be a second, competing resolution of the same manifest, which is the "two truths nothing
+# compares them" failure this repo already paid for once in ledger.ts.
+package-lock.json

@@ -19,13 +19,33 @@ interface FlockCall {
 
 const calls: FlockCall[] = [];
 
-/** A recording stand-in for the FLOCK_COORDINATOR namespace. */
-function fakeFlockNamespace() {
+/**
+ * A recording stand-in for the FLOCK_COORDINATOR namespace.
+ *
+ * `exhausted` exists because the happy-path stand-in made one whole behaviour
+ * untestable: every `/execute` test took the answered branch, so the exhaustion path —
+ * and with it the `Retry-After` header of Story 5.5 — had never been executed at the HTTP
+ * layer by any test in this file. A stand-in that can only say "yes" is not a fixture, it
+ * is a way of never finding out.
+ */
+function fakeFlockNamespace(opts: { exhausted?: boolean; cooldownUntil?: number } = {}) {
+  const exhausted = opts.exhausted === true;
+  const cooldownUntil = opts.cooldownUntil ?? 0;
   return {
     idFromName: (name: string) => name,
     get: () => ({
       async runFlock(prompt: string, tools: string[]) {
         calls.push({ prompt, tools });
+        if (exhausted) {
+          return {
+            meta: {
+              answered_by: "none",
+              flock_attempts: [{ birdId: "stub", ok: false, error: "rate limited" }],
+              error: "flock_exhausted",
+            },
+            answer: "All birds are tired. Please try again shortly.",
+          };
+        }
         return {
           meta: {
             answered_by: "Stub (test)",
@@ -37,35 +57,75 @@ function fakeFlockNamespace() {
         };
       },
       async getFlockStatus() {
-        return { birds: [], timestamp: 0 };
+        // `dormant` is derived from the live secret reader in the real coordinator, so a
+        // minimal bird needs the fields the retry policy actually reads.
+        return {
+          birds: [
+            {
+              id: "stub",
+              name: "Stub",
+              provider: "test",
+              model: "stub-model",
+              dormant: cooldownUntil === 0,
+              status: cooldownUntil > 0 ? "tired" : "healthy",
+              consecutiveFailures: cooldownUntil > 0 ? 1 : 0,
+              totalCalls: 1,
+              totalFailures: cooldownUntil > 0 ? 1 : 0,
+              cooldownUntil,
+            },
+          ],
+          timestamp: 0,
+        };
       },
       async sweepStale() {
         return 0;
+      },
+      async checkRateLimit(_key: string, limit: number, windowMs: number) {
+        return { allowed: true, limit, remaining: limit - 1, resetAt: Date.now() + windowMs };
       },
     }),
   };
 }
 
-function testEnv(): Env {
+/** The token the helpers present, and the user it is mapped to. */
+const TOKEN = "test-secret";
+/** A second, equally valid token belonging to a *different* user. */
+const OTHER_TOKEN = "other-secret";
+
+function testEnv(flock: unknown = fakeFlockNamespace()): Env {
   return {
     AI: env.AI,
     CONTEXT_STORE: env.CONTEXT_STORE,
     DATA_TRUST_VAULT: env.DATA_TRUST_VAULT,
-    FLOCK_COORDINATOR: fakeFlockNamespace(),
+    FLOCK_COORDINATOR: flock,
     ENVIRONMENT: env.ENVIRONMENT,
+    SIMORGH_API_KEY: TOKEN,
+    // Two callers, not one. The per-user routes resolve their caller from this map, and a
+    // single-entry map would make the ownership check untestable: with one token, "deny"
+    // and "allow" are the same observation. The second token is what lets a test show
+    // that the owner is *served* and the non-owner is *refused* in the same breath.
+    SIMORGH_API_KEYS: JSON.stringify({ [TOKEN]: "anonymous", [OTHER_TOKEN]: "u-ledger" }),
   } as unknown as Env;
 }
 
-const post = (body: unknown) =>
+const post = (body: unknown, flock?: unknown) =>
   app.request(
     "/api/v1/agent/execute",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer test-secret" },
       body: JSON.stringify(body),
     },
-    testEnv()
+    testEnv(flock)
   );
+
+/**
+ * Authenticated GET. The production-readiness change put `/api/v1/context/:refId`
+ * and `/api/v1/user/:userId/logs` behind the same bearer token as `/execute`, so a
+ * test that reads them anonymously asserts 401 and not the behaviour it names.
+ */
+const authedGet = (path: string, token: string = TOKEN) =>
+  app.request(path, { headers: { Authorization: `Bearer ${token}` } }, testEnv());
 
 describe("static routes", () => {
   it("GET / identifies the gateway", async () => {
@@ -101,8 +161,12 @@ describe("GET /api/v1/flock/status", () => {
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as { birds: { id: string; dormant: boolean }[] };
-    expect(body.birds.map((b) => b.id)).toEqual(["shahin", "bulbul", "homa"]);
-    // No secrets are configured in the test env; Homā must still be available.
+    // Not a roster pin: this route serves the real DO, and the exact roster is pinned in
+    // test/durable-objects.test.ts. Asserting it here too would only mean two literals to
+    // keep in step, and would say nothing about the HTTP layer this file is about. What
+    // matters at this boundary is the zero-KYC answer — no secrets configured in the test
+    // env, and Homā must still be there and available.
+    expect(body.birds.map((b) => b.id)).toContain("homa");
     expect(body.birds.find((b) => b.id === "homa")?.dormant).toBe(false);
   });
 });
@@ -205,7 +269,7 @@ describe("POST /api/v1/agent/execute", () => {
     const res = await post({ prompt: "remember this", tools: ["get_server_time"] });
     const { meta } = (await res.json()) as { meta: { contextRefId: string } };
 
-    const stored = await app.request(`/api/v1/context/${meta.contextRefId}`, undefined, testEnv());
+    const stored = await authedGet(`/api/v1/context/${meta.contextRefId}`);
     expect(stored.status).toBe(200);
     expect(await stored.json()).toEqual({
       prompt: "remember this",
@@ -213,17 +277,27 @@ describe("POST /api/v1/agent/execute", () => {
     });
   });
 
-  it("404s an unknown context reference", async () => {
-    const res = await app.request("/api/v1/context/does-not-exist", undefined, testEnv());
+  it("404s a well-formed but unknown context reference", async () => {
+    const res = await authedGet("/api/v1/context/00000000-0000-4000-8000-000000000000");
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "not_found" });
+  });
+
+  it("400s a malformed context reference before it reaches KV", async () => {
+    // Shape is checked ahead of the lookup on purpose: without it, any authenticated
+    // caller could probe arbitrary KV keys by guessing reference strings.
+    const res = await authedGet("/api/v1/context/does-not-exist");
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+      "INVALID_CONTEXT_REF"
+    );
   });
 
   it("records the call in the transparency ledger, defaulting identity for anonymous callers", async () => {
     const res = await post({ prompt: "anonymous please", tools: [] });
     const { meta } = (await res.json()) as { meta: { contextRefId: string } };
 
-    const logs = await app.request("/api/v1/user/anonymous/logs", undefined, testEnv());
+    const logs = await authedGet("/api/v1/user/anonymous/logs");
     expect(logs.status).toBe(200);
 
     const body = (await logs.json()) as {
@@ -242,9 +316,246 @@ describe("POST /api/v1/agent/execute", () => {
   it("logs the caller's own identity when given one", async () => {
     await post({ prompt: "identify me", tools: [], userId: "u-ledger", tier: "Pro-Data-Pact" });
 
-    const logs = await app.request("/api/v1/user/u-ledger/logs", undefined, testEnv());
+    // `u-ledger`'s own token, because this route now requires the caller to *be* the user
+    // whose logs they are asking for.
+    const logs = await authedGet("/api/v1/user/u-ledger/logs", OTHER_TOKEN);
     const body = (await logs.json()) as { count: number; entries: { tier: string }[] };
     expect(body.count).toBe(1);
     expect(body.entries[0].tier).toBe("Pro-Data-Pact");
+  });
+});
+
+// AUTH-002 and AUTH-003, asserted at the HTTP layer, because that is where the findings
+// were and it is the only layer that can show the *route* refusing rather than a helper.
+//
+// Every case here runs its positive control too. An ownership check that denies everybody
+// is a different bug from one that denies nobody, and a test that only asserts the denial
+// cannot tell the two apart — the same reason the audit's own lesson is to run a negative
+// control against any detector.
+describe("identity and ownership (AUTH-002 / AUTH-003)", () => {
+  it("serves a user their own ledger and 403s another caller's (AUTH-002)", async () => {
+    await post({ prompt: "identify me", tools: [], userId: "u-ledger" });
+
+    // Positive control: `u-ledger` can still read `u-ledger`.
+    const owner = await authedGet("/api/v1/user/u-ledger/logs", OTHER_TOKEN);
+    expect(owner.status).toBe(200);
+
+    // The finding itself: a *valid* token for a different user must not.
+    const intruder = await authedGet("/api/v1/user/u-ledger/logs", TOKEN);
+    expect(intruder.status).toBe(403);
+    expect(
+      ((await intruder.json()) as { error: { code: string } }).error.code
+    ).toBe("FORBIDDEN");
+  });
+
+  it("serves an owner their offloaded context and 404s it to another caller (AUTH-003)", async () => {
+    // Owned by `u-ledger`: ownership comes from the ledger row the execute call writes,
+    // not from whichever token created it.
+    const created = await post({
+      prompt: "private",
+      tools: ["get_server_time"],
+      userId: "u-ledger",
+    });
+    const { meta } = (await created.json()) as { meta: { contextRefId: string } };
+
+    const owner = await authedGet(`/api/v1/context/${meta.contextRefId}`, OTHER_TOKEN);
+    expect(owner.status).toBe(200);
+    expect((await owner.json()) as unknown).toMatchObject({ prompt: "private" });
+
+    // 404 rather than 403 on purpose: indistinguishable from a reference that does not
+    // exist, so this route cannot be used to learn which references exist.
+    const intruder = await authedGet(`/api/v1/context/${meta.contextRefId}`, TOKEN);
+    expect(intruder.status).toBe(404);
+    expect(await intruder.json()).toEqual({ error: "not_found" });
+  });
+
+  it("refuses the per-user routes when the deployment cannot attribute the token", async () => {
+    // `SIMORGH_API_KEY` alone: a valid credential, but nothing says which user it speaks
+    // for. Guessing there is exactly the bug, so the answer is a 503 that names the
+    // remedy. This is the deliberate behaviour change a solo deployment sees.
+    const solo = { ...testEnv(), SIMORGH_API_KEYS: undefined } as unknown as Env;
+    const res = await app.request(
+      "/api/v1/user/anonymous/logs",
+      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      solo
+    );
+    expect(res.status).toBe(503);
+    expect(
+      ((await res.json()) as { error: { code: string } }).error.code
+    ).toBe("IDENTITY_UNRESOLVED");
+  });
+
+  it("401s a caller who presents no token at all", async () => {
+    const res = await app.request("/api/v1/user/anonymous/logs", undefined, testEnv());
+    expect(res.status).toBe(401);
+  });
+});
+
+
+// The capability matrix. This is the launch's demo and its honesty test at once, so the
+// assertions are about *content* — a 200 carrying an empty list would satisfy a status-only
+// check while telling an operator nothing, which is the shape of test this repo keeps
+// finding underneath its own green suites.
+describe("GET /api/v1/capabilities", () => {
+  type CapabilityBody = {
+    capabilities: {
+      capability: string;
+      available: string[];
+      degraded: boolean;
+      considered: { adapter: string; reason?: string; keyFree: boolean }[];
+    }[];
+    summary: string[];
+  };
+
+  const fetchCapabilities = async (env: Env = testEnv()) => {
+    const res = await app.request(
+      "/api/v1/capabilities",
+      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      env
+    );
+    expect(res.status).toBe(200);
+    return (await res.json()) as CapabilityBody;
+  };
+
+  it("reports every capability, naming a gap rather than omitting it", async () => {
+    const body = await fetchCapabilities();
+    const byCapability = Object.fromEntries(
+      body.capabilities.map((entry) => [entry.capability, entry])
+    );
+
+    // All five, always. A capability this box cannot serve still gets a line saying so —
+    // an absent line and a line saying "nothing is here" are different claims, and the
+    // engine refuses to let the first stand in for the second.
+    expect(Object.keys(byCapability).sort()).toEqual([
+      "embeddings",
+      "inference",
+      "scheduler",
+      "sync",
+      "vector",
+    ]);
+
+    for (const name of ["embeddings", "vector", "sync", "scheduler"]) {
+      expect(byCapability[name]?.degraded).toBe(true);
+      expect(byCapability[name]?.considered.map((v) => v.reason)).toEqual([
+        "no_adapter_registered",
+      ]);
+    }
+  });
+
+  it("keeps the key-free bird usable with no secret set at all", async () => {
+    const inference = (await fetchCapabilities()).capabilities.find(
+      (entry) => entry.capability === "inference"
+    );
+
+    expect(inference?.considered.map((v) => v.adapter)).toEqual([
+      "shahin",
+      "gemini",
+      "bulbul",
+      "openrouter",
+      "homa",
+    ]);
+    // The zero-KYC guarantee, as the endpoint states it: Homā answers on a deployment that
+    // has configured nothing. This is the claim the whole product rests on.
+    expect(inference?.available).toEqual(["homa"]);
+    expect(inference?.considered.find((v) => v.adapter === "homa")?.keyFree).toBe(true);
+
+    // And a keyed bird that is not configured says *what* is missing, not merely that it
+    // failed. That string is the difference between an actionable matrix and a list of xs.
+    expect(inference?.considered.find((v) => v.adapter === "shahin")?.reason).toBe(
+      "missing_config:GROQ_API_KEY"
+    );
+  });
+
+  it("makes a configured bird usable — the positive control", async () => {
+    // Without this, the assertions above would pass against a probe that reports every
+    // keyed bird as missing regardless of the environment, which is the failure a
+    // "reports a gap" test cannot see on its own.
+    const withKey = { ...testEnv(), GROQ_API_KEY: "present" } as unknown as Env;
+    const inference = (await fetchCapabilities(withKey)).capabilities.find(
+      (entry) => entry.capability === "inference"
+    );
+
+    expect(inference?.available).toContain("shahin");
+    expect(inference?.considered.find((v) => v.adapter === "shahin")?.reason).toBeUndefined();
+    // Homā is still there: a configured key adds a bird, it does not replace the key-free one.
+    expect(inference?.available).toContain("homa");
+  });
+
+  it("requires a token, because it exposes which keys the deployment holds", async () => {
+    const res = await app.request("/api/v1/capabilities", undefined, testEnv());
+    expect(res.status).toBe(401);
+  });
+});
+
+// Story 5.5 — an exhausted flock is backpressure, and backpressure a client cannot read
+// is indistinguishable from a gateway that is simply broken. These run at the HTTP layer
+// because the engine-level tests cannot see whether the route emits the header at all.
+describe("flock exhaustion (Story 5.5)", () => {
+  it("tells a cooling flock how long to wait", async () => {
+    // 30s of cooldown left must read as Retry-After: 30, not 29 and not 60.
+    const res = await post(
+      { prompt: "hello" },
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: Date.now() + 30_000 })
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    const body = (await res.json()) as { agentResponse: string; meta: { error?: string } };
+    expect(body.meta.error).toBe("flock_exhausted");
+  });
+
+  it("omits Retry-After when no bird is cooling down, rather than inventing a wait", async () => {
+    // The honest case, and the one a lazy implementation gets wrong. Dormant birds fail
+    // for a reason retrying cannot fix — no API key — so a fabricated 60s would make a
+    // client machine poll a configuration problem and call it backpressure.
+    const res = await post(
+      { prompt: "hello" },
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: 0 })
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Retry-After")).toBeNull();
+    const body = (await res.json()) as { meta: { error?: string } };
+    expect(body.meta.error).toBe("flock_exhausted");
+  });
+
+  it("never emits Retry-After: 0, which would invite an immediate hot loop", async () => {
+    // A cooldown 100ms out rounds to 0 seconds. The header must be clamped to the floor.
+    const res = await post(
+      { prompt: "hello" },
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: Date.now() + 100 })
+    );
+
+    expect(res.headers.get("Retry-After")).toBe("1");
+  });
+
+  it("leaves Retry-After off a successful answer", async () => {
+    // Completeness, not containment: the header must be absent, not merely correct when
+    // present. A `Retry-After` on a 200 would make clients back off a request that
+    // succeeded.
+    const res = await post({ prompt: "hello" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Retry-After")).toBeNull();
+    const body = (await res.json()) as { agentResponse: string };
+    expect(body.agentResponse).toBe("stub-answer");
+  });
+
+  it("keeps the exhaustion answer honest rather than fabricating one", async () => {
+    // The engine's own contract: exhaustion says so in `meta.error` and answers in prose.
+    // A client that only reads the body must still be able to tell this apart from success.
+    const res = await post(
+      { prompt: "hello" },
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: Date.now() + 5_000 })
+    );
+    const body = (await res.json()) as {
+      agentResponse: string;
+      meta: { answered_by: string; error?: string; flock_attempts: unknown[] };
+    };
+
+    expect(body.agentResponse).not.toBe("stub-answer");
+    expect(body.meta.answered_by).toBe("none");
+    expect(body.meta.error).toBe("flock_exhausted");
+    expect(body.meta.flock_attempts).toHaveLength(1);
   });
 });

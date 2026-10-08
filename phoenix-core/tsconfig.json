@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    // ES2022 only, and `types: ["node"]` for the *test* files. There is deliberately
+    // no DOM lib and no `@cloudflare/workers-types`: if phoenix-core ever reaches for
+    // `Response`, `SqlStorage`, or a `crypto` global, this project must fail to
+    // typecheck. That failure is the architecture.
+    "lib": ["ES2022"],
+    "types": ["node"],
+    // Relative imports carry an explicit `.ts` extension throughout this package.
+    // That is not style: it is what lets plain `node` execute the sources with no
+    // build step (Node strips types natively but resolves files literally, so an
+    // extensionless specifier is `ERR_MODULE_NOT_FOUND`). The bundlers — esbuild via
+    // wrangler, vite via the test pools — accept the extension too.
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

@@ -168,21 +168,21 @@ End-to-end tests: "What time is it?" → synthesized answer contains ISO timesta
 
 Harden the Swarm-State / Durable Object patterns for production resilience.
 
-- **PRD status:** backlog
+- **PRD status:** in progress
 
 ### Story 5.1: DO atomic updates
 
 FlockCoordinator supports concurrent `pickRoute()` calls without race conditions; tested with 10 concurrent requests.
 
 - **Acceptance:** no races under 10 concurrent requests
-- **PRD status:** backlog
+- **PRD status:** shipped
 
 ### Story 5.2: KV fallback
 
 If DO is unavailable, fall back to KV-cached bird health with eventual consistency.
 
 - **Acceptance:** KV fallback with eventual consistency
-- **PRD status:** backlog
+- **PRD status:** shipped
 
 ### Story 5.3: Request-to-request state passing
 
@@ -196,14 +196,14 @@ State propagated via context offload or headers; no data loss on cold starts.
 Bird call counts, failure rates, cooldown events exported via `/api/v1/flock/status` and dashboard.
 
 - **Acceptance:** call/failure/cooldown metrics exposed
-- **PRD status:** backlog
+- **PRD status:** shipped — the endpoint exports `totalCalls`/`totalFailures`/`cooldownUntil`, and the unified control plane renders them as per-bird columns plus a headline call/failure/failure-rate/cooldown row
 
 ### Story 5.5: Backpressure handling
 
 When all birds are tired, return a clear "flock exhausted" response with retry-after header.
 
 - **Acceptance:** flock-exhausted response with Retry-After
-- **PRD status:** backlog
+- **PRD status:** shipped
 
 ---
 

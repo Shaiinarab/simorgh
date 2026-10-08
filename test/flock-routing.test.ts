@@ -50,7 +50,7 @@ function fakeBird(
 
 /** Build the deps with sane recording defaults so each test states only what it cares about. */
 function deps(
-  birds: Bird[],
+  birds: readonly Bird[],
   opts: {
     env?: FlockEnv;
     cooldowns?: Record<string, number>;
@@ -214,26 +214,35 @@ describe("flyFlock — routing policy", () => {
     expect(after.answer).toBe("hot-answer");
   });
 
-  it("lets a thrown provider error escape the routing loop (adapters must catch their own)", async () => {
+  it("absorbs a thrown provider error, records it, and falls through", async () => {
+    // Behaviour change, inherited from phoenix-core. This test previously asserted the
+    // opposite — that a thrown error escaped the loop and failed the whole request.
+    //
+    // The old contract put the burden on every adapter to catch its own transport
+    // errors, and made one third-party adapter raising an exception a 500 for the
+    // user. A federation exists to survive exactly that, so the engine now wraps the
+    // single `provider.call` in try/catch: the throw degrades to a failed attempt,
+    // `record()` still sees it (so Swarm-State learns the provider is unhealthy), and
+    // the flock moves on to the next bird.
     const records: Array<[string, boolean, string | undefined]> = [];
     const log: CallLog = { calls: [] };
-    await expect(
-      flyFlock(
-        "hi",
-        deps(
-          [
-            fakeBird("boom", 1, { throws: true }, log),
-            fakeBird("survivor", 2, { result: { ok: true, answer: "survivor-answer" } }, log),
-          ],
-          { log, records }
-        )
+    const result = await flyFlock(
+      "hi",
+      deps(
+        [
+          fakeBird("boom", 1, { throws: true }, log),
+          fakeBird("survivor", 2, { result: { ok: true, answer: "survivor-answer" } }, log),
+        ],
+        { log, records }
       )
-    ).rejects.toThrow("boom exploded");
+    );
 
-    // Documents real behaviour: the *adapter* is responsible for catching its own
-    // transport errors (every built-in bird does). A bird that throws escapes the
-    // routing loop — which is why the loop must not be the only line of defence.
-    expect(records).toEqual([]);
+    expect(log.calls).toEqual(["boom", "survivor"]);
+    expect(result.answer).toBe("survivor-answer");
+    expect(records[0]?.[0]).toBe("boom");
+    expect(records[0]?.[1]).toBe(false);
+    expect(records[0]?.[2]).toMatch(/boom exploded/);
+    expect(result.meta.flock_attempts[0]).toMatchObject({ birdId: "boom", ok: false });
   });
 
   it("passes rate_limit through to record() so the caller can back off longer", async () => {
@@ -257,12 +266,29 @@ describe("flyFlock — routing policy", () => {
 });
 
 describe("flyFlock — the real flock", () => {
-  it("is ordered Shāhīn → Bulbul → Homā, with Homā key-free", () => {
+  it("is ordered Shāhīn → Gemini → Bulbul → OpenRouter → Homā, with Homā key-free", () => {
+    // A completeness pin: the roster and the order it is consulted in *are* the contract
+    // here, so this stays `toEqual`. Gemini and OpenRouter were slotted between the
+    // existing birds rather than appended — see the catalog comment in src/flock.ts.
     const sorted = [...FLOCK].sort((a, b) => a.priority - b.priority);
-    expect(sorted.map((b) => b.id)).toEqual(["shahin", "bulbul", "homa"]);
+    expect(sorted.map((b) => b.id)).toEqual([
+      "shahin",
+      "gemini",
+      "bulbul",
+      "openrouter",
+      "homa",
+    ]);
 
     const homa = FLOCK.find((b) => b.id === "homa");
     expect(homa?.keyEnv).toBeUndefined();
+
+    // The ordering has a reason, and the literal above stops expressing it the moment the
+    // roster changes, so state it as a property: everything ahead of Homā needs a secret,
+    // or those birds are permanently unreachable. A new bird appended after it, or a
+    // key-free one placed in front, fails here.
+    const homaIndex = sorted.findIndex((b) => b.id === "homa");
+    expect(homaIndex).toBeGreaterThan(0);
+    expect(sorted.slice(0, homaIndex).every((b) => b.keyEnv !== undefined)).toBe(true);
   });
 
   it("delivers the zero-KYC guarantee: with no secrets at all, Homā still answers", async () => {
@@ -272,9 +298,16 @@ describe("flyFlock — the real flock", () => {
 
     expect(result.meta.answered_by).toBe("Homā (Cloudflare Workers AI)");
     expect(result.answer).toBe("homa-answer");
+    // Also a completeness pin, and the strongest one in the file: the attempt log is how
+    // you see that the loop walked *past every* keyed bird before Homā answered. Dropping
+    // any of the three dormant entries, or reordering them, means a bird was skipped
+    // silently or reached at the wrong priority — so this stays `toEqual`, not
+    // `toContain`.
     expect(result.meta.flock_attempts).toEqual([
       { birdId: "shahin", ok: false, error: "dormant" },
+      { birdId: "gemini", ok: false, error: "dormant" },
       { birdId: "bulbul", ok: false, error: "dormant" },
+      { birdId: "openrouter", ok: false, error: "dormant" },
       { birdId: "homa", ok: true },
     ]);
   });

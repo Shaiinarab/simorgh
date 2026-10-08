@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-31-2026 20:15
-last_updated: 08-31-2026 20:15
+last_updated: 10-06-2026 20:50
 project: Simorgh
 project_key: NOKEY
 tracking_system: file-system
@@ -57,25 +57,25 @@ development_status:
   3-3-flight-console: done
   epic-3-retrospective: optional
 
-  epic-4: in-progress
+  epic-4: done
   4-1-search_web-query-tool: done
   4-2-get_server_time-tool: done
-  4-3-clean-answer-synthesis: in-progress
-  4-4-multi-tool-orchestration: in-progress
-  4-5-answer-quality-tests: backlog
+  4-3-clean-answer-synthesis: done
+  4-4-multi-tool-orchestration: done
+  4-5-answer-quality-tests: done
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-do-atomic-updates: backlog
-  5-2-kv-fallback: backlog
+  epic-5: in-progress
+  5-1-do-atomic-updates: done
+  5-2-kv-fallback: done
   5-3-request-to-request-state-passing: backlog
-  5-4-metrics-export: backlog
-  5-5-backpressure-handling: backlog
+  5-4-metrics-export: done
+  5-5-backpressure-handling: done
   epic-5-retrospective: optional
 
-  epic-6: backlog
+  epic-6: in-progress
   6-1-declarative-policy-engine: backlog
-  6-2-prompt-injection-defense: backlog
+  6-2-prompt-injection-defense: in-progress
   6-3-policy-versioning: backlog
   6-4-swarm-state-policy-sharing: backlog
   6-5-shield-audit-dashboard: backlog

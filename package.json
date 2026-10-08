@@ -4,15 +4,28 @@
   "description": "Free-to-run, no-KYC, self-evolving agentic AI gateway that federates fragmented free tiers into one resilient flock.",
   "type": "module",
   "main": "src/index.ts",
+  "workspaces": [
+    "phoenix-core"
+  ],
   "scripts": {
     "dev": "wrangler dev --local --port 8787",
     "deploy": "npm run typecheck && wrangler deploy",
     "types": "wrangler types",
-    "typecheck": "tsgo --noEmit",
-    "test": "vitest run",
+    "typecheck": "tsgo --noEmit && tsgo --noEmit -p phoenix-core/tsconfig.json && tsgo --noEmit -p simorgh-platform/tsconfig.json",
+    "test": "npm run test:workers && npm run test:node",
+    "test:workers": "vitest run",
+    "test:node": "vitest run --config vitest.node.config.ts",
     "test:watch": "vitest",
+    "simorgh": "node simorgh-platform/src/cli.ts",
+    "platform:smoke": "node simorgh-platform/src/runtimes/smoke.ts",
+    "e2e:ask": "node simorgh-platform/scripts/e2e-ask.ts",
     "cf:dry-run": "wrangler deploy --dry-run --outdir dist",
-    "security:check": "npm audit --omit=dev && tsgo --noEmit && wrangler deploy --dry-run --outdir dist"
+    "security:scan": "bash scripts/security-scan.sh",
+    "dashboard:check": "bash scripts/dashboard-client-check.sh",
+    "security:check": "npm run security:scan && npm run dashboard:check && tsgo --noEmit && wrangler deploy --dry-run --outdir dist",
+    "go:build": "GOFLAGS=-mod=readonly go build all",
+    "go:test": "GOFLAGS=-mod=readonly go test github.com/shaiinarab/simorgh/... -count=1",
+    "go:vet": "GOFLAGS=-mod=readonly go vet github.com/shaiinarab/simorgh/..."
   },
   "keywords": [
     "ai-agents",
@@ -30,14 +43,16 @@
   "license": "MIT",
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@types/node": "^22.20.4",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "vitest": "^4.1.0",
     "wrangler": "^4.132.0"
   },
   "dependencies": {
+    "@simorgh/phoenix-core": "workspace:*",
     "hono": "^4.13.8"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.3"
   }
 }

@@ -212,11 +212,11 @@ Based on 2026 research, these additional free-tier providers could join the floc
 
 | Story | Description | Acceptance Criteria | Status |
 |-------|-------------|---------------------|--------|
-| 5.1 | DO atomic updates | FlockCoordinator supports concurrent `pickRoute()` calls without race conditions; tested with 10 concurrent requests | ⬜ |
-| 5.2 | KV fallback | If DO is unavailable, fall back to KV-cached bird health with eventual consistency | ⬜ |
+| 5.1 | DO atomic updates | FlockCoordinator supports concurrent `pickRoute()` calls without race conditions; tested with 10 concurrent requests | ✅ |
+| 5.2 | KV fallback | If DO is unavailable, fall back to KV-cached bird health with eventual consistency | ✅ |
 | 5.3 | Request-to-request state passing | State propagated via context offload or headers; no data loss on cold starts | ⬜ |
-| 5.4 | Metrics export | Bird call counts, failure rates, cooldown events exported via `/api/v1/flock/status` and dashboard | ⬜ |
-| 5.5 | Backpressure handling | When all birds are tired, return a clear "flock exhausted" response with retry-after header | ⬜ |
+| 5.4 | Metrics export | Bird call counts, failure rates, cooldown events exported via `/api/v1/flock/status` and dashboard | ✅ |
+| 5.5 | Backpressure handling | When all birds are tired, return a clear "flock exhausted" response with retry-after header | ✅ |
 
 **Technical Risks:**
 - DO cost/scale limits in 2026 free tier
