@@ -9,8 +9,12 @@ import {
   describeFlock,
   flockRetryAfterSeconds,
   flyFlock,
+  orderCandidates,
   type FlyFlockDeps,
 } from "../src/flock.ts";
+import { estimateComplexity } from "../src/complexity.ts";
+import { SESSION_AFFINITY_REF_CHARS } from "../src/session.ts";
+import { autoRouterProvider, AUTO_ROUTER_MODEL } from "../src/provider.ts";
 import { HEALTH_SCHEMA, readAllHealth, readCooldown, recordObservation } from "../src/health.ts";
 import type { Provider, ProviderCallResult, ProviderContext } from "../src/provider.ts";
 import { openMemorySql } from "../src/node/index.ts";
@@ -299,5 +303,284 @@ describe("flockRetryAfterSeconds", () => {
   it("honours a per-host floor, which is why floorSeconds is not defaulted", () => {
     expect(flockRetryAfterSeconds([NOW + 5_000], NOW, 1)).toBe(5);
     expect(flockRetryAfterSeconds([NOW + 5_000], NOW, 10)).toBe(10);
+  });
+});
+
+// ── Routing signals (TASK-016): the vocabulary, complexity ordering, affinity ──
+//
+// The default path's byte-identical wire shape is pinned by every test above —
+// they assert `flock_attempts` with `toEqual` and were **not** touched for this
+// feature, which is the strongest form the compatibility claim can take. Below
+// lives only the opt-in world (`deps.routing`).
+
+interface RoutingProviderOptions {
+  requires?: string;
+  servesTiers?: readonly ("trivial" | "moderate" | "heavy")[];
+  result?: ProviderCallResult;
+}
+
+function routingProvider(id: string, priority: number, options: RoutingProviderOptions = {}): Provider {
+  return {
+    id,
+    name: id,
+    provider: `${id}-provider`,
+    model: `${id}-model`,
+    priority,
+    ...(options.requires ? { requires: options.requires } : {}),
+    ...(options.servesTiers ? { servesTiers: options.servesTiers } : {}),
+    async call(): Promise<ProviderCallResult> {
+      return options.result ?? { ok: true, answer: `${id}-answer` };
+    },
+  };
+}
+
+function routingDeps(
+  providers: readonly Provider[],
+  options: {
+    secrets?: Record<string, string>;
+    cooldowns?: Record<string, number>;
+    routing?: FlyFlockDeps["routing"];
+  } = {}
+): FlyFlockDeps {
+  return {
+    providers,
+    ctx: {
+      fetch: async () => {
+        throw new Error("unexpected network call");
+      },
+      secret: (name: string) => options.secrets?.[name],
+    },
+    cooldownUntil: (id) => options.cooldowns?.[id] ?? 0,
+    record: () => {},
+    now: NOW,
+    ...(options.routing ? { routing: options.routing } : {}),
+  };
+}
+
+describe("flyFlock — routing vocabulary (opt-in)", () => {
+  it("keeps the wire shape byte-identical when no routing signal is supplied", async () => {
+    const result = await flyFlock(
+      "ping",
+      routingDeps([
+        routingProvider("keyed", 10, { requires: "GROQ_API_KEY" }),
+        routingProvider("open", 20),
+      ])
+    );
+
+    // The pre-vocabulary shape, exactly: no `reason` field appears anywhere —
+    // this is what `test/flock-routing.test.ts` (workers suite, not touched)
+    // keeps asserting with `toEqual`.
+    expect(result.meta.flock_attempts).toEqual([
+      { birdId: "keyed", ok: false, error: "dormant" },
+      { birdId: "open", ok: true },
+    ]);
+    for (const attempt of result.meta.flock_attempts) {
+      expect(attempt).not.toHaveProperty("reason");
+    }
+  });
+
+  it("names every considered-but-not-dialled candidate with a skipped_* reason", async () => {
+    const result = await flyFlock(
+      "ping",
+      routingDeps(
+        [
+          routingProvider("dormant", 10, { requires: "GROQ_API_KEY" }),
+          routingProvider("cooling", 20),
+          routingProvider("ready", 30),
+        ],
+        { cooldowns: { cooling: NOW + 60_000 }, routing: {} }
+      )
+    );
+
+    // A scheduler that silently drops candidates is indistinguishable from one
+    // that lost them — every skip is a line in the ledger.
+    expect(result.meta.flock_attempts).toEqual([
+      { birdId: "dormant", ok: false, error: "dormant", reason: "skipped_dormant" },
+      { birdId: "cooling", ok: false, error: "cooling_down", reason: "skipped_cooldown" },
+      { birdId: "ready", ok: true, reason: "selected_by_priority" },
+    ]);
+  });
+
+  it("marks a winner that follows a dialled failure as fallback_previous_unavailable", async () => {
+    const result = await flyFlock(
+      "ping",
+      routingDeps(
+        [
+          routingProvider("flaky", 10, { result: { ok: false, error: "http_503" } }),
+          routingProvider("steady", 20),
+        ],
+        { routing: {} }
+      )
+    );
+
+    expect(result.meta.flock_attempts).toEqual([
+      { birdId: "flaky", ok: false, error: "http_503" },
+      { birdId: "steady", ok: true, reason: "fallback_previous_unavailable" },
+    ]);
+  });
+
+  it("does NOT call a dormant-skip a fallback — the winner was the first available bird", async () => {
+    const result = await flyFlock(
+      "ping",
+      routingDeps(
+        [
+          routingProvider("dormant", 10, { requires: "GROQ_API_KEY" }),
+          routingProvider("open", 20),
+        ],
+        { routing: {} }
+      )
+    );
+
+    // A "fallback" here would tell an operator their fleet is failing when it
+    // is merely unconfigured.
+    expect(result.meta.flock_attempts[1]).toEqual({
+      birdId: "open",
+      ok: true,
+      reason: "selected_by_priority",
+    });
+  });
+
+  it("pins the previous winner inside a session", async () => {
+    const providers = [routingProvider("first", 10), routingProvider("second", 20)];
+    const result = await flyFlock(
+      "ping",
+      routingDeps(providers, {
+        routing: { session: { previousWinnerId: "second", contextChars: 500 } },
+      })
+    );
+
+    // "second" wins despite the worse priority — and says so, by name.
+    expect(result.meta.bird_id).toBe("second");
+    expect(result.meta.flock_attempts).toEqual([
+      { birdId: "second", ok: true, reason: "pinned_by_session" },
+    ]);
+  });
+
+  it("releases the pin once the session's context reaches the reference size — decay, end to end", async () => {
+    const providers = [routingProvider("first", 10), routingProvider("second", 20)];
+    const result = await flyFlock(
+      "ping",
+      routingDeps(providers, {
+        routing: {
+          session: { previousWinnerId: "second", contextChars: SESSION_AFFINITY_REF_CHARS },
+        },
+      })
+    );
+
+    // Deep conversation: the pin has decayed to zero and priority decides again.
+    expect(result.meta.bird_id).toBe("first");
+    expect(result.meta.flock_attempts).toEqual([
+      { birdId: "first", ok: true, reason: "selected_by_priority" },
+    ]);
+  });
+
+  it("orders a trivial task ahead of the heavy bird: selected_by_complexity", async () => {
+    const providers = [
+      routingProvider("heavy", 10, { servesTiers: ["heavy"] }),
+      routingProvider("small", 20, { servesTiers: ["trivial"] }),
+    ];
+    const result = await flyFlock(
+      "ping",
+      routingDeps(providers, { routing: { task: estimateComplexity("ping") } })
+    );
+
+    expect(result.meta.bird_id).toBe("small");
+    expect(result.meta.flock_attempts).toEqual([
+      { birdId: "small", ok: true, reason: "selected_by_complexity" },
+    ]);
+  });
+
+  it("never excludes: a tier-mismatched bird is still dialled when the birds ahead fail", async () => {
+    const providers = [
+      routingProvider("small", 10, {
+        servesTiers: ["trivial"],
+        result: { ok: false, error: "http_503" },
+      }),
+      routingProvider("heavy", 20, { servesTiers: ["heavy"] }),
+    ];
+    const prompt = "analyse " + "word ".repeat(400);
+    const result = await flyFlock(
+      prompt,
+      routingDeps(providers, {
+        routing: { task: estimateComplexity(prompt) },
+      })
+    );
+
+    // "heavy" is a bad fit for a trivial prompt, so it sorted last — but it got
+    // its turn when the better-fitted bird failed. Ranking, not dropping.
+    expect(result.meta.bird_id).toBe("heavy");
+    expect(result.meta.flock_attempts).toEqual([
+      { birdId: "small", ok: false, error: "http_503" },
+      { birdId: "heavy", ok: true, reason: "fallback_previous_unavailable" },
+    ]);
+  });
+
+  it("orderCandidates is a pure function: same inputs, same order, inputs untouched", () => {
+    const providers = [routingProvider("a", 10), routingProvider("b", 20)];
+    const routing = { task: estimateComplexity("ping") };
+    const first = orderCandidates(providers, routing).map((p) => p.id);
+    const second = orderCandidates(providers, routing).map((p) => p.id);
+    expect(first).toEqual(second);
+    expect(providers.map((p) => p.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("auto-router bird (ADR-0006)", () => {
+  it("threads the gateway id through the additive WorkersAiPort argument and reports the served model", async () => {
+    let seenModel = "";
+    let seenOptions: unknown;
+    const bird = autoRouterProvider({
+      id: "auto",
+      name: "Auto",
+      provider: "cloudflare",
+      priority: 5,
+      gatewayId: "gw-123",
+    });
+    const result = await bird.call("ping", {
+      fetch: async () => {
+        throw new Error("unexpected network call");
+      },
+      secret: () => undefined,
+      workersAi: {
+        async run(model, _input, options) {
+          seenModel = model;
+          seenOptions = options;
+          return { response: "auto-answer", routed_model: "some/actual-model" };
+        },
+      },
+    });
+
+    expect(seenModel).toBe(AUTO_ROUTER_MODEL);
+    expect(seenOptions).toEqual({ gateway: { id: "gw-123" } });
+    expect(result).toEqual({
+      ok: true,
+      answer: "auto-answer",
+      servedModel: "some/actual-model",
+    });
+  });
+
+  it("degrades honestly on a non-Workers host: unavailable, never a pretend provider", async () => {
+    const bird = autoRouterProvider({
+      id: "auto",
+      name: "Auto",
+      provider: "cloudflare",
+      priority: 5,
+      gatewayId: "gw-123",
+    });
+    const result = await bird.call("ping", {
+      fetch: async () => {
+        throw new Error("unexpected network call");
+      },
+      secret: () => undefined,
+    });
+    expect(result).toEqual({ ok: false, error: "workers_ai_unavailable" });
+  });
+
+  it("surfaces servedModel as meta.ai_model so the operator reads the truth", async () => {
+    const bird = routingProvider("truth", 10, {
+      result: { ok: true, answer: "x", servedModel: "actual/model" },
+    });
+    const result = await flyFlock("ping", routingDeps([bird], { routing: {} }));
+    expect(result.meta.ai_model).toBe("actual/model");
   });
 });

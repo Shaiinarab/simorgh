@@ -1,7 +1,7 @@
 # TASK-016 — AI/context engineering: make the router legible, complexity-aware, and cache-aware
 
 - Owner: any
-- Status: open
+- Status: done (Lead 2026-10-08T23:14)
 - Depends on: nothing · Estimate: 120–180 min · Runner: **AI engineering** agent
 
 ## 0. Start here: introduce yourself

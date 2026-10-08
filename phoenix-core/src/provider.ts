@@ -11,11 +11,19 @@
 // here. They are Simorgh's branding, and core is the part other products import.
 
 import type { FetchLike, WorkersAiPort } from "./ports.ts";
+import type { ComplexityTier } from "./complexity.ts";
 
 export interface ProviderCallResult {
   ok: boolean;
   answer?: string;
   error?: string;
+  /**
+   * The model that *actually served* the request when it differs from the one
+   * asked for — today only the auto-router bird (`cloudflare/auto`, ADR-0006)
+   * fills it in. `flyFlock` surfaces it as `meta.ai_model`, so an operator reads
+   * the truth instead of the alias. Absent means "the model we requested".
+   */
+  servedModel?: string;
 }
 
 /** What a provider is handed when it is dialled. */
@@ -36,6 +44,21 @@ export interface Provider {
   model: string;
   /** Tried in ascending order. */
   priority: number;
+  /**
+   * Complexity tiers this entry is declared fit to serve — an *ordering* input,
+   * never an eligibility one. Absent (the default) means "assume it can serve
+   * anything": the complexity signal then leaves this entry's position to its
+   * priority alone. A provider that declares tiers but not the wanted one sinks
+   * to the back of the queue and is still tried if the fleet ahead of it fails —
+   * see `complexity.ts` for why exclusion is forbidden.
+   *
+   * A declaration slot, not a capability claim: nothing validates that a
+   * 7-billion-parameter model is genuinely good at "heavy" work, because the
+   * engine has no way to know and pretending otherwise would be the fabricated
+   * answer this project refuses to ship. Operators tune it; the router orders by
+   * it; every bird still gets its turn.
+   */
+  servesTiers?: readonly ComplexityTier[];
   /**
    * Which of the operator's accounts for this provider this entry dialled.
    *
@@ -76,6 +99,8 @@ export interface OpenAiCompatibleSpec {
   requires?: string;
   /** See `Provider.accountId`. */
   accountId?: string;
+  /** See `Provider.servesTiers`. */
+  servesTiers?: readonly ComplexityTier[];
   /**
    * Provider-specific headers merged into the request.
    *
@@ -105,6 +130,7 @@ export function openAiCompatibleProvider(spec: OpenAiCompatibleSpec): Provider {
     priority: spec.priority,
     ...(spec.requires ? { requires: spec.requires } : {}),
     ...(spec.accountId ? { accountId: spec.accountId } : {}),
+    ...(spec.servesTiers ? { servesTiers: spec.servesTiers } : {}),
     async call(prompt, ctx) {
       const key = spec.requires ? ctx.secret(spec.requires) : undefined;
       if (spec.requires && !key) return { ok: false, error: "dormant" };
@@ -172,6 +198,8 @@ export interface GeminiSpec {
   requires?: string;
   /** See `Provider.accountId`. */
   accountId?: string;
+  /** See `Provider.servesTiers`. */
+  servesTiers?: readonly ComplexityTier[];
 }
 
 /**
@@ -212,6 +240,7 @@ export function geminiProvider(spec: GeminiSpec): Provider {
     priority: spec.priority,
     requires: secretName,
     ...(spec.accountId ? { accountId: spec.accountId } : {}),
+    ...(spec.servesTiers ? { servesTiers: spec.servesTiers } : {}),
     async call(prompt, ctx) {
       const key = ctx.secret(secretName);
       if (!key) return { ok: false, error: "dormant" };
@@ -260,6 +289,20 @@ export interface WorkersAiSpec {
   provider: string;
   model: string;
   priority: number;
+  /** See `Provider.servesTiers`. */
+  servesTiers?: readonly ComplexityTier[];
+}
+
+/** Read `{ response: string }` off a Workers AI chat reply, loosely. */
+function workersAiAnswer(resp: unknown): string {
+  // Workers AI returns `{ response: string }` for chat models, but the binding
+  // is typed loosely enough to be worth checking rather than asserting.
+  return typeof resp === "object" &&
+    resp !== null &&
+    "response" in resp &&
+    typeof (resp as { response?: unknown }).response === "string"
+    ? (resp as { response: string }).response
+    : String(resp);
 }
 
 /**
@@ -276,22 +319,93 @@ export function workersAiProvider(spec: WorkersAiSpec): Provider {
     provider: spec.provider,
     model: spec.model,
     priority: spec.priority,
+    ...(spec.servesTiers ? { servesTiers: spec.servesTiers } : {}),
     async call(prompt, ctx) {
       if (!ctx.workersAi) return { ok: false, error: "workers_ai_unavailable" };
       try {
         const resp = await ctx.workersAi.run(spec.model, {
           messages: [{ role: "user", content: prompt }],
         });
-        // Workers AI returns `{ response: string }` for chat models, but the binding
-        // is typed loosely enough to be worth checking rather than asserting.
-        const answer =
-          typeof resp === "object" &&
-          resp !== null &&
-          "response" in resp &&
-          typeof (resp as { response?: unknown }).response === "string"
-            ? (resp as { response: string }).response
-            : String(resp);
-        return { ok: true, answer };
+        return { ok: true, answer: workersAiAnswer(resp) };
+      } catch (e) {
+        return { ok: false, error: String(e) };
+      }
+    },
+  };
+}
+
+/** The model name Cloudflare's Auto Router answers as. */
+export const AUTO_ROUTER_MODEL = "cloudflare/auto";
+
+export interface AutoRouterSpec {
+  id: string;
+  name: string;
+  provider: string;
+  priority: number;
+  /**
+   * The AI Gateway id the router fronts. **Required** — an auto-router entry
+   * configured without one must never dial, because a permanently-failing dial
+   * costs a request and plants a cooldown on a bird that could have served it.
+   * The host registers this provider only when the id is configured; the factory
+   * refuses to build one without it rather than trusting that discipline.
+   */
+  gatewayId: string;
+  /** See `Provider.servesTiers`. */
+  servesTiers?: readonly ComplexityTier[];
+}
+
+/**
+ * Cloudflare's `cloudflare/auto` as one more bird — TASK-016 §6, ADR-0006.
+ *
+ * Behind the existing `Provider` port: no new port, no new binding, no engine
+ * dependency on Cloudflare. It is Workers-only by construction (it needs
+ * `ctx.workersAi`), so a Node host reports `workers_ai_unavailable` and the
+ * flock routes around it — the same honest degradation `workersAiProvider`
+ * already does, and the catalog's Node page simply lists it as absent.
+ *
+ * The gateway option threads through `WorkersAiPort.run`'s **additive** third
+ * argument: every existing host implementation satisfies the widened port
+ * without a change (a function of two parameters is assignable to a signature
+ * that declares three when the third is optional), so this bird is the only
+ * consumer of the extension and nothing else had to move.
+ */
+export function autoRouterProvider(spec: AutoRouterSpec): Provider {
+  const model = AUTO_ROUTER_MODEL;
+  return {
+    id: spec.id,
+    name: spec.name,
+    provider: spec.provider,
+    model,
+    priority: spec.priority,
+    ...(spec.servesTiers ? { servesTiers: spec.servesTiers } : {}),
+    async call(prompt, ctx) {
+      if (!ctx.workersAi) return { ok: false, error: "workers_ai_unavailable" };
+      try {
+        const resp = await ctx.workersAi.run(
+          model,
+          { messages: [{ role: "user", content: prompt }] },
+          { gateway: { id: spec.gatewayId } }
+        );
+        // `cf-aig-routed-model` is a *header* on the AI Gateway HTTP path, and the
+        // Workers binding does not surface response headers — UNVERIFIED whether
+        // any body field names the chosen model without a live account to probe.
+        // So: read a `routed_model`/`model` field if the response happens to carry
+        // one, and otherwise report no served model rather than fabricating one.
+        const served =
+          typeof resp === "object" && resp !== null
+            ? (resp as { routed_model?: unknown; model?: unknown })
+            : undefined;
+        const servedModel =
+          typeof served?.routed_model === "string"
+            ? served.routed_model
+            : typeof served?.model === "string"
+              ? served.model
+              : undefined;
+        return {
+          ok: true,
+          answer: workersAiAnswer(resp),
+          ...(servedModel ? { servedModel } : {}),
+        };
       } catch (e) {
         return { ok: false, error: String(e) };
       }

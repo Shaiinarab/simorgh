@@ -100,7 +100,26 @@ export interface PhoenixPorts {
  * need it report themselves unavailable.
  */
 export interface WorkersAiPort {
-  run(model: string, input: { messages: { role: string; content: string }[] }): Promise<unknown>;
+  /**
+   * The third argument is **additive and optional**: Cloudflare's Auto Router
+   * (`cloudflare/auto`, ADR-0006) needs an AI Gateway id threaded through, and
+   * widening the port this way means every existing host binding — Cloudflare's
+   * `env.AI` and every test stub — still satisfies the port with no change.
+   * Extending additively rather than replacing the signature is why this was the
+   * right call: the port has three known implementors, and a breaking change to
+   * serve one new provider would have taxed all of them for one bird's need.
+   */
+  run(
+    model: string,
+    input: { messages: { role: string; content: string }[] },
+    options?: WorkersAiRunOptions
+  ): Promise<unknown>;
+}
+
+/** Additive options for `WorkersAiPort.run`. See ADR-0006. */
+export interface WorkersAiRunOptions {
+  /** AI Gateway fronting the model pool; only `cloudflare/auto` consumes it today. */
+  gateway?: { id: string };
 }
 
 // ── Storage ports ─────────────────────────────────────────────────────────────

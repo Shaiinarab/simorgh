@@ -25,11 +25,96 @@ import {
   type ProviderContext,
 } from "./provider.ts";
 import type { SecretReader } from "./ports.ts";
+import { estimateComplexity, fitRank, type ComplexityEstimate } from "./complexity.ts";
+import { pinnedBySession, type SessionSignal } from "./session.ts";
+
+/**
+ * Why a bird was chosen — and, mirrored, why a considered bird was not.
+ *
+ * The vocabulary is modelled on Cloudflare AI Gateway's `cf-aig-routing-reason`
+ * header (`cost_optimal_within_pool`, `forced_by_candidate_pool`, …) because that
+ * product solved the same problem first and its shape has survived contact with
+ * users. It is Simorgh-native in membership: ADR-0003 already insists a
+ * *rejection* names its binding reason, and this is the selection-side mirror of
+ * that discipline — plus the `skipped_*` members, because a scheduler that
+ * silently drops candidates is indistinguishable from one that lost them.
+ *
+ * Which layer emits which member (documented in ADR-0006, because the split is
+ * load-bearing):
+ *
+ *   - `flyFlock` (here) emits `selected_by_priority`, `selected_by_complexity`,
+ *     `pinned_by_session`, `fallback_previous_unavailable`, `skipped_dormant`,
+ *     `skipped_cooldown`.
+ *   - `selected_by_capacity` / `skipped_cost_ineligible` belong to the capacity
+ *     layer (`quota.ts`): cost and quota facts do not exist inside the routing
+ *     loop, and re-deriving them here would create the two-definitions-nothing-
+ *     comparing-them trap `ledger.ts` already documents. The members exist in the
+ *     vocabulary so a host that pre-filters by capacity speaks the same language;
+ *     the flock never emits them itself.
+ */
+export type RouteReason =
+  | "selected_by_priority"
+  | "selected_by_capacity"
+  | "selected_by_complexity"
+  | "pinned_by_session"
+  | "fallback_previous_unavailable"
+  | "skipped_dormant"
+  | "skipped_cooldown"
+  | "skipped_cost_ineligible";
 
 export interface FlockAttempt {
   birdId: string;
   ok: boolean;
   error?: string;
+  /**
+   * Why this bird sat where it sat in the order. Present only when routing
+   * signals are supplied (`FlyFlockDeps.routing`) — the default path is kept
+   * byte-identical to the pre-vocabulary wire shape, because `flock_attempts` is
+   * a published API field and two consumers (`src/dashboard.ts`,
+   * `test/flock-routing.test.ts`) assert it with `toEqual`.
+   */
+  reason?: RouteReason;
+}
+
+/**
+ * Opt-in routing signals. Absent — the default — behaviour is byte-identical to
+ * plain priority order, which is the whole safety story here: a behaviour change
+ * on the hot path with no flag is how a gateway starts leaking capacity, and
+ * `simorgh-platform/test/conformance.test.ts` exists to catch exactly that.
+ */
+export interface RoutingOptions {
+  /** A pre-computed estimate (see `estimateComplexity`). Orders, never excludes. */
+  task?: ComplexityEstimate;
+  /** Session affinity. The host owns the signal; the engine never mints one. */
+  session?: SessionSignal;
+}
+
+/**
+ * Order candidates under routing signals: pinned first, then tier fit, then the
+ * incoming (priority) order, stably. Pure — `flyFlock` feeds it `byPriority(...)`
+ * so "tie" always means "whichever the priority order already preferred".
+ *
+ * Note what is *not* here: exclusion. `fitRank` 2 (declared tiers that don't
+ * include the wanted one) is a position at the back of the queue, not a drop.
+ */
+export function orderCandidates(
+  providers: readonly Provider[],
+  routing: RoutingOptions
+): Provider[] {
+  const pinned = pinnedBySession(routing.session);
+  const want = routing.task?.tier;
+  return providers
+    .map((provider, index) => ({ provider, index }))
+    .sort((a, b) => {
+      const pa = pinned !== undefined && a.provider.id === pinned ? 0 : 1;
+      const pb = pinned !== undefined && b.provider.id === pinned ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      const fa = want === undefined ? 1 : fitRank(a.provider.servesTiers, want);
+      const fb = want === undefined ? 1 : fitRank(b.provider.servesTiers, want);
+      if (fa !== fb) return fa - fb;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.provider);
 }
 
 export interface FlockMeta {
@@ -74,6 +159,12 @@ export interface FlyFlockDeps {
   /** Called once per attempted provider. `error` is undefined on success. */
   record: (providerId: string, ok: boolean, error?: string) => void;
   now?: number;
+  /**
+   * Opt-in routing signals (complexity ordering, session affinity, and the
+   * per-attempt `reason` vocabulary). Absent = the classic path, untouched.
+   * A host may also pass `{}`: reasons without reordering.
+   */
+  routing?: RoutingOptions;
 }
 
 /**
@@ -90,14 +181,40 @@ export async function flyFlock(
   const now = deps.now ?? 0;
   const attempts: FlockAttempt[] = [];
 
-  for (const provider of byPriority(deps.providers)) {
+  // The default branch is *literally* `byPriority` — not an orderCandidates call
+  // with empty options — so "no routing signal" cannot drift through a shared
+  // code path into "slightly different order". `phoenix-core/test/flock.test.ts`
+  // pins the byte-identical wire shape on both sides.
+  const ordered = deps.routing
+    ? orderCandidates(byPriority(deps.providers), deps.routing)
+    : byPriority(deps.providers);
+  const priorityIndex = deps.routing
+    ? new Map(byPriority(deps.providers).map((p, i) => [p.id, i]))
+    : undefined;
+  // Why a later bird got its chance: only a *dialled* failure counts. A bird
+  // skipped as dormant was never asked, so the winner was the first available
+  // bird all along — calling that a "fallback" would tell an operator their
+  // fleet is failing when it is merely unconfigured.
+  let dialledFailures = 0;
+
+  for (const provider of ordered) {
     if (provider.requires && !deps.ctx.secret(provider.requires)) {
-      attempts.push({ birdId: provider.id, ok: false, error: "dormant" });
+      attempts.push({
+        birdId: provider.id,
+        ok: false,
+        error: "dormant",
+        ...(deps.routing ? { reason: "skipped_dormant" as const } : {}),
+      });
       continue;
     }
 
     if (deps.cooldownUntil(provider.id) > now) {
-      attempts.push({ birdId: provider.id, ok: false, error: "cooling_down" });
+      attempts.push({
+        birdId: provider.id,
+        ok: false,
+        error: "cooling_down",
+        ...(deps.routing ? { reason: "skipped_cooldown" as const } : {}),
+      });
       continue;
     }
 
@@ -118,13 +235,37 @@ export async function flyFlock(
       ...(result.ok ? {} : { error: result.error ?? "unknown" }),
     });
     deps.record(provider.id, result.ok, result.error);
+    if (!result.ok || !result.answer) dialledFailures++;
 
     if (result.ok && result.answer) {
+      // Selection reason, most specific first: a session pin beats everything,
+      // a retry-after-failure beats a reordering claim, and only a bird that was
+      // actually moved forward by the complexity signal claims that signal.
+      const pinned =
+        deps.routing !== undefined && pinnedBySession(deps.routing.session) === provider.id;
+      const movedUp =
+        deps.routing?.task !== undefined &&
+        priorityIndex !== undefined &&
+        (priorityIndex.get(provider.id) ?? 0) >
+          ordered.findIndex((p) => p.id === provider.id);
+      const reason: RouteReason = pinned
+        ? "pinned_by_session"
+        : dialledFailures > 0
+          ? "fallback_previous_unavailable"
+          : movedUp
+            ? "selected_by_complexity"
+            : "selected_by_priority";
+      if (deps.routing && attempts.length > 0) {
+        attempts[attempts.length - 1] = { ...attempts[attempts.length - 1]!, reason };
+      }
       return {
         meta: {
           answered_by: provider.name + " (" + provider.provider + ")",
           bird_id: provider.id,
-          ai_model: provider.model,
+          // A provider may report the model that *actually served* the request
+          // (the auto-router bird, ADR-0006). Absent means "the model we asked
+          // for", which is what every portable provider answers.
+          ai_model: result.servedModel ?? provider.model,
           flock_attempts: attempts,
         },
         answer: result.answer,
