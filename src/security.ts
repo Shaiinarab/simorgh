@@ -16,12 +16,18 @@
 
 import {
   allowedOrigins as coreAllowedOrigins,
+  authenticateServiceIdentity as coreAuthenticateServiceIdentity,
   authenticateServiceRequest as coreAuthenticateServiceRequest,
   constantTimeEqual as coreConstantTimeEqual,
   extractBearerToken as coreExtractBearerToken,
+  parseTokenSubjects,
+  subjectMatches,
   type AuthResult,
+  type IdentityAuthResult,
   type Sha256,
 } from "@simorgh/phoenix-core";
+
+export { parseTokenSubjects, subjectMatches };
 
 export {
   MAX_EXECUTE_BODY_CHARS,
@@ -62,6 +68,22 @@ export function authenticateServiceRequest(
 ): Promise<AuthResult> {
   return coreAuthenticateServiceRequest(request.headers, {
     apiKey: env.SIMORGH_API_KEY,
+    sha256,
+  });
+}
+
+/**
+ * Auth *and* identity. `SIMORGH_API_KEYS` is the only configuration in which a caller can
+ * be attributed to a user; without it this resolves to `IDENTITY_UNRESOLVED` rather than
+ * guessing, which is what makes the per-user routes safe rather than merely authenticated.
+ */
+export function authenticateServiceIdentity(
+  request: Request,
+  env: Env
+): Promise<IdentityAuthResult> {
+  return coreAuthenticateServiceIdentity(request.headers, {
+    apiKey: env.SIMORGH_API_KEY,
+    tokenSubjects: parseTokenSubjects(env.SIMORGH_API_KEYS),
     sha256,
   });
 }

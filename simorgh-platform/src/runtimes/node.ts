@@ -31,6 +31,7 @@ import {
   QUOTA_SCHEMA,
   RATE_LIMIT_SCHEMA,
   RequestValidationError,
+  authenticateServiceIdentity,
   authenticateServiceRequest,
   consumeRateLimit,
   createToolExecutor,
@@ -38,9 +39,11 @@ import {
   executeAgent,
   isAllowedOrigin,
   parseExecuteBody,
+  parseTokenSubjects,
   readAllHealth,
   readCooldown,
   recordObservation,
+  subjectMatches,
   sweepStale,
   type AgentTool,
   type FetchLike,
@@ -69,6 +72,24 @@ export interface NodeRuntimeOptions {
   host?: string;
   /** Bearer token callers must present. Absent ⇒ every authed route returns 503. */
   apiKey?: string;
+  /**
+   * JSON map of `token → userId` (`SIMORGH_API_KEYS`).
+   *
+   * The per-user routes (`/api/v1/user/:userId/logs`, `/api/v1/context/:refId`) resolve
+   * their caller from this map rather than from the URL. Absent, they refuse with
+   * `IDENTITY_UNRESOLVED` instead of guessing which user a token speaks for — guessing is
+   * precisely the vulnerability they carried until 2026-10-08.
+   *
+   * **Known gap, deliberate not accidental:** a token that is only in this map can *read*
+   * its own data but cannot call `/api/v1/agent/execute`, which still authenticates against
+   * `apiKey` alone. So a multi-caller deployment must hand each caller both. Fixing that is
+   * not a one-line change: letting a map token execute means the `userId` must come from
+   * the token rather than from `X-Simorgh-User-Id`, or a caller can spend another caller's
+   * rate-limit budget and write ledger rows in their name (AUTH-004). Until that lands, the
+   * map's job is strictly "who is reading", and this comment is the reason a reader is not
+   * left to rediscover it.
+   */
+  apiKeys?: string;
   secrets?: Record<string, string | undefined>;
   providers?: readonly Provider[];
   /** SQLite path. `:memory:` (the default) keeps a smoke run from leaving state behind. */
@@ -254,8 +275,8 @@ export async function startNodeRuntime(
       }
 
       if (path.startsWith("/api/v1/user/") && path.endsWith("/logs") && req.method === "GET") {
-        const denied = await requireAuth(req, res, requestId);
-        if (denied) return;
+        const subject = await requireIdentity(req, res, requestId);
+        if (subject === null) return;
         const userId = decodeURIComponent(path.slice("/api/v1/user/".length, -"/logs".length));
         if (!/^[A-Za-z0-9:_-]{1,128}$/.test(userId)) {
           return send(res, 400, {
@@ -263,12 +284,25 @@ export async function startNodeRuntime(
             error: { code: "INVALID_USER_ID", message: "Invalid user ID.", requestId },
           });
         }
+        // The token names the caller; the URL names the data. They must agree. `403` for
+        // *every* non-matching userId, existing or not, so this cannot be used to probe
+        // which user ids are real (AUTH-002).
+        if (!subjectMatches(subject, userId)) {
+          return send(res, 403, {
+            success: false,
+            error: {
+              code: "FORBIDDEN",
+              message: "This token may not read another user's logs.",
+              requestId,
+            },
+          });
+        }
         return send(res, 200, await ledger.getUserLogs(userId));
       }
 
       if (path.startsWith("/api/v1/context/") && req.method === "GET") {
-        const denied = await requireAuth(req, res, requestId);
-        if (denied) return;
+        const subject = await requireIdentity(req, res, requestId);
+        if (subject === null) return;
         const refId = path.slice("/api/v1/context/".length);
         if (!/^[0-9a-f-]{36}$/i.test(refId)) {
           return send(res, 400, {
@@ -279,6 +313,14 @@ export async function startNodeRuntime(
               requestId,
             },
           });
+        }
+        // Ownership from the ledger, which is what binds a `refId` to a principal. A
+        // missing row is "not yours", never "unowned, therefore allowed" (AUTH-003).
+        const owner = await ledger.findByRef(refId);
+        if (!owner || !subjectMatches(subject, owner.user_id)) {
+          // Same 404 as a genuinely absent context, so this cannot be used to enumerate
+          // which references exist. The stored payload is not read on this path.
+          return send(res, 404, { error: "not_found" });
         }
         const stored = await contextStore.get("ctx_" + refId);
         if (!stored) return send(res, 404, { error: "not_found" });
@@ -464,6 +506,48 @@ export async function startNodeRuntime(
     }
   }
 
+  /**
+   * Parsed once per runtime, not once per request: `options` is fixed at boot.
+   * A malformed map parses to `undefined`, which degrades these routes to refusing with
+   * `503 IDENTITY_UNRESOLVED` — never to an empty map that would let every token through.
+   */
+  const tokenSubjects = parseTokenSubjects(options.apiKeys);
+
+  /**
+   * Auth *and* identity, for routes that name the resource they return in the URL.
+   *
+   * Returns the resolved subject, or `null` after having sent the refusal — the same
+   * shape as `requireAuth` below, so the call sites read identically.
+   */
+  async function requireIdentity(
+    req: IncomingMessage,
+    res: ServerResponse,
+    requestId: string
+  ): Promise<string | null> {
+    const auth = await authenticateServiceIdentity(headerAccessor(req), {
+      ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+      ...(tokenSubjects ? { tokenSubjects } : {}),
+      sha256: ports.sha256,
+    });
+    if (auth.ok) return auth.subject;
+
+    if (auth.status === 401) res.setHeader("WWW-Authenticate", "Bearer");
+    send(res, auth.status, {
+      success: false,
+      error: {
+        code: auth.code,
+        message:
+          auth.code === "AUTH_NOT_CONFIGURED"
+            ? "Simorgh API authentication is not configured."
+            : auth.code === "IDENTITY_UNRESOLVED"
+              ? "This deployment cannot attribute the token to a user. Set SIMORGH_API_KEYS to a JSON map of token to user id."
+              : "A valid Bearer token is required.",
+        requestId,
+      },
+    });
+    return null;
+  }
+
   async function requireAuth(
     req: IncomingMessage,
     res: ServerResponse,
@@ -587,6 +671,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   const runtime = await startNodeRuntime({
     ...(port !== undefined && Number.isFinite(port) ? { port } : {}),
     apiKey: process.env.SIMORGH_API_KEY,
+    apiKeys: process.env.SIMORGH_API_KEYS,
     secrets: process.env,
     corsOrigins: process.env.CORS_ORIGINS,
   });

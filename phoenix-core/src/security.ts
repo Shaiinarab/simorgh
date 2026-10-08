@@ -89,6 +89,128 @@ export async function authenticateServiceRequest(
   return { ok: true };
 }
 
+// ── Who the caller is ────────────────────────────────────────────────────────
+//
+// Authenticating a caller and knowing *which user they are* are different questions, and
+// until now this module only answered the first. That is the whole of AUTH-002/AUTH-003:
+// `/api/v1/user/:userId/logs` took the userId from the URL and checked only that *some*
+// valid token was present, so one caller could read any user's ledger. Worse, the ledger
+// stores each request's `refId`, and `/api/v1/context/:refId` returned the stored prompt
+// with no owner check at all — so reading one user's logs handed you the keys to that
+// user's prompts. The two findings chain into a single read of somebody's request history.
+//
+// The fix is to make identity come from the credential rather than from the request.
+// A bearer token that maps to a userId *is* that userId; the URL and body are then claims
+// to be checked rather than trusted.
+
+/** A token → userId map. Present ⇒ the deployment can distinguish callers. */
+export type TokenSubjects = Readonly<Record<string, string>>;
+
+export type IdentityAuthResult =
+  | { ok: true; subject: string }
+  | {
+      ok: false;
+      status: 401 | 503;
+      code: "UNAUTHORIZED" | "AUTH_NOT_CONFIGURED" | "IDENTITY_UNRESOLVED";
+    };
+
+/**
+ * Parse the `SIMORGH_API_KEYS` variable: a JSON object of `{"<token>": "<userId>"}`.
+ *
+ * Malformed input returns `undefined` rather than throwing, and that direction is the safe
+ * one: it degrades the deployment to single-token mode, where the per-user routes refuse
+ * with a 503 instead of serving an unverified user. A malformed map must never become an
+ * empty map that authenticates nobody-but-then-authorises-everyone.
+ */
+export function parseTokenSubjects(raw: string | undefined): TokenSubjects | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return undefined;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+
+  // Built explicitly rather than with `filter` + a type assertion: `filter` does not narrow
+  // `unknown` to `string`, so a cast would be the only way to satisfy the return type, and a
+  // cast here would be the one place a malformed map could slip through as a valid one.
+  const entries: Array<[string, string]> = [];
+  for (const [token, subject] of Object.entries(parsed as Record<string, unknown>)) {
+    if (token.trim().length > 0 && typeof subject === "string" && subject.trim().length > 0) {
+      entries.push([token, subject]);
+    }
+  }
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/**
+ * Authenticate a caller *and* resolve which user they are.
+ *
+ * Two modes, and the difference is the whole security property:
+ *
+ *   * **Multi-caller** (`tokenSubjects` present). Every configured token is compared and the
+ *     matching one names the subject. Comparison does not stop at the first match, so the
+ *     number of comparisons does not leak which token was correct.
+ *   * **Single-principal** (`apiKey` only). The deployment has one caller, and we cannot know
+ *     which userId it acts as. Guessing would be the vulnerability, so this returns
+ *     `IDENTITY_UNRESOLVED` and the per-user routes refuse. Every *other* route keeps using
+ *     `authenticateServiceRequest` and is unaffected — a solo deployment loses nothing but
+ *     the ability to read a per-user ledger until it sets `SIMORGH_API_KEYS`.
+ *
+ * A single shared token across public callers is exactly the configuration this exists to
+ * stop working, so a deployment that reaches the internet without a token map cannot read
+ * anybody's data.
+ */
+export async function authenticateServiceIdentity(
+  headers: HeaderLike,
+  options: { apiKey?: string; tokenSubjects?: TokenSubjects; sha256: Sha256 }
+): Promise<IdentityAuthResult> {
+  const subjects = options.tokenSubjects;
+  const hasMap = subjects !== undefined && Object.keys(subjects).length > 0;
+  const configured = options.apiKey?.trim();
+
+  // Configuration is checked *before* the token, matching `authenticateServiceRequest`
+  // above. The order is load-bearing and was caught by `platform-connectors.test.ts`: an
+  // unconfigured deployment must answer `503 AUTH_NOT_CONFIGURED` whether or not a token
+  // was supplied, because "this deployment has no auth configured" is the honest
+  // description and it is what every other authed route already says. Checking the token
+  // first made these two routes answer `401` where the rest of the app answers `503` —
+  // the same refusal reading two different ways depending on the route.
+  if (!hasMap && !configured) return { ok: false, status: 503, code: "AUTH_NOT_CONFIGURED" };
+
+  const supplied = extractBearerToken(headers);
+  if (!supplied) return { ok: false, status: 401, code: "UNAUTHORIZED" };
+
+  if (hasMap) {
+    let matched: string | undefined;
+    // Deliberately not `break`: an early return makes the comparison count depend on
+    // which token matched, which is exactly what constant-time comparison is for.
+    for (const [token, subject] of Object.entries(subjects)) {
+      if (await constantTimeEqual(supplied, token, options.sha256)) matched ??= subject;
+    }
+    if (matched) return { ok: true, subject: matched };
+    // No match *in the map* falls through rather than returning: a deployment may set both
+    // `SIMORGH_API_KEY` (service-to-service, used by every other route) and
+    // `SIMORGH_API_KEYS` (identity). A token that is only the former is still a credential
+    // this deployment accepts — it just cannot be attributed, which is the 503 below.
+  }
+
+  // A valid token, but no way to know which user it speaks for. The distinction from
+  // `UNAUTHORIZED` is the operator-facing one: the credential is fine, the deployment is
+  // under-configured, and the remedy is `SIMORGH_API_KEYS`, not a new key.
+  if (configured && (await constantTimeEqual(supplied, configured, options.sha256))) {
+    return { ok: false, status: 503, code: "IDENTITY_UNRESOLVED" };
+  }
+  return { ok: false, status: 401, code: "UNAUTHORIZED" };
+}
+
+/** Whether a configured userId may act as `subject`, by exact match. */
+export function subjectMatches(subject: string, claimed: string): boolean {
+  return subject === claimed;
+}
+
 /**
  * Parse and bound an execute request body.
  *

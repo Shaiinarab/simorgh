@@ -81,6 +81,7 @@ export async function executeAgent(
   const ledger: LedgerPort = {
     logEntry: (entry) => vault.logEntry(entry),
     getUserLogs: (userId) => vault.getUserLogs(userId),
+    findByRef: (refId) => vault.findByRef(refId),
   };
 
   return coreExecuteAgent(

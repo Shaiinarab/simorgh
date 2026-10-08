@@ -19,6 +19,8 @@ import { restConnector } from "../src/connectors/rest.ts";
 import { startNodeRuntime, type NodeRuntime } from "../src/runtimes/node.ts";
 
 const API_KEY = "integration-token";
+/** A second, equally valid token belonging to a *different* user. */
+const OTHER_KEY = "integration-other-token";
 
 /** Answers without touching the network, so the suite is hermetic. */
 const canned: Provider = {
@@ -44,6 +46,10 @@ beforeAll(async () => {
   runtime = await startNodeRuntime({
     port: 0,
     apiKey: API_KEY,
+    // The per-user routes resolve their caller from the token map rather than from the
+    // URL, so the runtime needs one. Two entries, because the ownership check is only
+    // observable when there is somebody to be refused.
+    apiKeys: JSON.stringify({ [API_KEY]: "u-ledger", [OTHER_KEY]: "u-other" }),
     secrets: {},
     providers: [canned],
   });
@@ -94,6 +100,51 @@ describe("a live core reached over REST", () => {
     const body = (await response.json()) as { count: number; entries: { action: string }[] };
     expect(body.count).toBe(1);
     expect(body.entries[0]?.action).toBe("execute");
+  });
+
+  // AUTH-002 / AUTH-003 again, but on the *self-hosted* host. The two hosts serve the
+  // same routes over the same engine, so a fix that landed on only one of them would
+  // leave the other reachable — and the workers suite cannot see this runtime at all.
+  it("refuses to read another user's ledger on the node host (AUTH-002)", async () => {
+    await rest().ask({ prompt: "identify me", userId: "u-ledger" });
+
+    // Positive control: the owner still reads their own ledger.
+    const owner = await fetch(`${runtime.url}/api/v1/user/u-ledger/logs`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+    expect(owner.status).toBe(200);
+
+    // The finding: a valid token for a different user must not.
+    const intruder = await fetch(`${runtime.url}/api/v1/user/u-ledger/logs`, {
+      headers: { Authorization: `Bearer ${OTHER_KEY}` },
+    });
+    expect(intruder.status).toBe(403);
+    expect(((await intruder.json()) as { error: { code: string } }).error.code).toBe("FORBIDDEN");
+  });
+
+  it("refuses to serve another user's offloaded context on the node host (AUTH-003)", async () => {
+    // Executed with the *service* key, because `/api/v1/agent/execute` still authenticates
+    // against `SIMORGH_API_KEY` alone — a token from the `SIMORGH_API_KEYS` map cannot call
+    // it (see the note on `NodeRuntimeOptions.apiKeys`). Ownership, which is what this test
+    // is about, comes from the `userId` in the body, not from the token that executed.
+    const executed = await fetch(`${runtime.url}/api/v1/agent/execute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
+      body: JSON.stringify({ prompt: "private context", tools: [], userId: "u-other" }),
+    });
+    expect(executed.status).toBe(200);
+    const { meta } = (await executed.json()) as { meta: { contextRefId: string } };
+
+    const owner = await fetch(`${runtime.url}/api/v1/context/${meta.contextRefId}`, {
+      headers: { Authorization: `Bearer ${OTHER_KEY}` },
+    });
+    expect(owner.status).toBe(200);
+
+    const intruder = await fetch(`${runtime.url}/api/v1/context/${meta.contextRefId}`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+    expect(intruder.status).toBe(404);
+    expect(await intruder.json()).toEqual({ error: "not_found" });
   });
 
   it("refuses a caller with no token", async () => {

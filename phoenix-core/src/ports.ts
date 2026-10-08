@@ -153,4 +153,19 @@ export interface UserLogs {
 export interface LedgerPort {
   logEntry(entry: LedgerEntry): Promise<{ logged: boolean }>;
   getUserLogs(userId: string): Promise<UserLogs>;
+  /**
+   * The row that owns `refId`, or `null` if no row carries it.
+   *
+   * `ref_id` is the only durable link between an offloaded context and the principal
+   * that created it, so this is what lets a host answer "may this caller read this
+   * context?" without trusting the caller's claim to the reference. It is a read on an
+   * append-only table: the answer can never change for a given `refId`, because no row
+   * is ever updated and a `refId` is a fresh UUID per request.
+   *
+   * More than one row may share a `refId` — the request record and a later
+   * `shield_block` row are written for the same request — and every one of them carries
+   * the same `user_id`, so the caller of this method does not have to care which row
+   * comes back.
+   */
+  findByRef(refId: string): Promise<LedgerRow | null>;
 }

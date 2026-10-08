@@ -87,6 +87,11 @@ function fakeFlockNamespace(opts: { exhausted?: boolean; cooldownUntil?: number 
   };
 }
 
+/** The token the helpers present, and the user it is mapped to. */
+const TOKEN = "test-secret";
+/** A second, equally valid token belonging to a *different* user. */
+const OTHER_TOKEN = "other-secret";
+
 function testEnv(flock: unknown = fakeFlockNamespace()): Env {
   return {
     AI: env.AI,
@@ -94,7 +99,12 @@ function testEnv(flock: unknown = fakeFlockNamespace()): Env {
     DATA_TRUST_VAULT: env.DATA_TRUST_VAULT,
     FLOCK_COORDINATOR: flock,
     ENVIRONMENT: env.ENVIRONMENT,
-    SIMORGH_API_KEY: "test-secret",
+    SIMORGH_API_KEY: TOKEN,
+    // Two callers, not one. The per-user routes resolve their caller from this map, and a
+    // single-entry map would make the ownership check untestable: with one token, "deny"
+    // and "allow" are the same observation. The second token is what lets a test show
+    // that the owner is *served* and the non-owner is *refused* in the same breath.
+    SIMORGH_API_KEYS: JSON.stringify({ [TOKEN]: "anonymous", [OTHER_TOKEN]: "u-ledger" }),
   } as unknown as Env;
 }
 
@@ -114,8 +124,8 @@ const post = (body: unknown, flock?: unknown) =>
  * and `/api/v1/user/:userId/logs` behind the same bearer token as `/execute`, so a
  * test that reads them anonymously asserts 401 and not the behaviour it names.
  */
-const authedGet = (path: string) =>
-  app.request(path, { headers: { Authorization: "Bearer test-secret" } }, testEnv());
+const authedGet = (path: string, token: string = TOKEN) =>
+  app.request(path, { headers: { Authorization: `Bearer ${token}` } }, testEnv());
 
 describe("static routes", () => {
   it("GET / identifies the gateway", async () => {
@@ -151,8 +161,12 @@ describe("GET /api/v1/flock/status", () => {
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as { birds: { id: string; dormant: boolean }[] };
-    expect(body.birds.map((b) => b.id)).toEqual(["shahin", "bulbul", "homa"]);
-    // No secrets are configured in the test env; Homā must still be available.
+    // Not a roster pin: this route serves the real DO, and the exact roster is pinned in
+    // test/durable-objects.test.ts. Asserting it here too would only mean two literals to
+    // keep in step, and would say nothing about the HTTP layer this file is about. What
+    // matters at this boundary is the zero-KYC answer — no secrets configured in the test
+    // env, and Homā must still be there and available.
+    expect(body.birds.map((b) => b.id)).toContain("homa");
     expect(body.birds.find((b) => b.id === "homa")?.dormant).toBe(false);
   });
 });
@@ -302,10 +316,78 @@ describe("POST /api/v1/agent/execute", () => {
   it("logs the caller's own identity when given one", async () => {
     await post({ prompt: "identify me", tools: [], userId: "u-ledger", tier: "Pro-Data-Pact" });
 
-    const logs = await authedGet("/api/v1/user/u-ledger/logs");
+    // `u-ledger`'s own token, because this route now requires the caller to *be* the user
+    // whose logs they are asking for.
+    const logs = await authedGet("/api/v1/user/u-ledger/logs", OTHER_TOKEN);
     const body = (await logs.json()) as { count: number; entries: { tier: string }[] };
     expect(body.count).toBe(1);
     expect(body.entries[0].tier).toBe("Pro-Data-Pact");
+  });
+});
+
+// AUTH-002 and AUTH-003, asserted at the HTTP layer, because that is where the findings
+// were and it is the only layer that can show the *route* refusing rather than a helper.
+//
+// Every case here runs its positive control too. An ownership check that denies everybody
+// is a different bug from one that denies nobody, and a test that only asserts the denial
+// cannot tell the two apart — the same reason the audit's own lesson is to run a negative
+// control against any detector.
+describe("identity and ownership (AUTH-002 / AUTH-003)", () => {
+  it("serves a user their own ledger and 403s another caller's (AUTH-002)", async () => {
+    await post({ prompt: "identify me", tools: [], userId: "u-ledger" });
+
+    // Positive control: `u-ledger` can still read `u-ledger`.
+    const owner = await authedGet("/api/v1/user/u-ledger/logs", OTHER_TOKEN);
+    expect(owner.status).toBe(200);
+
+    // The finding itself: a *valid* token for a different user must not.
+    const intruder = await authedGet("/api/v1/user/u-ledger/logs", TOKEN);
+    expect(intruder.status).toBe(403);
+    expect(
+      ((await intruder.json()) as { error: { code: string } }).error.code
+    ).toBe("FORBIDDEN");
+  });
+
+  it("serves an owner their offloaded context and 404s it to another caller (AUTH-003)", async () => {
+    // Owned by `u-ledger`: ownership comes from the ledger row the execute call writes,
+    // not from whichever token created it.
+    const created = await post({
+      prompt: "private",
+      tools: ["get_server_time"],
+      userId: "u-ledger",
+    });
+    const { meta } = (await created.json()) as { meta: { contextRefId: string } };
+
+    const owner = await authedGet(`/api/v1/context/${meta.contextRefId}`, OTHER_TOKEN);
+    expect(owner.status).toBe(200);
+    expect((await owner.json()) as unknown).toMatchObject({ prompt: "private" });
+
+    // 404 rather than 403 on purpose: indistinguishable from a reference that does not
+    // exist, so this route cannot be used to learn which references exist.
+    const intruder = await authedGet(`/api/v1/context/${meta.contextRefId}`, TOKEN);
+    expect(intruder.status).toBe(404);
+    expect(await intruder.json()).toEqual({ error: "not_found" });
+  });
+
+  it("refuses the per-user routes when the deployment cannot attribute the token", async () => {
+    // `SIMORGH_API_KEY` alone: a valid credential, but nothing says which user it speaks
+    // for. Guessing there is exactly the bug, so the answer is a 503 that names the
+    // remedy. This is the deliberate behaviour change a solo deployment sees.
+    const solo = { ...testEnv(), SIMORGH_API_KEYS: undefined } as unknown as Env;
+    const res = await app.request(
+      "/api/v1/user/anonymous/logs",
+      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      solo
+    );
+    expect(res.status).toBe(503);
+    expect(
+      ((await res.json()) as { error: { code: string } }).error.code
+    ).toBe("IDENTITY_UNRESOLVED");
+  });
+
+  it("401s a caller who presents no token at all", async () => {
+    const res = await app.request("/api/v1/user/anonymous/logs", undefined, testEnv());
+    expect(res.status).toBe(401);
   });
 });
 

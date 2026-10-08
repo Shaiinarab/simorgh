@@ -7,13 +7,16 @@ import {
   MAX_TOOLS,
   UNTRUSTED_CLOSE,
   UNTRUSTED_OPEN,
+  authenticateServiceIdentity,
   authenticateServiceRequest,
   constantTimeEqual,
   extractBearerToken,
   isAllowedOrigin,
   markUntrusted,
   parseExecuteBody,
+  parseTokenSubjects,
   sanitizeModelOutput,
+  subjectMatches,
 } from "../src/security.ts";
 import { AGENT_TOOLS, buildSynthesisPrompt } from "../src/agent.ts";
 import { executeAgent, type ExecuteAgentDeps } from "../src/execute.ts";
@@ -676,5 +679,112 @@ describe("the output shield on the answer path", () => {
     expect(result.success).toBe(false);
     expect(result.meta.sanitizer_findings).toEqual([]);
     expect((await ledger.getUserLogs("u-down")).count).toBe(1);
+  });
+});
+
+// ── identity: auth, and *who* the caller is (AUTH-002 / AUTH-003) ─────────────
+//
+// These primitives were staged without tests, and that is how the fix they enable sat
+// unwired: `authenticateServiceIdentity` and `subjectMatches` had zero callers and nothing
+// went red. The route-level assertions live in `test/http.test.ts`; what is pinned here is
+// the decision table, because it has to be right for *both* hosts to be safe.
+
+describe("parseTokenSubjects", () => {
+  it("parses a token → user map", () => {
+    expect(parseTokenSubjects('{"a":"alice","b":"bob"}')).toEqual({ a: "alice", b: "bob" });
+  });
+
+  it("returns undefined for absent, empty, or malformed input", () => {
+    for (const raw of [undefined, "", "   ", "not json", "[1,2]", '"a string"', "null", "42"]) {
+      expect(parseTokenSubjects(raw)).toBeUndefined();
+    }
+  });
+
+  it("drops entries that are not non-empty strings, keeping the rest", () => {
+    // A malformed *entry* must not take the whole map with it: the rest is still a usable
+    // configuration, and the dropped entry simply cannot authenticate anyone.
+    expect(parseTokenSubjects('{"":"anon","a":"alice","b":42,"c":""}')).toEqual({
+      a: "alice",
+    });
+  });
+
+  it("returns undefined when every entry is dropped, never an empty map", () => {
+    // The dangerous shape: an empty object is truthy, so a caller doing `if (map)` would
+    // take the map path and compare against nothing. `undefined` sends it down the
+    // single-principal path instead, which refuses rather than authorising everybody.
+    expect(parseTokenSubjects('{"":"","x":null}')).toBeUndefined();
+  });
+});
+
+describe("authenticateServiceIdentity", () => {
+  const TOKENS = { "secret-a": "alice", "secret-b": "bob" };
+
+  it("names the user a token belongs to", async () => {
+    expect(
+      await authenticateServiceIdentity(headers({ Authorization: "Bearer secret-b" }), {
+        tokenSubjects: TOKENS,
+        sha256,
+      })
+    ).toEqual({ ok: true, subject: "bob" });
+  });
+
+  it("401s a token that is not in the map", async () => {
+    expect(
+      await authenticateServiceIdentity(headers({ Authorization: "Bearer nope" }), {
+        tokenSubjects: TOKENS,
+        sha256,
+      })
+    ).toEqual({ ok: false, status: 401, code: "UNAUTHORIZED" });
+  });
+
+  it("401s a caller who presents nothing", async () => {
+    expect(
+      await authenticateServiceIdentity(headers({}), { tokenSubjects: TOKENS, sha256 })
+    ).toEqual({ ok: false, status: 401, code: "UNAUTHORIZED" });
+  });
+
+  it("503s AUTH_NOT_CONFIGURED with no map and no key, token or not", async () => {
+    // Configuration is checked *first*, matching `authenticateServiceRequest`. This exact
+    // ordering is what `platform-connectors.test.ts` caught: the rest of the app answers
+    // 503 on an unconfigured deployment, and these routes must not answer something else.
+    for (const h of [headers({}), headers({ Authorization: "Bearer anything" })]) {
+      expect(await authenticateServiceIdentity(h, { sha256 })).toEqual({
+        ok: false,
+        status: 503,
+        code: "AUTH_NOT_CONFIGURED",
+      });
+    }
+  });
+
+  it("503s IDENTITY_UNRESOLVED for a single-principal key, rather than guessing", async () => {
+    // The whole fix in one assertion: the credential is valid, and the deployment still
+    // refuses to say which user it speaks for. Guessing there is the vulnerability.
+    expect(
+      await authenticateServiceIdentity(headers({ Authorization: "Bearer solo-key" }), {
+        apiKey: "solo-key",
+        sha256,
+      })
+    ).toEqual({ ok: false, status: 503, code: "IDENTITY_UNRESOLVED" });
+  });
+
+  it("prefers the map when a map and a key are both set, and still resolves the key", async () => {
+    const opts = { apiKey: "service-key", tokenSubjects: TOKENS, sha256 };
+    expect(
+      await authenticateServiceIdentity(headers({ Authorization: "Bearer secret-a" }), opts)
+    ).toEqual({ ok: true, subject: "alice" });
+    // The service key is a valid credential everywhere else in the app; it just cannot be
+    // attributed to a user, so it gets the under-configured answer rather than a 401.
+    expect(
+      await authenticateServiceIdentity(headers({ Authorization: "Bearer service-key" }), opts)
+    ).toEqual({ ok: false, status: 503, code: "IDENTITY_UNRESOLVED" });
+  });
+});
+
+describe("subjectMatches", () => {
+  it("matches only by exact equality", () => {
+    expect(subjectMatches("alice", "alice")).toBe(true);
+    for (const claimed of ["Alice", "alice ", " alice", "alice2", "", "anonymous"]) {
+      expect(subjectMatches("alice", claimed)).toBe(false);
+    }
   });
 });

@@ -152,3 +152,55 @@ describe("the /node subpath re-export", () => {
     expect(logs.entries[0]?.ref_id).toBe("r9");
   });
 });
+
+// `findByRef` is what lets a host answer "may this caller read this context?" from the
+// record rather than from the caller's claim to the reference (AUTH-003). These are engine
+// tests: they pin the *lookup*. Whether a route refuses a non-owner is asserted in
+// `test/http.test.ts`, which is the only layer that can see the refusal.
+describe("findByRef", () => {
+  it("returns the row that owns the reference", async () => {
+    await ledger.logEntry({ userId: "owner", tier: "free", refId: "ref-1", timestamp: NOW });
+    expect((await ledger.findByRef("ref-1"))?.user_id).toBe("owner");
+  });
+
+  it("returns null for a reference no row carries, rather than an empty row", async () => {
+    // The distinction *is* the security property: a caller that reads "no row" as
+    // "unowned, therefore allowed" has the vulnerability back. `null` cannot be mistaken
+    // for an owner the way `{}` or `undefined` can.
+    expect(await ledger.findByRef("never-logged")).toBeNull();
+  });
+
+  it("does not confuse two references with different owners", async () => {
+    await ledger.logEntry({ userId: "alice", tier: "free", refId: "ref-a", timestamp: NOW });
+    await ledger.logEntry({ userId: "bob", tier: "free", refId: "ref-b", timestamp: NOW });
+    expect((await ledger.findByRef("ref-a"))?.user_id).toBe("alice");
+    expect((await ledger.findByRef("ref-b"))?.user_id).toBe("bob");
+  });
+
+  it("resolves a reference that carries both a request row and a shield row", async () => {
+    // A `shield_block` row is written against the same refId *after* the flight, so more
+    // than one row can share it. Every one carries the same user_id, which is why the
+    // lookup does not have to care which row comes back — asserted rather than assumed.
+    await ledger.logEntry({ userId: "owner", tier: "free", refId: "ref-2", timestamp: NOW });
+    await ledger.logEntry({
+      userId: "owner",
+      tier: "free",
+      refId: "ref-2",
+      timestamp: NOW + 1,
+      action: "shield_block",
+    });
+    const count = sql
+      .exec<{ n: number }>("SELECT COUNT(*) AS n FROM ledger WHERE ref_id = 'ref-2'")
+      .toArray()[0]?.n;
+    expect(count).toBe(2);
+    expect((await ledger.findByRef("ref-2"))?.user_id).toBe("owner");
+  });
+
+  it("has an index, because the ledger is append-only and never pruned", () => {
+    const indexes = sql
+      .exec<{ name: string }>("PRAGMA index_list(ledger)")
+      .toArray()
+      .map((row) => row.name);
+    expect(indexes).toContain("idx_ledger_ref_id");
+  });
+});

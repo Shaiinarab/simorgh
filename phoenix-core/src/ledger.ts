@@ -41,6 +41,21 @@ export const LEDGER_SCHEMA = `
   );
 `;
 
+/**
+ * The `ref_id` index, applied *separately* from `LEDGER_SCHEMA` on purpose.
+ *
+ * `ensureLedgerSchema` runs on both hosts, and the Node host's `SqlPort` is built on
+ * `node:sqlite`'s `prepare()`, which prepares **one** statement — a second statement in
+ * the schema string would throw there while working fine on a Durable Object. Two
+ * `exec` calls is the shape that works on both, and it is why this is exported rather
+ * than concatenated above.
+ *
+ * The index exists for `findByRef`, which is on the request path of
+ * `/api/v1/context/:refId`. Without it that lookup is a full scan of an append-only,
+ * never-pruned table.
+ */
+export const LEDGER_REF_INDEX = `CREATE INDEX IF NOT EXISTS idx_ledger_ref_id ON ledger(ref_id);`;
+
 /** Newest-first page size for `getUserLogs`. */
 export const LEDGER_PAGE_LIMIT = 100;
 
@@ -104,6 +119,20 @@ export function createLedger(sql: SqlPort): LedgerPort {
         .toArray();
       return { userId, entries, count: entries.length };
     },
+
+    async findByRef(refId) {
+      // `ORDER BY id` rather than `timestamp`: `id` is the autoincrement primary key, so
+      // it is the only column that is totally ordered even when two rows are written in
+      // the same millisecond. The oldest row is returned, and every row for a given
+      // `refId` shares a `user_id`, so which one comes back is not load-bearing.
+      const rows = sql
+        .exec<LedgerRow & SqlRow>(
+          "SELECT * FROM ledger WHERE ref_id = ? ORDER BY id LIMIT 1",
+          refId
+        )
+        .toArray();
+      return rows[0] ?? null;
+    },
   };
 }
 
@@ -117,4 +146,5 @@ export function createLedger(sql: SqlPort): LedgerPort {
  */
 export function ensureLedgerSchema(sql: SqlPort): void {
   sql.exec(LEDGER_SCHEMA);
+  sql.exec(LEDGER_REF_INDEX);
 }

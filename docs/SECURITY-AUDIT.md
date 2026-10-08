@@ -31,17 +31,22 @@
 - **Impact:** Any unauthenticated caller learns which providers are configured, their statuses, and which providers have keys — a reconnaissance map for targeted attacks. The edge route goes directly to `FLOCK_COORDINATOR.get(id).getFlockStatus()` with no `requireServiceAuth` guard.
 - **Recommended fix:** Add `requireServiceAuth` to `/api/v1/flock/status`, or document it as an intentional health-exposure with a risk acceptance. The Node runtime comment says "Not authenticated, matching the edge" — but matching an insecure edge is not a defense.
 
-### AUTH-002 — IDOR: any authenticated user can read any user's ledger logs
+### AUTH-002 — IDOR: any authenticated user can read any user's ledger logs *(FIXED 2026-10-08)*
 - **Severity:** high
-- **Evidence:** `src/index.ts:222` (`/api/v1/user/:userId/logs`)
+- **Evidence:** `src/index.ts:222` (`/api/v1/user/:userId/logs`), and `simorgh-platform/src/runtimes/node.ts:256` on the self-hosted host
 - **Impact:** The route authenticates the caller (bearer token) but takes `userId` from the URL path with no ownership check. An authenticated attacker enumerates `userId` values and reads every user's ledger entries (prompt, tools, tier, timestamp). This is the highest-value question in this audit: an IDOR where the IDs are in the URL.
 - **Recommended fix:** Bind the route to the authenticated identity. Either derive `userId` from the bearer token claims, or add an allow-list check mapping the authenticated principal to the requested `userId`.
+- **Fix:** Identity now comes from the credential. `SIMORGH_API_KEYS` is a JSON `{"<token>": "<userId>"}` map; `authenticateServiceIdentity` (`phoenix-core/src/security.ts`) resolves a subject from it, and the route requires `subjectMatches(subject, userId)`. **Both hosts** were fixed — the Node runtime had the identical hole, which matters because `/api/v1/user/…/logs` is served by both and only one of them is covered by the workerd suite. A deployment that sets only `SIMORGH_API_KEY` cannot attribute a token to a user, so these routes answer **503 `IDENTITY_UNRESOLVED`** rather than guessing; that is a deliberate behaviour change for solo deployments and the message names the remedy. `403` for every non-matching `userId`, existing or not, so the route is not an oracle for which ids are real.
+- **Verification:** Negative control run — with the ownership check disabled, the two new tests in `test/http.test.ts` fail (`expected 200 to be 403`); restored, both suites are green (134 workerd + 462 node). See AUTH-003 for the shared evidence.
 
-### AUTH-003 — IDOR: any authenticated user can read any user's context
+### AUTH-003 — IDOR: any authenticated user can read any user's context *(FIXED 2026-10-08)*
 - **Severity:** high
-- **Evidence:** `src/index.ts:198` (`/api/v1/context/:refId`)
+- **Evidence:** `src/index.ts:198` (`/api/v1/context/:refId`), and `simorgh-platform/src/runtimes/node.ts:269` on the self-hosted host
 - **Impact:** Same pattern as AUTH-002: authentication verifies the caller but the `refId` in the URL selects the resource. Any authenticated user can read any other user's offloaded context (prompt + tools). The UUID refId is not secret, making enumeration trivial.
 - **Recommended fix:** Same as AUTH-002 — scope context reads to the authenticated user, or make refId opaque-to-unauthenticated callers.
+- **Fix:** The `refId` is now a claim that gets checked. `LedgerPort.findByRef(refId)` returns the append-only row that binds a reference to the principal that created it, and the route serves the payload only when that owner is the caller. A missing row is treated as **not yours**, never as "unowned, therefore allowed". Refusals return the *same* `404 {error:"not_found"}` as a reference that does not exist, so the route cannot be used to learn which references exist, and the stored payload is not read at all on that path. The `ref_id` index (`LEDGER_REF_INDEX`) is applied as a **second** `exec` rather than appended to `LEDGER_SCHEMA`, because the Node host's `SqlPort` is built on `node:sqlite`'s `prepare()`, which prepares one statement — a two-statement schema string would throw there while working on a Durable Object.
+- **Verification:** Negative control run — with the ownership check disabled, the new AUTH-003 tests fail (`expected 200 to be 404`) on **both** hosts. Restored: `npm run typecheck` clean, `npm test` green (134 workerd + 462 node), `platform:smoke` 5/5, `e2e:ask` 10/10, Go build/vet/test green, `security:scan` PASS. Each test runs its **positive** control too (the owner is still served), because an ownership check that denies everybody is a different bug from one that denies nobody and a denial-only assertion cannot tell them apart.
+- **Found but not fixed, and recorded so it is not rediscovered:** a token that exists *only* in `SIMORGH_API_KEYS` can read its own data but cannot call `/api/v1/agent/execute`, which still authenticates against `SIMORGH_API_KEY` alone. A multi-caller deployment must therefore issue both. Closing that is not mechanical: it means the `userId` must come from the token instead of `X-Simorgh-User-Id`, or a caller can spend another caller's rate-limit budget and write ledger rows in their name (AUTH-004). Noted at `NodeRuntimeOptions.apiKeys`.
 
 ### AUTH-004 — Rate-limit key is spoofable via `X-Simorgh-User-Id` header
 - **Severity:** medium
@@ -225,11 +230,11 @@ grep -rn 'apiKey\|API_KEY' --include='*.ts' simorgh-platform/src/fleet-store.ts
 
 | Severity | Count |
 |----------|-------|
-| High | 6 open (AUTH-001, AUTH-002, AUTH-003, SSRF-001, MCP-001, SEC-001) |
+| High | 4 open (AUTH-001, SSRF-001, MCP-001, SEC-001) |
 | Medium | 8 (AUTH-004, INJ-001, SSRF-002, DEP-001, DEP-002, MCP-002, SEC-002, RATE-001) |
 | Low | 4 (INJ-002, ERR-001, ERR-002, TELE-003) |
 | Info | 7 (MCP-003, SEC-003, SEC-004, ERR-003, DEPS-001, TELE-001, TELE-002) |
-| High, **fixed** | 1 (RES-001, 2026-10-08) |
+| High, **fixed** | 3 (RES-001, AUTH-002, AUTH-003 — all 2026-10-08) |
 
 *Counts recounted from each finding's own `**Severity:**` line (2026-10-03). The table was
 wrong in three of four rows: it undercounted High by one while listing six, counted `INJ-002`
@@ -246,7 +251,7 @@ something that was agreed to. The general lesson is the audit's own: a security 
 counts one direction of a flow is a description of half a flow.*
 
 **Three findings to fix first:**
-1. **AUTH-002 (IDOR on `/api/v1/user/:userId/logs`)** — An attacker with any valid bearer token can read any user's complete ledger (prompts, tools, tiers). The `userId` is a URL path parameter, making enumeration trivial. This is the highest-value target in the audit because it leaks request history. Fix: derive the user ID from the bearer token claims, not the URL.
+1. ~~**AUTH-002 (IDOR on `/api/v1/user/:userId/logs`)**~~ — **fixed 2026-10-08** with AUTH-003, which chained into it (see their entries). What remains of the original reasoning: it was the highest-value target because it leaked request history, and the same fix had to land on *both* hosts.
 2. **AUTH-001 (unauthenticated `/api/v1/flock/status`)** — Any internet caller can learn which providers are configured and their health, giving a reconnaissance map for targeted attacks on under-configured cores. Fix: add `requireServiceAuth` or explicitly accept the risk in the PRD.
 3. **SSRF-001 (no fleet endpoint validation)** — The platform dials whatever origin is in the fleet file with no validation against private/link-local IP ranges. While fleet file access is local, a compromised operator machine or a supply-chain attack on `simorgh connect` could inject internal targets. Fix: add a private-IP blocklist in `connectorFor` or `fleet-store.ts`.
 
@@ -263,14 +268,19 @@ at their audited severity, and this section records *why* they are being carried
 
 | Finding | Carried because | What it would cost to fix |
 |---|---|---|
-| **AUTH-002** IDOR on `/api/v1/user/:userId/logs` | One principal. The "users" in the ledger are request-caller labels, not separate tenants with data of their own to protect. | Derive the id from the token instead of the path — small, but changes the route contract. |
-| **AUTH-003** IDOR on `/api/v1/context/:refId` | Same posture. Context offload is a KV convenience, not an isolation boundary. | Same shape as AUTH-002. |
+| ~~**AUTH-002** IDOR on `/api/v1/user/:userId/logs`~~ | **No longer carried — fixed 2026-10-08.** Carried as: one principal, so the ledger's "users" were request-caller labels rather than tenants with data of their own. | Derive the id from the token instead of the path. Cost was "small, but changes the route contract" — which is what happened, and it took two hosts, not one. |
+| ~~**AUTH-003** IDOR on `/api/v1/context/:refId`~~ | **No longer carried — fixed 2026-10-08.** Carried as: context offload is a KV convenience, not an isolation boundary. | The `refId` was the only link to a principal, so the fix needed the ledger to answer "who owns this reference" — one new port method and an index. |
 | **AUTH-001** unauthenticated `/api/v1/flock/status` | The operator dashboard and `doctor` read it, and the operator needs it before a key is configured. | One `requireServiceAuth` call — but then a fresh deployment cannot show its own status. |
 | **SSRF-001** fleet endpoints unvalidated | The `byo-endpoint` target exists precisely so the operator can dial a core they run. Validating it would narrow a feature that is the point. | A private/link-local IP blocklist in `connectorFor`. |
 | **SEC-001** plaintext fleet API keys | Single-operator file on the operator's own machine, already `0600`-scoped by the OS. | Encrypt at rest — and `packages/crypto` already does exactly this in Go, so the code exists. |
 | **MCP-001** Workers MCP handler auth unresolved | The finding is that the audit *could not locate* the route. It is unverified in either direction. | One verification, then possibly one guard. |
 
 ### The condition under which this acceptance is void
+
+> **Triggered 2026-10-08.** Conditions **1** (a second principal) and **4** (a public deployment) both
+> became true for the 11 October launch, so this acceptance is **void as it applies to AUTH-002 and
+> AUTH-003** — both are now fixed rather than carried, and their rows below are strikes-through
+> history, not live deferrals. The remaining four HIGH findings are still carried under this section.
 
 **This acceptance expires the moment any of the following becomes true.** Each is a change in the
 deployment's *shape*, not in its traffic, and each turns a single-principal assumption into a false

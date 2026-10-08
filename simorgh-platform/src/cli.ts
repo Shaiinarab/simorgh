@@ -425,6 +425,7 @@ async function cmdServe(values: Parsed["values"]): Promise<number> {
   const runtime = await startNodeRuntime({
     ...(port !== undefined && Number.isFinite(port) ? { port } : {}),
     apiKey: process.env.SIMORGH_API_KEY,
+    apiKeys: process.env.SIMORGH_API_KEYS,
     secrets: process.env,
     corsOrigins: process.env.CORS_ORIGINS,
   });

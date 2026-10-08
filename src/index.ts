@@ -7,6 +7,7 @@ import { AGENT_TOOLS } from "./agent";
 import { flockRetryAfterSeconds, rateLimitHeaders } from "@simorgh/phoenix-core";
 import { executeAgent } from "./agent-service";
 import {
+  authenticateServiceIdentity,
   authenticateServiceRequest,
   isAllowedOrigin,
   MAX_EXECUTE_BODY_CHARS,
@@ -14,6 +15,7 @@ import {
   MAX_TOOLS,
   parseExecuteBody,
   RequestValidationError,
+  subjectMatches,
 } from "./security";
 import { connectorReadiness, toolSurface } from "./platform";
 import { handleTelegramWebhook } from "./telegram";
@@ -82,6 +84,50 @@ async function requireServiceAuth(
           auth.code === "AUTH_NOT_CONFIGURED"
             ? "Simorgh API authentication is not configured."
             : "A valid Bearer token is required.",
+        requestId: c.res.headers.get("X-Request-Id"),
+      },
+    },
+    auth.status
+  );
+  if (auth.status === 401) response.headers.set("WWW-Authenticate", "Bearer");
+  return response;
+}
+
+/**
+ * Auth *and* identity, for the routes that return a resource named in the URL.
+ *
+ * `requireServiceAuth` above answers "is somebody with a valid token calling?". That was
+ * the whole check on `/api/v1/user/:userId/logs` and `/api/v1/context/:refId`, and it is
+ * not sufficient for either: both read the thing they return *out of the URL*, so a
+ * valid token let any caller name any user and take their ledger — and, because the
+ * ledger returns each request's `refId`, then take that user's stored prompts too.
+ *
+ * Resolving a subject from the credential is what turns the URL parameter into a claim
+ * that gets checked rather than a value that gets trusted.
+ *
+ * Returns the subject on success, or the `Response` to send instead. The middle case,
+ * `503 IDENTITY_UNRESOLVED`, is deliberate: the token is valid but the deployment cannot
+ * say which user it speaks for (no `SIMORGH_API_KEYS` map). Guessing an identity there
+ * would reintroduce exactly the bug this closes, so it refuses instead — and the remedy
+ * named in the message is configuration, not a new credential.
+ */
+async function requireIdentity(
+  c: Context<{ Bindings: Env }>
+): Promise<{ subject: string } | Response> {
+  const auth = await authenticateServiceIdentity(c.req.raw, c.env);
+  if (auth.ok) return { subject: auth.subject };
+
+  const response = c.json(
+    {
+      success: false,
+      error: {
+        code: auth.code,
+        message:
+          auth.code === "AUTH_NOT_CONFIGURED"
+            ? "Simorgh API authentication is not configured."
+            : auth.code === "IDENTITY_UNRESOLVED"
+              ? "This deployment cannot attribute the token to a user. Set SIMORGH_API_KEYS to a JSON map of token to user id."
+              : "A valid Bearer token is required.",
         requestId: c.res.headers.get("X-Request-Id"),
       },
     },
@@ -371,8 +417,8 @@ app.post("/api/v1/agent/execute", async (c) => {
 });
 
 app.get("/api/v1/context/:refId", async (c) => {
-  const denied = await requireServiceAuth(c);
-  if (denied) return denied;
+  const identity = await requireIdentity(c);
+  if (identity instanceof Response) return identity;
 
   const refId = c.req.param("refId");
   if (!/^[0-9a-f-]{36}$/i.test(refId)) {
@@ -389,14 +435,28 @@ app.get("/api/v1/context/:refId", async (c) => {
     );
   }
 
+  // Ownership is resolved from the ledger, which is the record that binds a `refId` to
+  // the principal that created it. `null` (no row carries this refId) is treated as
+  // "not yours" rather than "unowned" — the direction that fails closed.
+  const vaultId = c.env.DATA_TRUST_VAULT.idFromName("global");
+  const vault = c.env.DATA_TRUST_VAULT.get(vaultId);
+  const owner = await vault.findByRef(refId);
+  if (!owner || !subjectMatches(identity.subject, owner.user_id)) {
+    // Deliberately the same 404 the "no such context" case returns. Distinguishing them
+    // would make this route an oracle for which references exist — and the whole point
+    // of AUTH-003 is that the refId was never the secret. The payload is not read at all
+    // on this path, so a non-owner never causes a KV lookup.
+    return c.json({ error: "not_found" }, 404);
+  }
+
   const data = await c.env.CONTEXT_STORE.get("ctx_" + refId);
   if (!data) return c.json({ error: "not_found" }, 404);
   return c.json(JSON.parse(data));
 });
 
 app.get("/api/v1/user/:userId/logs", async (c) => {
-  const denied = await requireServiceAuth(c);
-  if (denied) return denied;
+  const identity = await requireIdentity(c);
+  if (identity instanceof Response) return identity;
 
   const userId = c.req.param("userId");
   if (!/^[A-Za-z0-9:_-]{1,128}$/.test(userId)) {
@@ -410,6 +470,23 @@ app.get("/api/v1/user/:userId/logs", async (c) => {
         },
       },
       400
+    );
+  }
+
+  // The token says who is calling; the URL says whose data they want. They must agree.
+  // `403` for *every* non-matching userId, including one that does not exist, so this
+  // cannot be used to probe which user ids are real.
+  if (!subjectMatches(identity.subject, userId)) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FORBIDDEN",
+          message: "This token may not read another user's logs.",
+          requestId: c.res.headers.get("X-Request-Id"),
+        },
+      },
+      403
     );
   }
 

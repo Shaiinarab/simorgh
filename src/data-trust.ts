@@ -4,6 +4,7 @@ import {
   ensureLedgerSchema,
   type LedgerEntry,
   type LedgerPort,
+  type LedgerRow,
   type UserLogs,
 } from "@simorgh/phoenix-core";
 
@@ -57,5 +58,21 @@ export class DataTrustVault extends DurableObject<Env> {
 
   async getUserLogs(userId: string): Promise<UserLogs> {
     return this.ledger.getUserLogs(userId);
+  }
+
+  /**
+   * The ledger row that owns an offloaded context reference, or `null`.
+   *
+   * Returns the whole row rather than just its `user_id`, so that this stub keeps being a
+   * `LedgerPort` structurally — `src/agent-service.ts` binds these two methods directly
+   * onto its `LedgerPort` with no adapter, and a narrowed return type would be what forced
+   * one into existence.
+   *
+   * `null` means "no row carries this refId", and a caller must read that as **not
+   * yours** — never as "unowned, therefore allowed". That is the direction that fails
+   * closed, and fail-closed is the only acceptable direction for an ownership check.
+   */
+  async findByRef(refId: string): Promise<LedgerRow | null> {
+    return this.ledger.findByRef(refId);
   }
 }
