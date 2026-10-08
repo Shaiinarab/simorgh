@@ -32,13 +32,25 @@ npm run dev              # wrangler dev (--local --port 8787)
 #   → http://127.0.0.1:8787/dashboard
 #   → http://127.0.0.1:8787/api/v1/flock/status
 
+# run a core on this box instead — see docs/DEPLOY.md
+export NO_PROXY=127.0.0.1,localhost
+npm run simorgh -- serve --port 8788   # keys come from process.env
+
 # deploy (typecheck-gated; needs your Cloudflare auth)
 npm run deploy           # tsgo --noEmit && wrangler deploy
 
 # add extra birds (optional — absent = dormant, safe-by-default)
 npx wrangler secret put GROQ_API_KEY
 npx wrangler secret put HF_TOKEN
+npx wrangler secret put GEMINI_API_KEY
+npx wrangler secret put OPENROUTER_API_KEY
 ```
+
+**Three places, not one.** Cloudflare is the *optional* path. A local Node run is a first-class way to
+run Simorgh — the same engine, the same core routes and wire contracts, no account and no card — and a
+self-hosted box is the third. All three, with the trap that will cost you an hour, the free-plan
+ceilings that will bite, and an honest account of which routes the Node host does *not* serve:
+**[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
 
 Then open `…workers.dev/dashboard`, exhaust Groq's quota, and **watch the flock reroute to Homā** in real time.
 
@@ -141,6 +153,10 @@ Four things it is opinionated about:
 
 ## Deploying
 
+Three places: local Node, Cloudflare Workers, or a self-hosted box. The Cloudflare walkthrough is
+below because it is the one with a moving part; the other two, and what is genuinely portable between
+them, are in **[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
+
 ```bash
 npx wrangler login
 npx wrangler kv namespace create CONTEXT_STORE   # paste the id into wrangler.toml
@@ -161,7 +177,9 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 | id | Bird | Provider | Model | Key | Priority |
 |----|------|----------|-------|-----|----------|
 | `shahin` | 🦅 Shāhīn | Groq (OpenAI-compat) | `llama-3.3-70b-versatile` | `GROQ_API_KEY` | 10 (fastest, first) |
+| `gemini` | 🔮 Gemini | Google Generative Language | `gemini-2.5-flash` | `GEMINI_API_KEY` | 15 (the one bird that is *not* OpenAI-shaped — see [ARCHITECTURE.md](docs/ARCHITECTURE.md) §1.1) |
 | `bulbul` | 🐦 Bulbul | HuggingFace Router | `meta-llama/Llama-3.3-70B-Instruct` | `HF_TOKEN` | 20 |
+| `openrouter` | 🌐 OpenRouter | OpenRouter (OpenAI-compat) | `openrouter/free` — a router over the `:free` pool, so the weights behind an answer can differ between calls | `OPENROUTER_API_KEY` | 25 |
 | `homa` | 🕊️ Homā | Cloudflare Workers AI | `@cf/meta/llama-3.2-3b-instruct` | *none* | 30 (**always present → zero-KYC guarantee**) |
 
 ---

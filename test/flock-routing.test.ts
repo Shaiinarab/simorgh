@@ -266,12 +266,29 @@ describe("flyFlock — routing policy", () => {
 });
 
 describe("flyFlock — the real flock", () => {
-  it("is ordered Shāhīn → Bulbul → Homā, with Homā key-free", () => {
+  it("is ordered Shāhīn → Gemini → Bulbul → OpenRouter → Homā, with Homā key-free", () => {
+    // A completeness pin: the roster and the order it is consulted in *are* the contract
+    // here, so this stays `toEqual`. Gemini and OpenRouter were slotted between the
+    // existing birds rather than appended — see the catalog comment in src/flock.ts.
     const sorted = [...FLOCK].sort((a, b) => a.priority - b.priority);
-    expect(sorted.map((b) => b.id)).toEqual(["shahin", "bulbul", "homa"]);
+    expect(sorted.map((b) => b.id)).toEqual([
+      "shahin",
+      "gemini",
+      "bulbul",
+      "openrouter",
+      "homa",
+    ]);
 
     const homa = FLOCK.find((b) => b.id === "homa");
     expect(homa?.keyEnv).toBeUndefined();
+
+    // The ordering has a reason, and the literal above stops expressing it the moment the
+    // roster changes, so state it as a property: everything ahead of Homā needs a secret,
+    // or those birds are permanently unreachable. A new bird appended after it, or a
+    // key-free one placed in front, fails here.
+    const homaIndex = sorted.findIndex((b) => b.id === "homa");
+    expect(homaIndex).toBeGreaterThan(0);
+    expect(sorted.slice(0, homaIndex).every((b) => b.keyEnv !== undefined)).toBe(true);
   });
 
   it("delivers the zero-KYC guarantee: with no secrets at all, Homā still answers", async () => {
@@ -281,9 +298,16 @@ describe("flyFlock — the real flock", () => {
 
     expect(result.meta.answered_by).toBe("Homā (Cloudflare Workers AI)");
     expect(result.answer).toBe("homa-answer");
+    // Also a completeness pin, and the strongest one in the file: the attempt log is how
+    // you see that the loop walked *past every* keyed bird before Homā answered. Dropping
+    // any of the three dormant entries, or reordering them, means a bird was skipped
+    // silently or reached at the wrong priority — so this stays `toEqual`, not
+    // `toContain`.
     expect(result.meta.flock_attempts).toEqual([
       { birdId: "shahin", ok: false, error: "dormant" },
+      { birdId: "gemini", ok: false, error: "dormant" },
       { birdId: "bulbul", ok: false, error: "dormant" },
+      { birdId: "openrouter", ok: false, error: "dormant" },
       { birdId: "homa", ok: true },
     ]);
   });

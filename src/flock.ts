@@ -38,6 +38,7 @@ import {
   consumeRateLimit,
   describeFlock,
   flyFlock as coreFlyFlock,
+  geminiProvider,
   openAiCompatibleProvider,
   readAllHealth,
   readAllQuota,
@@ -170,12 +171,18 @@ export function readFlockStatus(env: Env): Promise<HostFlockStatus> {
 /** One provider's line in the public flock status payload. */
 export type BirdStatus = ProviderStatus;
 
-export type SecretKey = "GROQ_API_KEY" | "HF_TOKEN";
+export type SecretKey =
+  | "GROQ_API_KEY"
+  | "HF_TOKEN"
+  | "GEMINI_API_KEY"
+  | "OPENROUTER_API_KEY";
 
 export interface FlockEnv {
   AI: Ai;
   GROQ_API_KEY?: string;
   HF_TOKEN?: string;
+  GEMINI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
 }
 
 export interface BirdCallResult {
@@ -196,11 +203,32 @@ export interface Bird {
 
 // ── The catalog ───────────────────────────────────────────────────────────────
 //
-// Built from the engine's factories, so the OpenAI-compatible request shape (and its
-// 429/`http_<status>`/throw handling) exists in exactly one place. Display names stay
-// here: they are Simorgh's branding, and core is the part other products import.
+// Built from the engine's factories, so the request shapes (and their
+// 429/`http_<status>`/throw handling) exist in exactly one place each — the OpenAI
+// chat-completions shape for Shāhīn/Bulbul/OpenRouter, Google's `generateContent` shape
+// for Gemini, and the binding call for Homā. Display names stay here: they are Simorgh's
+// branding, and core is the part other products import.
+//
+// Every entry here is *optional by configuration*, and it says so by naming its secret
+// in `requires` rather than by being omitted: a bird with no key is reported `dormant`
+// in `/api/v1/flock/status` and skipped by the routing loop without a cooldown, because
+// a missing key is a deployment fact and not a provider fault. Registering a bird and
+// then discovering its key at dial time is the "registered-and-broken" shape this
+// avoids.
 
 const HOMA_MODEL = "@cf/meta/llama-3.2-3b-instruct";
+const GEMINI_MODEL = "gemini-2.5-flash";
+
+/**
+ * OpenRouter's router over its free-model pool.
+ *
+ * `openrouter/free` is not a model — it is a rotating router that dispatches to whichever
+ * `:free` models are available, so the model behind the answer changes between calls.
+ * That is the point for this flock: the bird's identity is "a free OpenAI-compatible
+ * endpoint", not a claim about which weights produced the text, and the transparency
+ * ledger records the bird, not a model that may not have been the one used.
+ */
+const OPENROUTER_MODEL = "openrouter/free";
 
 export const PROVIDERS: readonly Provider[] = [
   openAiCompatibleProvider({
@@ -212,6 +240,18 @@ export const PROVIDERS: readonly Provider[] = [
     endpoint: "https://api.groq.com/openai/v1/chat/completions",
     requires: "GROQ_API_KEY",
   }),
+  // Keyed, like Shāhīn, and slotted between the existing birds rather than appended:
+  // Homā is the key-free bird that delivers the zero-KYC guarantee, so anything that
+  // needs a secret belongs *ahead* of it. Appending instead would leave both new birds
+  // permanently unreachable — Homā would answer first on every single request.
+  geminiProvider({
+    id: "gemini",
+    name: "Gemini",
+    provider: "Google Generative Language",
+    model: GEMINI_MODEL,
+    priority: 15,
+    requires: "GEMINI_API_KEY",
+  }),
   openAiCompatibleProvider({
     id: "bulbul",
     name: "Bulbul",
@@ -220,6 +260,22 @@ export const PROVIDERS: readonly Provider[] = [
     priority: 20,
     endpoint: "https://router.huggingface.co/v1/chat/completions",
     requires: "HF_TOKEN",
+  }),
+  // Not a bespoke `openRouterProvider`: OpenRouter *is* OpenAI-compatible, and the only
+  // things it adds are a URL and two attribution headers. That is what `extraHeaders` on
+  // the shared spec is for, so the next OpenAI-compatible vendor costs one entry here.
+  openAiCompatibleProvider({
+    id: "openrouter",
+    name: "OpenRouter",
+    provider: "OpenRouter (OpenAI-compat)",
+    model: OPENROUTER_MODEL,
+    priority: 25,
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    requires: "OPENROUTER_API_KEY",
+    extraHeaders: {
+      "HTTP-Referer": "https://github.com/Shaiinarab/simorgh",
+      "X-Title": "Simorgh",
+    },
   }),
   workersAiProvider({
     id: "homa",

@@ -47,7 +47,14 @@ export interface DeployStep {
   id: string;
   description: string;
   run?: readonly string[];
-  /** What the human does, when `run` is absent. */
+  /**
+   * What the human does, when `run` is absent.
+   *
+   * Also set on a step that *has* a command when the operator needs to know how to run
+   * it themselves, or what to install first. `renderPlan` shows exactly one of the two per
+   * mode — the prose in `manual`, the argv in `cli` — so the two never double up, and a
+   * prose-only step is still complete on its own.
+   */
   manual?: string;
   /** Secret names this step needs in its environment. */
   needs?: readonly string[];
@@ -112,7 +119,9 @@ const CLOUDFLARE_WORKERS: DeploymentTarget = {
     {
       id: "deps",
       description: "Install workspace dependencies",
-      run: ["npm", "ci"],
+      run: ["upm", "install", "--frozen-lockfile"],
+      manual:
+        "upm install --frozen-lockfile, run from the repository root. upm installs and upm.lock is the committed lockfile (ADR-0004); --frozen-lockfile makes a deploy fail loudly rather than re-resolve a dependency tree nobody reviewed. If `upm` is not on PATH, install it with `npm i -g upm` — npm survives as a dev dependency of the build for exactly that, and for `npm audit`. There is deliberately no npm-install fallback: `npm ci` requires the package-lock.json that ADR-0004 deleted and that must never come back.",
     },
     {
       id: "kv",
@@ -172,7 +181,9 @@ const NODE: DeploymentTarget = {
     {
       id: "deps",
       description: "Install workspace dependencies",
-      run: ["npm", "ci"],
+      run: ["upm", "install", "--frozen-lockfile"],
+      manual:
+        "upm install --frozen-lockfile, run from the repository root. upm installs and upm.lock is the committed lockfile (ADR-0004); --frozen-lockfile makes a deploy fail loudly rather than re-resolve a dependency tree nobody reviewed. If `upm` is not on PATH, install it with `npm i -g upm`. There is deliberately no npm-install fallback: `npm ci` requires the package-lock.json that ADR-0004 deleted and that must never come back.",
     },
     {
       id: "smoke",

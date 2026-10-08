@@ -17,6 +17,7 @@ export * from "./flock.ts";
 export * from "./health.ts";
 export * from "./rate-limit.ts";
 export * from "./quota.ts";
+export * from "./capabilities.ts";
 export * from "./scheduled.ts";
 export * from "./tasks.ts";
 export * from "./swarm.ts";

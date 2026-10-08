@@ -20,7 +20,7 @@ Every file below exists and is in the build. This is the map to reach for before
 | File | Owns |
 |------|------|
 | `ports.ts` | The seven ports. The only place any of them is declared. |
-| `provider.ts` | The `Provider` contract plus factories (`openAiCompatibleProvider`, `workersAiProvider`) |
+| `provider.ts` | The `Provider` contract plus factories (`openAiCompatibleProvider`, `geminiProvider`, `workersAiProvider`) — one per **wire shape**, not one per vendor |
 | `flock.ts` | `flyFlock()`: priority routing, dormant skip, cooldowns, fail-through, exhaustion, and `describeFlock()` status assembly |
 | `agent.ts` | The agent loop: registry, argument extraction, per-tool failure capture, truncation, the synthesis prompt, the iteration budget |
 | `tools.ts` | `createToolExecutor()` — what each allow-listed tool *does* (the request, the parsing, the failure text) |
@@ -157,6 +157,13 @@ Every change must not break these rules. Each is asserted where noted.
 1. Create a factory returning a `Provider` (interface: `phoenix-core/src/provider.ts`). At minimum: `id`, `name`, `provider`, `model`, `priority`, `call(prompt, ctx)`. Optionally `requires` for secret-gated dormancy.
 2. Add it to the host's provider catalog — Node: `simorgh-platform/src/runtimes/providers.ts` (uses `defaultProviders()`). Workers: inline in the host entry (`src/index.ts`).
 3. If the provider needs a secret, add it to the relevant target's `secrets` in `simorgh-platform/src/targets.ts` and to the deploy step's `needs`.
+
+> **Pick the factory by wire shape, not by vendor.** `geminiProvider` is a separate factory because
+> Google's Generative Language API is *not* OpenAI-compatible, and the difference is not cosmetic: the
+> model sits in the **URL path**, the credential is an `x-goog-api-key` header rather than a bearer
+> token, and the answer lives at `candidates[0].content.parts[0].text`. Reusing
+> `openAiCompatibleProvider` for it returns `""` on every call while the bird still reports itself
+> healthy — a wrong read path rather than a missing one, which is the quietest possible failure.
 
 ### Adding a deployment target
 

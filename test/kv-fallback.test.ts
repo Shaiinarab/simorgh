@@ -146,7 +146,12 @@ describe("readFlockStatus — the wiring the route and the Telegram command use"
   it("reads live through the real bindings and leaves a KV snapshot", async () => {
     const status = await readFlockStatus(env);
 
-    expect(status.birds.map((b) => b.id)).toEqual(["shahin", "bulbul", "homa"]);
+    // Incidental mention of the roster, not a roster pin — this story is the KV fallback,
+    // and the roster is pinned exactly in test/durable-objects.test.ts. What has to hold
+    // here is that the *live* DO read succeeded and carried the key-free bird. Note that
+    // the stale-snapshot path would also contain "homa", so the live-vs-cached property is
+    // asserted by the missing `source` marker below, not by the ids.
+    expect(status.birds.map((b) => b.id)).toContain("homa");
     expect(status).not.toHaveProperty("source");
 
     const cached = (await env.CONTEXT_STORE.get(
@@ -154,7 +159,10 @@ describe("readFlockStatus — the wiring the route and the Telegram command use"
       "json"
     )) as FlockStatus | null;
     expect(cached).not.toBeNull();
-    expect(cached?.birds.map((b) => b.id)).toEqual(["shahin", "bulbul", "homa"]);
+    // Derived from the read just made, not a second literal: the snapshot's value is that
+    // it is a faithful copy of the live answer, and a copied literal stops saying that the
+    // moment the roster changes.
+    expect(cached?.birds.map((b) => b.id)).toEqual(status.birds.map((b) => b.id));
   });
 
   it("falls back to that snapshot when the namespace throws", async () => {
@@ -194,6 +202,9 @@ describe("readFlockStatus — the wiring the route and the Telegram command use"
       timestamp: expect.any(Number),
     });
     expect(body.source).toBeUndefined();
-    expect(body.birds.map((b) => b.id)).toEqual(["shahin", "bulbul", "homa"]);
+    // Again incidental to this story: the shape above is the published contract, and the
+    // exact roster is pinned in test/durable-objects.test.ts. Over the wire, what this test
+    // owes the operator is that a zero-KYC deploy still shows an answerable bird.
+    expect(body.birds.map((b) => b.id)).toContain("homa");
   });
 });

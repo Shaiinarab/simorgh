@@ -38,5 +38,11 @@ ENVIRONMENT = "production"
 # npx wrangler secret put TELEGRAM_BOT_TOKEN
 # npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
 #
+# Optional provider keys. Each one is the *only* thing that activates its bird: without
+# it the provider reports itself `dormant` on /api/v1/flock/status and is skipped
+# without a cooldown, so a zero-key deployment still answers via Homā (Workers AI).
+# npx wrangler secret put GEMINI_API_KEY
+# npx wrangler secret put OPENROUTER_API_KEY
+#
 # Browser origins are non-secret and should be set per deployment:
 # CORS_ORIGINS = "https://your-vercel-dashboard.example"
