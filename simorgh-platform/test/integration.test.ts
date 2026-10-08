@@ -147,6 +147,62 @@ describe("a live core reached over REST", () => {
     expect(await intruder.json()).toEqual({ error: "not_found" });
   });
 
+  it("serves the same capability matrix the edge does, from this host's own roster", async () => {
+    const res = await fetch(`${runtime.url}/api/v1/capabilities`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      capabilities: {
+        capability: string;
+        available: string[];
+        degraded: boolean;
+        considered: { adapter: string; cost: string; keyFree: boolean; reason?: string }[];
+      }[];
+      summary: string[];
+    };
+
+    const byCapability = Object.fromEntries(
+      body.capabilities.map((entry) => [entry.capability, entry])
+    );
+    expect(Object.keys(byCapability).sort()).toEqual([
+      "embeddings",
+      "inference",
+      "scheduler",
+      "sync",
+      "vector",
+    ]);
+
+    // The matrix describes the roster this runtime was *given* — `providers: [canned]` —
+    // not a catalogue compiled into the engine. That is the whole point of probing rather
+    // than enumerating, so the assertion is about the injected double's id.
+    const inference = byCapability.inference;
+    expect(inference?.considered.map((v) => v.adapter)).toEqual(["canned"]);
+    expect(inference?.available).toEqual(["canned"]);
+    expect(inference?.considered[0]?.keyFree).toBe(true);
+
+    // An adapter nobody classified reports `unknown`, never `free` — ADR-0005's default is
+    // the direction that fails closed, and a test double is exactly the unclassified case.
+    expect(inference?.considered[0]?.cost).toBe("unknown");
+
+    for (const name of ["embeddings", "vector", "sync", "scheduler"]) {
+      expect(byCapability[name]?.degraded).toBe(true);
+      expect(byCapability[name]?.considered.map((v) => v.reason)).toEqual([
+        "no_adapter_registered",
+      ]);
+    }
+
+    // The rendered summary is part of the contract, not a debugging aid: it is the line an
+    // operator reads. A capability that quietly vanished from it would be the failure the
+    // whole module exists to prevent.
+    expect(body.summary.at(-1)).toBe("4 of 5 capabilities degraded");
+  });
+
+  it("gates the capability matrix on this host too", async () => {
+    const res = await fetch(`${runtime.url}/api/v1/capabilities`);
+    expect(res.status).toBe(401);
+  });
+
   it("refuses a caller with no token", async () => {
     const anonymous = restConnector({
       endpoint: runtime.url,

@@ -33,6 +33,9 @@ import {
   RequestValidationError,
   authenticateServiceIdentity,
   authenticateServiceRequest,
+  buildCapabilityStatus,
+  builtInCostOf,
+  claimedCapabilities,
   consumeRateLimit,
   createToolExecutor,
   describeFlock,
@@ -40,11 +43,14 @@ import {
   isAllowedOrigin,
   parseExecuteBody,
   parseTokenSubjects,
+  providerProbes,
   readAllHealth,
   readCooldown,
   recordObservation,
+  renderCapabilitySummary,
   subjectMatches,
   sweepStale,
+  unclaimedCapabilityProbes,
   type AgentTool,
   type FetchLike,
   type Provider,
@@ -272,6 +278,30 @@ export async function startNodeRuntime(
         );
         for (const [key, value] of Object.entries(outcome.headers)) res.setHeader(key, value);
         return send(res, outcome.status, outcome.payload);
+      }
+
+      // The capability matrix (TASK-017), the same route the edge host serves from the same
+      // engine pairing — `providerProbes(providers, secretOf, builtInCostOf)`. The roster is
+      // this host's `defaultProviders`, read through this host's secret accessor, so the
+      // matrix describes the flock this runtime actually dials rather than a second list.
+      //
+      // Gated, for the reason the edge route states at length: it names which providers the
+      // deployment holds keys for. Both hosts must make the same choice, and it is asserted
+      // in the integration suite rather than assumed.
+      if (path === "/api/v1/capabilities" && req.method === "GET") {
+        const denied = await requireAuth(req, res, requestId);
+        if (denied) return;
+
+        const probes = providerProbes(providers, secretOf, builtInCostOf);
+        const statuses = buildCapabilityStatus([
+          ...probes,
+          ...unclaimedCapabilityProbes(claimedCapabilities(probes)),
+        ]);
+
+        return send(res, 200, {
+          capabilities: statuses,
+          summary: renderCapabilitySummary(statuses),
+        });
       }
 
       if (path.startsWith("/api/v1/user/") && path.endsWith("/logs") && req.method === "GET") {
