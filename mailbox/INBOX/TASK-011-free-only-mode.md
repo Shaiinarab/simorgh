@@ -1,7 +1,7 @@
 # TASK-011 — make FREE_ONLY a real, enforced resource mode in the quota engine
 
 - Owner: fb3
-- Status: open
+- Status: done (Lead 2026-10-08T21:59)
 - Depends on: nothing · Estimate: 90–120 min · Runner: freebuff CLI agent (podman)
 
 ## Why this exists
