@@ -1,7 +1,7 @@
 # TASK-017 — Expose the capability matrix: the layer is built, wired to nothing
 
 - Owner: any
-- Status: open
+- Status: done (fb2 2026-10-08T16:58)
 - Depends on: nothing · Estimate: 90–120 min · Runner: any agent that can run the two suites
 
 ## 0. Start here: introduce yourself

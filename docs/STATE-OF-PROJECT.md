@@ -427,8 +427,8 @@ paths now agree. Worth noting as a pattern: the test that caught this was not wr
 | Check | Result |
 |---|---|
 | `npm run typecheck` | clean, 3 configs |
-| `npm run test:workers` | **134 passed**, 14 files |
-| `npm run test:node` | **462 passed**, 25 files |
+| `npm run test:workers` | **138 passed**, 14 files |
+| `npm run test:node` | **473 passed**, 25 files |
 | `npm run platform:smoke` | **5/5** |
 | `npm run e2e:ask` | **10/10** |
 | `go build` / `go vet` / `go test` | green, 6 packages |
@@ -437,3 +437,30 @@ paths now agree. Worth noting as a pattern: the test that caught this was not wr
 The per-file composition in §3.1 is **stale** and is left as written 2026-09-22 rather than
 re-derived: it described a tree three commits old, and the totals above are the ones a regression
 should be measured against. Re-derive the per-file numbers if a specific file's count is what you need.
+
+### 11.6 The capability matrix is wired, so the pattern is now broken once in each direction
+
+`capabilities.ts` and the identity primitives were both built-but-unwired. The second one is now wired:
+`GET /api/v1/capabilities` on **both** hosts, over a shared probe layer
+(`phoenix-core/src/capability-probes.ts`, TASK-017, five commits). It is bearer-gated, because it names
+which providers the deployment holds keys for.
+
+A live core, on a **host difference four documents describe and no command previously showed**:
+
+```
+GET /api/v1/capabilities  (node host, real defaultProviders, 3 keys set)
+  inference   ok       3/4 available: shahin, gemini, bulbul
+  embeddings  DEGRADED 0/1 available: (none)  [no_adapter_registered]
+  ... 4 of 5 capabilities degraded
+```
+
+**Four adapters, not five, and that is correct** — the Node roster is the Workers catalog *minus Homā*,
+because Homā is a Cloudflare binding with no Node equivalent. With no keys at all but `OLLAMA_BASE_URL`
+set, the same endpoint answers `inference ok 1/5 available: ollama` — the key-free local path is real.
+
+**One open gap, and it is a vocabulary problem rather than a missing line:** `ollama` classifies as
+`unknown`, so under `FREE_ONLY` the planner refuses the *only* key-free option on the self-hosted host.
+`renewing` means "does this allowance refill", and a local daemon has no allowance — your own hardware,
+unbounded and always present. Neither `true` (a refilling quota that does not exist) nor `false` (a
+one-time grant, spend last) is true, so this needs a third state decided rather than a value guessed.
+Recorded in `DEFAULT_PROVIDER_COST` and in `mailbox/OUTBOX/TASK-017-REPORT.md` §4.
