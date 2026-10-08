@@ -1,8 +1,9 @@
 # Simorgh — project scope and current state
 
-**Written:** 2026-09-22 · **Branch:** `feat/phoenix-core-modularization`, stacked on `e0053fc` (= the
-head of PR #1, `origin/production-readiness-v0-3`) · **Status:** all TS suites green (93 + 261), the Go
-workspace green, verified twice (host + clean container)
+**Written:** 2026-09-22 · **Updated:** 2026-10-08 (§11) · **Branch:**
+`feat/phoenix-core-modularization`, stacked on `e0053fc` (= the head of PR #1,
+`origin/production-readiness-v0-3`) · **Status:** all TS suites green (**134 + 462**, up from 93 + 261
+on 2026-09-22 — see §11 for what grew), the Go workspace green
 
 > **Read this as a claim set, not a fact set.** Every number and path below was true when written and
 > every one is re-derivable with the commands given. If this file and the code disagree, **the code
@@ -356,6 +357,83 @@ answered this question was built, proven, and then removed by owner decision (`5
 - **`docs/OBSERVABILITY.md`** — what exists, what the ledger already answers, and the one real gap:
 **provider latency is recorded nowhere on the TypeScript side** (while the Go side keeps an EMA).
 - **`scripts/security-scan.sh`** — the secrets + dependency gate, wired into CI *and* runnable locally as
-`npm run security:scan`. Verified with a negative control: exit `1` with a planted token, `0` clean.
-- **`.agents/skills/`** — five project skills: `simorgh-architecture`, `simorgh-testing`,
-`simorgh-deploy-boundary`, `simorgh-go-workspace`, `simorgh-lanes`.
+`npm run security:scan`. Verified with a negative control: exit `1` with a planted token, `0` clean.- **`.agents/skills/`** — five project skills: `simorgh-architecture`, `simorgh-testing`,
+  `simorgh-deploy-boundary`, `simorgh-go-workspace`, `simorgh-lanes`.
+
+---
+
+## 11. The 2026-10-08 pass — the launch-blocking security fix, and two commits
+
+**Written 2026-10-08 by the fb2 lane.** Everything below was run, not read; commands are in §6.
+
+### 11.1 The finding that mattered: a fix that was staged but not wired
+
+The tree arrived with **4,223 lines staged and uncommitted** across 25 paths, and `npm run typecheck`
+**failing** on one of them (`parseTokenSubjects` returned `{[k: string]: unknown}`, which is not
+`Readonly<Record<string, string>>`). Fixing that type error unblocked the rest.
+
+The staged work turned out to contain the primitives for the **AUTH-002/AUTH-003 fix** — and none of
+the wiring. `authenticateServiceIdentity` had **zero callers**; `subjectMatches` had **zero callers
+anywhere, including tests**; and `src/index.ts` had not been touched at all. So both IDOR holes were
+still open while the code that closes them sat in the diff looking finished. This is the repo's own
+documented failure mode — *an all-green suite hiding a real defect* — and the reason the audit's
+§4 acceptance is void here is that the 11 October launch is both a **second principal** and a **public
+deployment**, the two triggers it names.
+
+### 11.2 What landed, as two commits
+
+| Commit | What it carries |
+|---|---|
+| `85f5be5` | `feat(core)`: the capability layer, provider parity, the Gemini/OpenRouter birds, the `upm`-correct deploy step, and the four docs that are that work's rationale |
+| `ffd925c` | `fix(security)`: AUTH-002 + AUTH-003 closed **on both hosts**, with tests, a positive control inside each test, and a negative control run on each host |
+
+The security commit is the one to read. Three things in it are worth carrying forward:
+
+1. **The Node host had the identical hole.** `simorgh-platform/src/runtimes/node.ts` served the same
+   two routes with the same missing check. A fix on the edge alone would have left a reachable host,
+   and the workerd suite cannot see the Node runtime at all — which is exactly the asymmetry §3.1's
+   per-file counts exist to make visible.
+2. **Ownership needed the ledger.** A `refId` had no link to a principal except the append-only
+   `ref_id` column, so this added `LedgerPort.findByRef`, an index, and the DO RPC. The index is a
+   *second* `exec()` rather than more text in `LEDGER_SCHEMA`, because the Node host's `SqlPort` is
+   `node:sqlite`'s `prepare()`, which prepares **one** statement — the combined version would have
+   thrown there while passing on a Durable Object.
+3. **Deliberate behaviour change, and it is a refusal.** With `SIMORGH_API_KEY` alone there is no way
+   to attribute a token to a user, so the per-user routes answer `503 IDENTITY_UNRESOLVED` instead of
+   guessing. A solo deployment loses only the ability to read a per-user ledger until it sets
+   `SIMORGH_API_KEYS`. Every other route is unaffected.
+
+### 11.3 A second bug, found because a test disagreed
+
+`authenticateServiceIdentity` checked the token *before* the configuration, so an unconfigured
+deployment answered `401` on these two routes where the rest of the app answers `503`.
+`platform-connectors.test.ts` caught it — its per-route "fails closed" assertion is the reason the two
+paths now agree. Worth noting as a pattern: the test that caught this was not written for this change.
+
+### 11.4 Found, not fixed
+
+- **A `SIMORGH_API_KEYS` token cannot execute.** It can read its own data but `/api/v1/agent/execute`
+  still authenticates against `SIMORGH_API_KEY` alone, so a multi-caller deployment must issue both.
+  Closing it is not mechanical: the `userId` would have to come from the token instead of
+  `X-Simorgh-User-Id`, or a caller can spend another caller's rate-limit budget and write ledger rows
+  in their name (AUTH-004). Recorded at `NodeRuntimeOptions.apiKeys`.
+- **Four HIGH findings remain carried** under the audit's §4: AUTH-001, SSRF-001, MCP-001, SEC-001.
+  With AUTH-002/003 closed the §4 table records two of its six as no longer deferred.
+- **Retrieval is still unbuilt** (`docs/research/WHERE-WE-ARE-AND-WHERE-WE-GO.md` §1). The launch cut
+  deliberately excludes it; the embedding budget, not the engineering, is the binding constraint.
+
+### 11.5 Numbers as of this commit
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | clean, 3 configs |
+| `npm run test:workers` | **134 passed**, 14 files |
+| `npm run test:node` | **462 passed**, 25 files |
+| `npm run platform:smoke` | **5/5** |
+| `npm run e2e:ask` | **10/10** |
+| `go build` / `go vet` / `go test` | green, 6 packages |
+| `npm run security:scan` | PASS |
+
+The per-file composition in §3.1 is **stale** and is left as written 2026-09-22 rather than
+re-derived: it described a tree three commits old, and the totals above are the ones a regression
+should be measured against. Re-derive the per-file numbers if a specific file's count is what you need.
