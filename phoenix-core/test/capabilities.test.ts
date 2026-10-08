@@ -19,6 +19,13 @@ import {
   type AdapterProbe,
   type CapabilityStatus,
 } from "../src/capabilities.ts";
+import {
+  UNCLASSIFIED_COST,
+  builtInCostOf,
+  providerProbes,
+  unclaimedCapabilityProbes,
+} from "../src/capability-probes.ts";
+import type { Provider } from "../src/provider.ts";
 
 /** A probe that works. Every field explicit, so a test never relies on a default. */
 function probe(over: Partial<AdapterProbe> & Pick<AdapterProbe, "adapter" | "capability">): AdapterProbe {
@@ -492,6 +499,139 @@ for (const line of renderCapabilitySummary(statuses)) {
 // Each block below was run and its red output pasted into the module's commit/report.
 // They are kept here as executable documentation: the next person who changes a rule
 // should be able to re-run the control rather than trust that it once worked.
+
+// ── The probe half: provider list → probes ────────────────────────────────────
+//
+// `capability-probes.ts` is where both hosts get their probes, so these cases are about the
+// mapping's honesty rather than its mechanics: that it agrees with the flock's own dormancy
+// rule, that an unclassified adapter is never free, and that a capability nothing claimed is
+// still reported. The host suites assert the same behaviour end to end over HTTP; these pin
+// the rules, which is where a regression is cheapest to catch.
+
+describe("providerProbes", () => {
+  const provider = (id: string, requires?: string): Provider => ({
+    id,
+    name: id,
+    provider: "Test",
+    model: "m",
+    priority: 1,
+    ...(requires !== undefined ? { requires } : {}),
+    async call() {
+      return { ok: true, answer: "" };
+    },
+  });
+
+  const noSecrets = () => undefined;
+
+  it("reuses the flock's dormancy rule: a keyed provider is unusable without its secret", () => {
+    const probes = providerProbes(
+      [provider("keyed", "SOME_KEY"), provider("free")],
+      noSecrets,
+      builtInCostOf
+    );
+
+    expect(probes.map((p) => [p.adapter, p.ok])).toEqual([
+      ["keyed", false],
+      ["free", true],
+    ]);
+    // `requires` is carried so the engine can derive `missing_config:<NAME>`. The probe
+    // deliberately invents no reason, which is what keeps every refusal phrased alike.
+    expect(probes[0]?.requires).toEqual(["SOME_KEY"]);
+    expect(probes[0]?.reason).toBeUndefined();
+    expect(probes[1]?.requires).toBeUndefined();
+  });
+
+  it("turns the secret on, and only for the provider that asked for it", () => {
+    const probes = providerProbes(
+      [provider("keyed", "SOME_KEY"), provider("other", "OTHER_KEY")],
+      (name) => (name === "SOME_KEY" ? "present" : undefined),
+      builtInCostOf
+    );
+    expect(probes.map((p) => [p.adapter, p.ok])).toEqual([
+      ["keyed", true],
+      ["other", false],
+    ]);
+  });
+
+  it("carries the model and priority through, so the matrix can be read without the catalog", () => {
+    const [first] = providerProbes([provider("solo")], noSecrets);
+    expect(first?.meta).toEqual({ priority: 1, model: "m", vendor: "Test" });
+  });
+
+  it("defaults an unclassified adapter to `unknown`, never `free`", () => {
+    // ADR-0005 expressed as a default value: nothing classified this adapter, so nothing may
+    // call it free. The failure mode of getting this wrong is an invoice.
+    const [first] = providerProbes([provider("mystery")], noSecrets);
+    expect(first?.cost).toBe("unknown");
+    expect(first?.renewing).toBe(false);
+    expect(UNCLASSIFIED_COST.cost).toBe("unknown");
+  });
+
+  it("classifies the built-in roster, and refuses to guess at HuggingFace", () => {
+    // The load-bearing rows. `bulbul` was classified free while HuggingFace had a free
+    // inference tier; TASK-015 found that tier gone, so its cost is now unclassified rather
+    // than assumed. This is the assertion that keeps that true — nothing else would notice a
+    // later edit quietly restoring it to `free` and routing routine work onto an allowance
+    // that is not there.
+    expect(builtInCostOf("shahin").cost).toBe("free");
+    expect(builtInCostOf("gemini").cost).toBe("free");
+    expect(builtInCostOf("openrouter").cost).toBe("free");
+    expect(builtInCostOf("homa").cost).toBe("free");
+    expect(builtInCostOf("bulbul").cost).toBe("unknown");
+    // The fail-closed fallback, which is what makes a hand-maintained table acceptable.
+    expect(builtInCostOf("some-new-bird")).toEqual(UNCLASSIFIED_COST);
+  });
+
+  it("marks the key-free bird key-free and every keyed one not", () => {
+    const probes = providerProbes(
+      [provider("keyed", "SOME_KEY"), provider("free")],
+      noSecrets,
+      builtInCostOf
+    );
+    expect(probes.map((p) => (p.requires?.length ?? 0) === 0)).toEqual([false, true]);
+  });
+});
+
+describe("unclaimedCapabilityProbes", () => {
+  it("reports every capability that no adapter claimed, as failed with a reason", () => {
+    const probes = unclaimedCapabilityProbes(["inference"]);
+    expect(probes.map((p) => p.capability)).toEqual([
+      "embeddings",
+      "vector",
+      "sync",
+      "scheduler",
+    ]);
+    expect(probes.every((p) => p.ok === false)).toBe(true);
+    expect(probes.map((p) => p.reason)).toEqual([
+      "no_adapter_registered",
+      "no_adapter_registered",
+      "no_adapter_registered",
+      "no_adapter_registered",
+    ]);
+    // Never `free`: nothing is running, so there is no cost to make a claim about.
+    expect(probes.every((p) => p.cost === "unknown")).toBe(true);
+    // And the adapter id cannot be mistaken for a vendor in a log.
+    expect(probes.every((p) => p.adapter.startsWith("no-adapter:"))).toBe(true);
+  });
+
+  it("claims nothing when every capability already has an adapter", () => {
+    expect(unclaimedCapabilityProbes([...CAPABILITY_NAMES])).toEqual([]);
+  });
+
+  it("is what makes an unserved capability appear rather than vanish", () => {
+    // The launch plan's rule, as a test: `buildCapabilityStatus` cannot invent a row, so
+    // without this the four empty capabilities would simply be absent — and a reader would
+    // infer "not applicable" where the truth is "not available".
+    const statuses = buildCapabilityStatus(unclaimedCapabilityProbes(["inference"]));
+    expect(statuses.map((s) => s.capability)).toEqual([
+      "embeddings",
+      "vector",
+      "sync",
+      "scheduler",
+    ]);
+    expect(statuses.every((s) => s.degraded)).toBe(true);
+  });
+});
 
 describe("negative controls", () => {
   it("would fail if the unknown-cost rule were removed (control — re-derive by breaking costVerdict)", () => {
