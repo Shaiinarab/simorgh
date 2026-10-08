@@ -1,10 +1,19 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { FlockCoordinator, readFlockStatus } from "./flock";
+import { FlockCoordinator, PROVIDERS, readFlockStatus } from "./flock";
 import { DataTrustVault } from "./data-trust";
 import { renderDashboard } from "./dashboard";
 import { AGENT_TOOLS } from "./agent";
-import { flockRetryAfterSeconds, rateLimitHeaders } from "@simorgh/phoenix-core";
+import {
+  buildCapabilityStatus,
+  builtInCostOf,
+  claimedCapabilities,
+  flockRetryAfterSeconds,
+  providerProbes,
+  rateLimitHeaders,
+  renderCapabilitySummary,
+  unclaimedCapabilityProbes,
+} from "@simorgh/phoenix-core";
 import { executeAgent } from "./agent-service";
 import {
   authenticateServiceIdentity,
@@ -414,6 +423,44 @@ app.post("/api/v1/agent/execute", async (c) => {
   }
 
   return c.json(result);
+});
+
+// ── The capability matrix ─────────────────────────────────────────────────────
+//
+// The launch's demo and its honesty test in one payload: what this deployment can actually
+// do, probed rather than asserted, with a reason for every gap. `capabilities.ts` does the
+// ranking and the explaining; this route only supplies the probes, which are built from the
+// same `PROVIDERS` the routing loop dials — so the matrix cannot claim a bird the flock
+// does not fly.
+//
+// **Bearer-gated, unlike `/api/v1/flock/status`.** This payload names which providers the
+// deployment holds keys for, which is the same secret-presence map that makes AUTH-001 an
+// open finding. The dashboard needs flock status before a key is configured; it does not
+// need this, and adding a second unauthenticated reconnaissance surface on the way to a
+// public launch would be a decision rather than an oversight. If that changes, it changes
+// with AUTH-001 and in the open.
+app.get("/api/v1/capabilities", async (c) => {
+  const denied = await requireServiceAuth(c);
+  if (denied) return denied;
+
+  // The same accessor the flock uses: a secret is whatever `Env` holds under that name.
+  const secret = (name: string): string | undefined => {
+    const value = (c.env as unknown as Record<string, unknown>)[name];
+    return typeof value === "string" ? value : undefined;
+  };
+
+  const probes = providerProbes(PROVIDERS, secret, builtInCostOf);
+  const statuses = buildCapabilityStatus([
+    ...probes,
+    // Reported rather than omitted: "can this box do embeddings" has an answer, and it is
+    // no. See `unclaimedCapabilityProbes`.
+    ...unclaimedCapabilityProbes(claimedCapabilities(probes)),
+  ]);
+
+  return c.json({
+    capabilities: statuses,
+    summary: renderCapabilitySummary(statuses),
+  });
 });
 
 app.get("/api/v1/context/:refId", async (c) => {

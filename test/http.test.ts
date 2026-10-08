@@ -392,6 +392,101 @@ describe("identity and ownership (AUTH-002 / AUTH-003)", () => {
 });
 
 
+// The capability matrix. This is the launch's demo and its honesty test at once, so the
+// assertions are about *content* — a 200 carrying an empty list would satisfy a status-only
+// check while telling an operator nothing, which is the shape of test this repo keeps
+// finding underneath its own green suites.
+describe("GET /api/v1/capabilities", () => {
+  type CapabilityBody = {
+    capabilities: {
+      capability: string;
+      available: string[];
+      degraded: boolean;
+      considered: { adapter: string; reason?: string; keyFree: boolean }[];
+    }[];
+    summary: string[];
+  };
+
+  const fetchCapabilities = async (env: Env = testEnv()) => {
+    const res = await app.request(
+      "/api/v1/capabilities",
+      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      env
+    );
+    expect(res.status).toBe(200);
+    return (await res.json()) as CapabilityBody;
+  };
+
+  it("reports every capability, naming a gap rather than omitting it", async () => {
+    const body = await fetchCapabilities();
+    const byCapability = Object.fromEntries(
+      body.capabilities.map((entry) => [entry.capability, entry])
+    );
+
+    // All five, always. A capability this box cannot serve still gets a line saying so —
+    // an absent line and a line saying "nothing is here" are different claims, and the
+    // engine refuses to let the first stand in for the second.
+    expect(Object.keys(byCapability).sort()).toEqual([
+      "embeddings",
+      "inference",
+      "scheduler",
+      "sync",
+      "vector",
+    ]);
+
+    for (const name of ["embeddings", "vector", "sync", "scheduler"]) {
+      expect(byCapability[name]?.degraded).toBe(true);
+      expect(byCapability[name]?.considered.map((v) => v.reason)).toEqual([
+        "no_adapter_registered",
+      ]);
+    }
+  });
+
+  it("keeps the key-free bird usable with no secret set at all", async () => {
+    const inference = (await fetchCapabilities()).capabilities.find(
+      (entry) => entry.capability === "inference"
+    );
+
+    expect(inference?.considered.map((v) => v.adapter)).toEqual([
+      "shahin",
+      "gemini",
+      "bulbul",
+      "openrouter",
+      "homa",
+    ]);
+    // The zero-KYC guarantee, as the endpoint states it: Homā answers on a deployment that
+    // has configured nothing. This is the claim the whole product rests on.
+    expect(inference?.available).toEqual(["homa"]);
+    expect(inference?.considered.find((v) => v.adapter === "homa")?.keyFree).toBe(true);
+
+    // And a keyed bird that is not configured says *what* is missing, not merely that it
+    // failed. That string is the difference between an actionable matrix and a list of xs.
+    expect(inference?.considered.find((v) => v.adapter === "shahin")?.reason).toBe(
+      "missing_config:GROQ_API_KEY"
+    );
+  });
+
+  it("makes a configured bird usable — the positive control", async () => {
+    // Without this, the assertions above would pass against a probe that reports every
+    // keyed bird as missing regardless of the environment, which is the failure a
+    // "reports a gap" test cannot see on its own.
+    const withKey = { ...testEnv(), GROQ_API_KEY: "present" } as unknown as Env;
+    const inference = (await fetchCapabilities(withKey)).capabilities.find(
+      (entry) => entry.capability === "inference"
+    );
+
+    expect(inference?.available).toContain("shahin");
+    expect(inference?.considered.find((v) => v.adapter === "shahin")?.reason).toBeUndefined();
+    // Homā is still there: a configured key adds a bird, it does not replace the key-free one.
+    expect(inference?.available).toContain("homa");
+  });
+
+  it("requires a token, because it exposes which keys the deployment holds", async () => {
+    const res = await app.request("/api/v1/capabilities", undefined, testEnv());
+    expect(res.status).toBe(401);
+  });
+});
+
 // Story 5.5 — an exhausted flock is backpressure, and backpressure a client cannot read
 // is indistinguishable from a gateway that is simply broken. These run at the HTTP layer
 // because the engine-level tests cannot see whether the route emits the header at all.
