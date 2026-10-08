@@ -9,9 +9,29 @@ on 2026-09-22 — see §11 for what grew), the Go workspace green
 > every one is re-derivable with the commands given. If this file and the code disagree, **the code
 > wins** — and that disagreement is itself a finding worth reporting.
 
+> **Stale-subsection policy:** this file accumulates work across many branches. When a section's reality
+> has moved on, the section is marked stale and left for context rather than silently rewritten — but the
+> stale marker itself must be true. If a marker has gone stale *again* (e.g. something marked "stale" is
+> now actually current, or a stale marker is attached to the wrong reality), that is itself a documentation
+> defect worth fixing the same session.
+
 ---
 
-## 1. What Simorgh is
+## 1. Where we are
+
+| Fact | Value |
+|---|---|
+| Branch | `feat/phoenix-core-modularization` |
+| HEAD | `0e7e1f0 chore(mailbox): report TASK-017 done, and record what its endpoint revealed` |
+| `main` / `origin/main` | `2dca0dd` (local == remote) |
+| Shared base with `main` | `1f529d3` |
+| Commits beyond that shared base | 47 |
+| `origin/production-readiness-v0-3` | `e0053fc` — **an ancestor of HEAD**, so the work it introduced is folded into this branch, not pending against `main` |
+
+> The prose below was written when the branch was much younger. Some of it still describes reality
+> accurately; some is marked stale and kept for context. When in doubt, re-derive from git rather than
+> trusting a paragraph — `git rev-parse`, `git merge-base`, and the suite counts at the bottom of §11.5
+> are the cheap truth.
 
 A free-to-run, no-KYC agentic AI gateway. It federates several free-tier model providers into one
 "flock" and answers requests through whichever provider is healthy and configured — so the gateway
@@ -69,25 +89,29 @@ and was merely *assumed* in the other. Now the order exists once.
 
 ---
 
-## 3. What works, verified
+## 3. What works, verified — the durable table
 
-Every row below was executed, not inferred. Commands are copy-pasteable from the repo root
-(`projects/opensource/simorgh-platform`).
+Every row below was executed, not inferred. Commands are copy-pasteable from the repo root.
+**§3.1 is explicitly stale** (the per-file composition describes a tree three commits old) — the live
+suite counts you should measure regressions against are in §11.5.
 
 | # | Claim | Command | Result |
 |---|---|---|---|
 | 1 | Types pass across all three configs | `npm run typecheck` | clean (0 errors) |
-| 2 | The Workers app works in workerd | `npm run test:workers` | **93 passed** (11 files) |
-| 3 | The engine + platform pass on plain Node | `npm run test:node` | **261 passed** (19 files) |
+| 2 | The Workers app works in workerd | `npm run test:workers` | **138 passed** (14 files) — current as of HEAD |
+| 3 | The engine + platform pass on plain Node | `npm run test:node` | **473 passed** (25 files) — current as of HEAD |
 | 4 | The platform reaches a live core **over REST and MCP**, and the answers match | `npm run e2e:ask` | **10/10 checks** |
 | 5 | A real core boots **unbuilt** and answers | `npm run simorgh -- smoke` | 5/5 checks (health, flock status, auth-fails-closed, execute-degrades-honestly, mcp-initialize) |
 | 6 | The engine runs on a different runtime | `freebuff2 bash -lc 'cd … && npx vitest run --config vitest.node.config.ts'` | **202 passed on Node 22.23** (host is Node 26.7) |
 | 7 | No build step is needed to run the thing | `node simorgh-platform/src/cli.ts targets` | works |
 
-The container column matters: the whole suite was re-run inside a clean `freebuff2` container against
-the same mounted tree, and passed identically. That is the portability claim actually tested.
+> The container column matters: the whole suite was re-run inside a clean `freebuff2` container against
+> the same mounted tree, and passed identically. That is the portability claim actually tested.
+>
+> > **Note:** the per-file counts in §3.1 were current when written and are now stale. The stale marker
+> > in §11.5 is the single source of truth for which numbers you should re-derive regressions against.
 
-### 3.1 Exact suite composition (so a regression is visible as a number)
+### 3.1 Exact suite composition (so a regression is visible as a number) — **STALE, §11.5 owns the current counts**
 
 **workerd — 11 files, 93 tests:** `agent` 17 · `flock-routing` 14 · `http` 12 · `health-storage` 11 ·
 `durable-scheduled` 10 · `durable-objects` 9 · `security` 7 · `index` 4 · `telegram` 4 · `rate-limit` 3 ·
@@ -98,6 +122,10 @@ the same mounted tree, and passed identically. That is the portability claim act
 `ledger` 14 · `tools` 14 · `flock` 11 · `agent` 9 · `storage` 9 · `execute` 8 · `boundary` 5.
 Platform (9 files, 113): `targets` 17 · `preflight` 16 · `connectors` 15 · `integration` 13 ·
 `mcp-server` 13 · `doctor` 12 · `deploy` 11 · `fleet` 10 · `conformance` 6.
+
+> **Why keep the stale numbers?** They let you spot the delta (`93 → 138`, `261 → 473`) in one glance,
+> which is exactly what the stale marker is for. Current counts are at the bottom of §11.5 and were
+> re-verified this session: workers **138**, node **473**.
 
 A collection-time failure is *not* a normal failure: treat it as a hard stop. `phoenix-core/test/boundary.test.ts`
 (5 tests) is the guard that keeps the engine portable, and it fails on a *collection* error, which is why the
