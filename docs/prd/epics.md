@@ -408,6 +408,7 @@ Document the bird adapter interface; any provider can be added by implementing t
 `simorgh-e-javani` adapter for Cerebras Cloud free tier; tested with real prompts.
 
 - **Acceptance:** Cerebras adapter; real-prompt tests
+- **VOID 2026-10-09:** Cerebras' free trial requires a verified payment method to activate Playground/API access (official FAQ); fails the repo's no-card core invariant.
 - **PRD status:** backlog
 
 ### Story 10.4: GitHub Models bird
@@ -415,6 +416,7 @@ Document the bird adapter interface; any provider can be added by implementing t
 `ghodrat` adapter for GitHub Models API; tested with real prompts.
 
 - **Acceptance:** GitHub Models adapter; real-prompt tests
+- **VOID 2026-10-09:** GitHub Models fully retired 2026-07-30 — playground, inference API and BYOK gone for all customers (official docs); no adapter can exist.
 - **PRD status:** backlog
 
 ### Story 10.5: Flock priority tuning

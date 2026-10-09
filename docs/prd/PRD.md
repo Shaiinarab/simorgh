@@ -98,8 +98,8 @@ Based on 2026 research, these additional free-tier providers could join the floc
 | Candidate | Provider | Free Tier | KYC? | Bird Name (proposed) |
 |-----------|----------|-----------|------|---------------------|
 | Google Gemini | AI Studio | Generous free tier | May require | `morgh-e-safed` |
-| Cerebras | Cerebras Cloud | Free tier available | Likely | `simorgh-e-javani` |
-| GitHub Models | GitHub Models API | Free tier | GitHub account | `ghodrat` |
+| ~~Cerebras~~ | Cerebras Cloud | ~~Free tier available~~ — **verified payment method now required to activate the API** (official FAQ, 2026-10-09) | — | ~~`simorgh-e-javani`~~ |
+| ~~GitHub Models~~ | GitHub Models API | **retired 2026-07-30** — playground, inference API and BYOK gone for all customers (official docs) | — | ~~`ghodrat`~~ |
 | Mistral | La Plateforme | Free tier | Email | `dastan` |
 | OpenRouter (free models) | OpenRouter | Free models available | API key | `pari` |
 
@@ -313,8 +313,8 @@ Based on 2026 research, these additional free-tier providers could join the floc
 |-------|-------------|---------------------|--------|
 | 10.1 | Bird adapter spec | Document the bird adapter interface; any provider can be added by implementing the interface | ⬜ |
 | 10.2 | Google Gemini bird | `morgh-e-safed` adapter for Google AI Studio free tier; tested with real prompts | ⬜ |
-| 10.3 | Cerebras bird | `simorgh-e-javani` adapter for Cerebras Cloud free tier; tested with real prompts | ⬜ |
-| 10.4 | GitHub Models bird | `ghodrat` adapter for GitHub Models API; tested with real prompts | ⬜ |
+| 10.3 | ~~Cerebras bird~~ | **VOID 2026-10-09** — Cerebras requires a verified payment method to activate the API (official FAQ); fails the no-card gate | ⛔ |
+| 10.4 | ~~GitHub Models bird~~ | **VOID 2026-10-09** — GitHub Models API fully retired 2026-07-30 for all customers (official docs) | ⛔ |
 | 10.5 | Flock priority tuning | Dashboard shows all birds; priority auto-tuned based on latency + success rate metrics | ⬜ |
 
 ---
@@ -422,8 +422,8 @@ Simorgh exists to give an operator **clarity before automation**. Its first loya
 This PRD synthesizes:
 1. **Original platform evidence:** README.md, SOUL.md, AGENT.md, REPULSE_ARCHITECTURE.md, test files
 2. **Grok-4.6 research digest** (13 turns, 1M context, web search): Architecture epics & stories for federation, Auto-Wrapper, BYOK, Data Trust, Intent Shield, Swarm-State
-3. **Web research (2026):** Competitor landscape (LiteLLM, Portkey, OpenRouter, Requesty, Kong, Cloudflare AI Gateway, Helicone); free no-KYC provider survey (Groq, HuggingFace, Cloudflare Workers AI, Google Gemini, Cerebras, GitHub Models, Mistral, OpenRouter free)
-4. **Research round 2 (2026-08-31):** [2026-08-round2.md](../research/2026-08-round2.md) — MCP 2026-07-28 spec verified & detailed (stateless core, header-based routing, MRTR, CIMD auth; SSE deprecated); DDG Instant Answer API confirmed deprecated → story 4.1 needs a Brave-API fallback; Workers AI free tier = 10,000 Neurons/day no-card (Homā verified); candidate-bird free tiers verified (Gemini no-card, Cerebras ~1M tok/day, Mistral free-mode trains models ⚠️ Data-Pact provider-aware consent), OpenRouter Free Models Router (Feb 2026)
+3. **Web research (2026):** Competitor landscape (LiteLLM, Portkey, OpenRouter, Requesty, Kong, Cloudflare AI Gateway, Helicone); free no-KYC provider survey (Groq, HuggingFace, Cloudflare Workers AI, Google Gemini, Cerebras, GitHub Models, Mistral, OpenRouter free) — ⚠️ partially superseded by the [2026-10 audit](Simorgh Deep Research Audit (October 2026).md): GitHub Models retired 2026-07-30, Cerebras now card-gated
+4. **Research round 2 (2026-08-31):** [2026-08-round2.md](../research/2026-08-round2.md) — MCP 2026-07-28 spec verified & detailed (stateless core, header-based routing, MRTR, CIMD auth; SSE deprecated); DDG Instant Answer API confirmed deprecated → story 4.1 needs a Brave-API fallback; Workers AI free tier = 10,000 Neurons/day no-card (Homā verified); candidate-bird free tiers verified (Gemini no-card, Cerebras ~1M tok/day, Mistral free-mode trains models ⚠️ Data-Pact provider-aware consent), OpenRouter Free Models Router (Feb 2026) — ⚠️ its Cerebras and GitHub Models rows are obsolete as of 2026-10-09 (see the October audit)
 
 ---
 
