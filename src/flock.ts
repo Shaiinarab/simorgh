@@ -52,6 +52,7 @@ import {
   nextWakeAt,
   SCHEDULED_SCHEMA,
   scheduleTask,
+  isRateLimitError,
   recordObservation,
   sweepStale as sweepHealthRows,
   workersAiProvider,
@@ -424,7 +425,7 @@ export class FlockCoordinator extends DurableObject<Env> {
           this.ctx.storage.sql,
           birdId,
           ok,
-          error === "rate_limit",
+          isRateLimitError(error),
           Date.now()
         ),
       now: Date.now(),

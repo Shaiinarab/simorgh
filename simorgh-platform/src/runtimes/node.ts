@@ -41,6 +41,7 @@ import {
   describeFlock,
   executeAgent,
   isAllowedOrigin,
+  isRateLimitError,
   parseExecuteBody,
   parseTokenSubjects,
   providerProbes,
@@ -188,7 +189,7 @@ export async function startNodeRuntime(
         ledger,
         cooldownUntil: (id) => readCooldown(sql, id),
         record: (id, ok, error) =>
-          recordObservation(sql, id, ok, error === "rate_limit", ports.now()),
+          recordObservation(sql, id, ok, isRateLimitError(error), ports.now()),
         executeTool,
       }
     );
@@ -521,7 +522,7 @@ export async function startNodeRuntime(
               ledger,
               cooldownUntil: (id) => readCooldown(sql, id),
               record: (id, isOk, error) =>
-                recordObservation(sql, id, isOk, error === "rate_limit", ports.now()),
+                recordObservation(sql, id, isOk, isRateLimitError(error), ports.now()),
               executeTool,
             }
           );

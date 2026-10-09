@@ -15,6 +15,7 @@ export * from "./ports.ts";
 export * from "./provider.ts";
 export * from "./flock.ts";
 export * from "./health.ts";
+export * from "./failures.ts";
 export * from "./rate-limit.ts";
 export * from "./quota.ts";
 export * from "./capabilities.ts";
