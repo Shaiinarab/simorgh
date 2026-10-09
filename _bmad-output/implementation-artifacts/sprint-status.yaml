@@ -136,3 +136,28 @@ development_status:
   13-4-bird-adapter-tutorial: backlog
   13-5-api-documentation: backlog
   epic-13-retrospective: optional
+
+# ── 2026-10-09 truth reconciliation (see docs/ROADMAP-SPINE.md) ──────────────
+# The epic-1..13 list above is HISTORICAL (generated 2026-08-31). Current canonical plan:
+reconciliation_note: >
+  Epics 1-5 done/historical. Epic 6 descoped to A3+ownership checks. Epics 7 deferred.
+  Epics 8-9 -> E1 (MCP modernization). Epic 10 -> E3 (Gemini/OpenRouter only, evidence-gated).
+  Epic 11 folded into B3. Epic 12 survivor = A3 AUTH-004. Epic 13 ongoing via A1.
+phases:
+  phase-0-foundation: done
+  phase-1-routing: done
+  phase-2-capability: done
+  phase-3-task-model: done
+  phase-4-durable-execution: in-progress   # EPIC-B spine: wire planTaskRun into scheduler
+  phase-5-retrieval: next                  # EPIC-C
+  phase-6-memory: next                     # EPIC-C4
+  phase-7-autonomous-loop: next            # EPIC-D
+  phase-8-connectors: later                # EPIC-F
+  phase-9-ui: later                        # EPIC-F3
+epics_current:
+  epic-A-stabilize: in-progress            # A1 done, A2 mostly done, A3 AUTH-004 OPEN (gate)
+  epic-B-spine-execution: next
+  epic-C-knowledge: next
+  epic-D-swarm-real-job: next
+  epic-E-external-intelligence: next
+  epic-F-scale: next

@@ -21,6 +21,20 @@ Two surfaces, and the distinction is load-bearing:
 **`simorgh_*` means one core. `platform_*` means the whole fleet.** Never alias one to the other; that
 collision was found and removed once already.
 
+## Plan of record (read before starting any work)
+
+[`docs/ROADMAP-SPINE.md`](docs/ROADMAP-SPINE.md) is canonical: one vertical execution spine
+(Principal → Goal → Task DAG → Capability → Quota plan → Provider → Execution → Verification →
+Persist → Memory → Next task), epics **A–F**, phase ledger, and an explicit freeze list. Order of
+attack: **A3 (AUTH-004 principal gate) → B1–B4 (wire quota into the scheduler, prove one durable
+task) → C1–C4 (RetrievalPort + knowledge) → D1 (swarm's first real job) → E1–E3**. BMAD Method v10
+skills are installed (`.agents/skills/bmad-*`); planning truth lives in ROADMAP-SPINE +
+`_bmad-output/implementation-artifacts/sprint-status.yaml`; the old epic-1–13 list in `docs/prd/` is
+historical. Every story's acceptance ends with:
+`upm install --frozen-lockfile && upm run typecheck && upm test` green (+ per-module Go build/vet/test
+when Go is touched). If a doc you open contradicts the spine, mark it stale the same session — do not
+silently rewrite history.
+
 ## The one architectural rule
 
 ```
@@ -47,22 +61,21 @@ change in the manifest and what had to be rebuilt in the security gate.
 ```bash
 upm install                     # once; node_modules is not committed
 upm install --frozen-lockfile   # CI: fail rather than resolve
-upm run typecheck               # or: upm run test, upm exec <bin>, upx <bin>
-npm run typecheck               # 3 configs: root, phoenix-core, simorgh-platform
-npm test                        # BOTH suites — workers first, then node
-npm run test:workers            # workerd: the Cloudflare app
-npm run test:node               # plain Node: the engine + the platform
-npx vitest run --config vitest.node.config.ts <file>   # one file, scoped
+upm run typecheck               # 3 configs: root, phoenix-core, simorgh-platform
+upm test                        # BOTH suites — workers first, then node
+upm run test:workers            # workerd: the Cloudflare app
+upm run test:node               # plain Node: the engine + the platform
+upx vitest run --config vitest.node.config.ts <file>   # one file, scoped
 
-npm run e2e:ask                 # the CLI reaches a live core over REST *and* MCP
-npm run platform:smoke          # boots a real core on an ephemeral port, probes it, exits 0/1
-npm run simorgh -- <cmd>        # targets | plan | deploy | serve | connect | ask | status | doctor
-npm run security:scan           # secrets scan + dependency audit (the CI security gate)
-npm run cf:dry-run              # wrangler bundle check
+upm run e2e:ask                 # the CLI reaches a live core over REST *and* MCP
+upm run platform:smoke          # boots a real core on an ephemeral port, probes it, exits 0/1
+upm run simorgh -- <cmd>        # targets | plan | deploy | serve | connect | ask | status | doctor
+upm run security:scan           # secrets scan + dependency audit (the CI security gate)
+upm run cf:dry-run              # wrangler bundle check
 
-npm run go:build                # Go workspace (all 8 modules)
-npm run go:vet
-npm run go:test
+upm run go:build                # Go workspace (all 8 modules)
+upm run go:vet
+upm run go:test
 ```
 
 **Two suites, split by what each can prove.** A change that only passes one has been tested on one
@@ -153,15 +166,15 @@ A change is done when **all** of these hold. Copy this into the PR description a
 □ Requirements understood — and any conflict with the docs written down, not silently resolved
 □ Relevant existing code inspected (not just the file being edited)
 □ Minimal change implemented — no speculative abstraction, no unrelated cleanup
-□ npm run typecheck passes (all 3 configs)
-□ npm test passes — BOTH suites, not just the one you touched
+□ upm run typecheck passes (all 3 configs)
+□ upm test passes — BOTH suites, not just the one you touched
 □ If the boundary moved: phoenix-core/test/boundary.test.ts still passes
 □ If Go changed: go:build + go:vet + go:test all pass
 □ If a claim is on a boundary: verified against a real host/core, not only a fixture
 □ Any new detector has had a negative control run against it
 □ Edge cases considered: empty, missing, failure, and the fail-closed path
 □ Security implications reviewed — no secret logged, echoed, or committed
-□ npm run security:scan passes
+□ upm run security:scan passes
 □ Documentation updated where it now describes something false
 □ git diff inspected; no unrelated files modified; no generated file hand-edited
 □ Commit message says why, not what

@@ -12,7 +12,7 @@
     "deploy": "npm run typecheck && wrangler deploy",
     "types": "wrangler types",
     "typecheck": "tsgo --noEmit && tsgo --noEmit -p phoenix-core/tsconfig.json && tsgo --noEmit -p simorgh-platform/tsconfig.json",
-    "test": "npm run test:workers && npm run test:node",
+    "test": "upm run test:workers && upm run test:node",
     "test:workers": "vitest run",
     "test:node": "vitest run --config vitest.node.config.ts",
     "test:watch": "vitest",

@@ -1,10 +1,17 @@
 # Quality Audit — TASK-008
 
+> **Snapshot notice (2026-10-09):** the numbers in this audit (82 + 202 tests, 10 + 17 files) were true
+> when written and are kept unedited as historical evidence — original command spellings included.
+> Current verified baseline: **138 workerd + 500 node tests**, typecheck exit 0, on Node 22.23.3 /
+> upm 1.4.0 / tsgo (see `docs/STATE-OF-PROJECT.md` §12.2 and `docs/ROADMAP-SPINE.md` §0). Canonical
+> commands today are `upm run typecheck`, `upm test`. The §7 "ten things to fix first" list still
+> stands as open quality debt; it is folded into EPIC-A/B acceptance criteria in the spine.
+
 ## 1. Method — what was run
 
 **Typecheck:**
 ```
-npm run typecheck
+npm run typecheck   # (historical spelling; canonical today: upm run typecheck)
 ```
 Output: `npm notice run tsgo --noEmit && tsgo --noEmit -p phoenix-core/tsconfig.json && tsgo --noEmit -p simorgh-platform/tsconfig.json` → OK-typecheck (exit 0, zero errors)
 

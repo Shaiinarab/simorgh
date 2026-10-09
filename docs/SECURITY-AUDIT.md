@@ -49,7 +49,12 @@
 - **Found but not fixed, and recorded so it is not rediscovered:** a token that exists *only* in `SIMORGH_API_KEYS` can read its own data but cannot call `/api/v1/agent/execute`, which still authenticates against `SIMORGH_API_KEY` alone. A multi-caller deployment must therefore issue both. Closing that is not mechanical: it means the `userId` must come from the token instead of `X-Simorgh-User-Id`, or a caller can spend another caller's rate-limit budget and write ledger rows in their name (AUTH-004). Noted at `NodeRuntimeOptions.apiKeys`.
 
 ### AUTH-004 — Rate-limit key is spoofable via `X-Simorgh-User-Id` header
-- **Severity:** medium
+- **Severity:** medium · **Status 2026-10-09:** OPEN — promoted to **EPIC-A3, the gate** in
+  [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md). Scope beyond this finding's original "rate-limit key" framing:
+  credential → authenticated principal → `principalId` must own *every* task/schedule/memory/retrieval/
+  connector/credential/ledger operation, with seven cross-principal negative tests (A cannot execute /
+  schedule / read context / read logs / consume quota / search knowledge / invoke connectors as B).
+  Multi-user autonomous execution is forbidden until A3 ships.
 - **Evidence:** `src/index.ts:156` (edge rate limit key), `src/security.ts:131` (userId from header or body)
 - **Impact:** The rate limit is keyed on `execute:{userId}` where `userId` comes from the `X-Simorgh-User-Id` header or request body. An unauthenticated caller (hitting `/api/v1/agent/execute`... wait, that route requires auth). However, a holder of any valid bearer token can set `X-Simorgh-User-Id` to any value, causing rate-limit collisions — they can exhaust another user's quota, or reset their own by changing the key. The Telegram rate limit (`telegram:{from_id}`) is keyed on Telegram's own `from` field, which is not attacker-controlled but also not scoped to the operator's identity.
 - **Recommended fix:** Derive the rate-limit key from the authenticated identity (e.g., a hash of the bearer token or a user claim in the token), not from a client-supplied header.

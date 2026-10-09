@@ -4,8 +4,12 @@
 > — Attar of Nishapur, *The Conference of the Birds*
 
 **Version:** 2.0 (PRD-Ready)
-**Date:** August 31, 2026
-**Status:** Approved for Implementation
+**Date:** August 31, 2026 · **Reconciled:** 2026-10-09
+**Status:** ✅ Historical baseline — §5 (Epics 1–13) and §7 (Milestones) describe what shipped through
+Phase 3; they are kept as the record of original intent. **The canonical forward plan is
+[`docs/ROADMAP-SPINE.md`](../ROADMAP-SPINE.md)** (vertical spine, epics A–F, phase ledger, freeze list).
+Where this PRD and the spine disagree about *what happens next*, the spine wins; where they disagree
+about *what exists*, the code wins. Epic disposition map: ROADMAP-SPINE §3.
 **Author:** Shahin Arab · GLM-5.2 (Freebuff CLI) · Grok-4.6 (xagent research)
 
 ---

@@ -1,7 +1,7 @@
 # TASK-014 — Mission Control: make the dashboard tell the truth, and prove it renders
 
 - Owner: any
-- Status: open
+- Status: done (Lead 2026-10-09T12:00) — descoped to Phase F3 per docs/ROADMAP-SPINE.md: dashboard stays inline-HTML until tasks/goals/knowledge APIs exist (EPIC-B/C). Re-slice from spine F3 when due.
 - Depends on: nothing · Estimate: 120–180 min · Runner: **UI/UX specialist** agent
 
 ## 0. Start here: introduce yourself
