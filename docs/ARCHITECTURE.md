@@ -1,5 +1,12 @@
 # Architecture — phoenix-core / simorgh-platform
 
+> **Planning status (2026-10-09):** the module map below is current for what *exists*; what comes next
+> is governed by [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md) (vertical spine, epics A–F). New architectural
+> surfaces land there first: `RetrievalPort` in `ports.ts` (EPIC-C1), unified Task/Execution/Schedule
+> over `tasks.ts` + `scheduled.ts` (EPIC-B1), and quota-gated execution (`planTaskRun()` wired into the
+> DO scheduler claim path, EPIC-B2). Test commands are canonical via `upm run …` (ADR-0004); `npm run …`
+> equivalents still work but are legacy spellings.
+
 ## 1. The two packages and the one-way arrow
 
 | Package | Path | Role |
@@ -187,9 +194,31 @@ Two test suites, deliberately separate.
 
 | Command | Config | What runs | What it catches | What it cannot catch |
 |---------|--------|-----------|-----------------|----------------------|
-| `npm run test:workers` | `vitest.config.ts` (via `npm test` → `test:workers` → `vitest run`) | `simorgh-platform/test/**/*.test.ts` — the Workers app suite, 6 files | Runtime behavior of the app in workerd: Durable Object RPC, KV reads/writes, cron handler shape, HTTP route contracts, the full request path through Hono. Uses real `cloudflare:workers` bindings from `wrangler.toml`. | Nothing about the engine in isolation — the Workers tests import the app, not the core directly. |
-| `npm run test:node` | `vitest.node.config.ts` (via `npm test` → `test:node` → `vitest run --config vitest.node.config.ts`) | `phoenix-core/test/**/*.test.ts` + `simorgh-platform/test/**/*.test.ts` (engine + platform unit suites) | Engine correctness in isolation: `flyFlock` routing, agent tool loop, request validation, SQL via `SqlPort` (real SQLite in-memory), rate limiting, boundary invariants. No runtime, no network, no Cloudflare account. | Nothing about the Workers runtime — no `cloudflare:workers` resolution, no Durable Objects, no KV, no AI binding. |
+| `upm run test:workers` (canonical; legacy spelling `npm run test:workers`) | `vitest.config.ts` (via `upm test` → `test:workers` → `vitest run`) | `simorgh-platform/test/**/*.test.ts` — the Workers app suite, 6 files | Runtime behavior of the app in workerd: Durable Object RPC, KV reads/writes, cron handler shape, HTTP route contracts, the full request path through Hono. Uses real `cloudflare:workers` bindings from `wrangler.toml`. | Nothing about the engine in isolation — the Workers tests import the app, not the core directly. |
+| `upm run test:node` (canonical; legacy spelling `npm run test:node`) | `vitest.node.config.ts` (via `upm test` → `test:node` → `vitest run --config vitest.node.config.ts`) | `phoenix-core/test/**/*.test.ts` + `simorgh-platform/test/**/*.test.ts` (engine + platform unit suites) | Engine correctness in isolation: `flyFlock` routing, agent tool loop, request validation, SQL via `SqlPort` (real SQLite in-memory), rate limiting, boundary invariants. No runtime, no network, no Cloudflare account. | Nothing about the Workers runtime — no `cloudflare:workers` resolution, no Durable Objects, no KV, no AI binding. |
 
-Why separate? `simorgh-platform/test/` imports `cloudflare:workers` (DurableObject) and uses `@cloudflare/vitest-pool-workers` with `remoteBindings: false`. The engine tests must run on plain Node to prove portability — if the engine ever picks up a `cloudflare:` import or a global binding, the Node suite stops resolving and goes red, while the workers suite keeps passing. That signal is the point. `npm test` runs both, in order; the workers suite runs first (it is listed first in `package.json`).
+Why separate? `simorgh-platform/test/` imports `cloudflare:workers` (DurableObject) and uses `@cloudflare/vitest-pool-workers` with `remoteBindings: false`. The engine tests must run on plain Node to prove portability — if the engine ever picks up a `cloudflare:` import or a global binding, the Node suite stops resolving and goes red, while the workers suite keeps passing. That signal is the point. `upm test` runs both, in order; the workers suite runs first (it is listed first in `package.json`). As of 2026-10-09 the counts are **138 passed / 14 files** (workers) and **500 passed / 27 files** (node) on Node 22.23.3.
 
 Both suites share `phoenix-core/test/boundary.test.ts`, which runs under the Node config and asserts every portability invariant in section 5.
+
+---
+
+## 8. Spine surfaces — what is being built now (2026-10-09)
+
+Per [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md), the next architectural surfaces are **planned, not yet
+present**; this section exists so future contributors find the intended home instead of inventing one:
+
+| Surface | Home | Rule | Status |
+|---|---|---|---|
+| Unified Task/Execution/Schedule | `phoenix-core/src/tasks.ts` + host `scheduled.ts` | `Task`=what, `Execution`=one attempt, `Schedule`=eligibility. One canonical model; **no second task DB, no second scheduler** | EPIC-B1 |
+| Quota-gated execution | DO scheduler claim path → `planTaskRun()` | Invariant: **nothing spends provider quota until the capacity planner says it can.** claim → load quota states → plan → {run ∣ delay(wake) ∣ unavailable} | EPIC-B2 |
+| Usage loop close | provider result → `recordUsage()` → health → ledger | Actual tokens/requests recorded after every execution; reset-aware scheduling becomes real | EPIC-B3 |
+| Principal identity | credential → authenticated `principalId` | Client-supplied `X-Simorgh-User-Id` is never believed; principal owns task/schedule/memory/retrieval/connector/ledger ops | EPIC-A3 🔴 gate |
+| `RetrievalPort` | `phoenix-core/src/ports.ts` | Core **never** imports `env.AI_SEARCH`; hosts adapt (AI Search / local / future Vectorize). Results carry provenance fields incl. `knowledgeNamespace` | EPIC-C1 |
+| Knowledge API | `POST /knowledge`, `GET /knowledge/:id`, `POST /knowledge/search` | Tiny first slice; tenant/agent namespaces — Simorgh owns authorization, AI Search is only substrate | EPIC-C2/C3 |
+| Layered memory | working → task state → episodic → knowledge artifacts → semantic → procedural | OKF artifact envelope `{id,type,principal,agent,created,updated,source,status,freshness,confidence,provenance}`; no Mem0/Graphiti/Neo4j dependency | EPIC-C4 |
+| Durable-execution interface | ports pattern, like everything else | DO/alarm (default today) vs Cloudflare Workflows vs Node/local — adapter chosen by benchmark (EPIC-F4), never faith; CF stays non-exclusive | planned |
+
+Freeze list (what must *not* appear): Rust/Wasm core, second scheduler/task-class circus, pooled
+free-provider credentials, giant policy engine, giant PWA before these APIs exist. Full text:
+ROADMAP-SPINE §1.

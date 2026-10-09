@@ -26,7 +26,7 @@ by name when the task calls for it:
 |---|---|
 | **Node 22** | CI pins `node-version: 22` (`.github/workflows/ci.yml`); the comment there states upm requires Node 22.3+, citing [`docs/adr/ADR-0004-toolchain-upm.md`](docs/adr/ADR-0004-toolchain-upm.md). Node is the **only** JavaScript runtime — Bun was removed on 2026-10-03 and must not come back. |
 | **[upm](https://github.com/unjs/upm)** — the package manager | `upm.lock` is committed and is the reproducible build input. `npm run <script>` is how you *run a script*; npm is **not** how you install. |
-| **Go 1.25** | Only if you touch `gateway/`, `packages/`, `bot/`, `tools/` (the eight modules under `go.work`). |
+| **Go 1.25+** | Only if you touch `gateway/`, `packages/`, `bot/`, `tools/` (the eight modules under `go.work`). Modules declare `go 1.25`; verified green on **go1.26.0** (2026-10-09). |
 | Cloudflare account | Only for a real deploy. The test suites need none — see "Hermetic" below. |
 
 ```bash
@@ -41,9 +41,11 @@ upm install --frozen-lockfile   # what CI does: fail rather than resolve
 > manifest and how the dependency-audit gate was rebuilt around it, is
 > [ADR-0004](docs/adr/ADR-0004-toolchain-upm.md).
 
-Node's floor is written as `engines.node: ">=20"` in `package.json`, which is lower than what the
-toolchain actually needs; trust the table above. (Aligning that field is a proposed change, not one
-this document makes.)
+Node's floor is `engines.node: ">=22.3"` in `package.json`, pinned by `.nvmrc` (`22`) and verified on
+**v22.23.3 LTS** (fnm-managed; v26.11.1 also installed for evaluation slices). Node 22.3+ is required
+because the toolchain uses `fs.glob`; older Node breaks `upm install`, tsgo, and both test suites.
+(2026-10-09: this paragraph previously claimed `>=20` — the manifest had already moved to `>=22.3`;
+the doc was the stale side, per this repo's own code-wins rule.)
 
 ---
 
@@ -82,12 +84,12 @@ Two configs, split by **what each can prove** — not by convenience.
 
 | Suite | Command | Config | Files it runs | Choose it when |
 |---|---|---|---|---|
-| **workers** | `npm run test:workers` | `vitest.config.ts` | `test/**` | Your change needs a binding or a runtime: Durable Object RPC, KV, SQLite, the cron shape, HTTP route contracts. Runs **inside workerd** with real bindings from `wrangler.toml`. |
-| **node** | `npm run test:node` | `vitest.node.config.ts` | `phoenix-core/test/**` + `simorgh-platform/test/**` | Pure logic and ports: routing, the agent tool loop, the tool executor, the ledger, validation, rate limiting, the portability invariants, targets, connectors, deploy, preflight, fleet, `doctor`. Real SQLite in memory; **no runtime, no network**. |
+| **workers** | `upm run test:workers` | `vitest.config.ts` | `test/**` | Your change needs a binding or a runtime: Durable Object RPC, KV, SQLite, the cron shape, HTTP route contracts. Runs **inside workerd** with real bindings from `wrangler.toml`. |
+| **node** | `upm run test:node` | `vitest.node.config.ts` | `phoenix-core/test/**` + `simorgh-platform/test/**` | Pure logic and ports: routing, the agent tool loop, the tool executor, the ledger, validation, rate limiting, the portability invariants, targets, connectors, deploy, preflight, fleet, `doctor`. Real SQLite in memory; **no runtime, no network**. |
 
 ```bash
-npm test                                              # BOTH, workers first
-npx vitest run --config vitest.node.config.ts <file>  # one file, scoped
+upm test                                              # BOTH, workers first
+upx vitest run --config vitest.node.config.ts <file>  # one file, scoped
 ```
 
 **The rule: pick the suite by what the test needs, not by where the file lives.** Does it need a
@@ -115,9 +117,9 @@ right and the doc is stale.
 Unit tests do not assemble anything. These do, and they are the ones that have caught boundary bugs:
 
 ```bash
-npm run e2e:ask          # the CLI reaches a live core over REST *and* MCP, and compares the answers
-npm run platform:smoke   # boots a real core on an ephemeral port, probes it, exits 0/1
-npm run simorgh -- doctor  # diagnoses a fleet that will not answer
+upm run e2e:ask          # the CLI reaches a live core over REST *and* MCP, and compares the answers
+upm run platform:smoke   # boots a real core on an ephemeral port, probes it, exits 0/1
+upm run simorgh -- doctor  # diagnoses a fleet that will not answer
 ```
 
 ---
@@ -218,7 +220,7 @@ health-shape trap are in
 
 ## The Go surface
 
-The Go workspace is eight modules under `go.work`; `npm run go:build` / `go:vet` / `go:test` wrap the
+The Go workspace is eight modules under `go.work`; `upm run go:build` / `go:vet` / `go:test` wrap the
 commands correctly (they already set `GOFLAGS=-mod=readonly`). Two things to know before you start:
 `gateway/` is a **second answering runtime**, not scaffolding, and it exposes **none** of the core
 contract the platform dials — so it cannot join the fleet today. Tests come before convergence, not
@@ -245,7 +247,7 @@ after: a cross-language contract has no compiler. Read
   do not strip them as noise.
 - **Documentation must describe reality, not intent.** If you change behaviour, change the doc that
   claims otherwise — `README.md`, `docs/ARCHITECTURE.md`, `docs/STATE-OF-PROJECT.md`, `docs/adr/`.
-- **No secrets in code, ever.** See [`SECURITY.md`](SECURITY.md) and `npm run security:scan`.
+- **No secrets in code, ever.** See [`SECURITY.md`](SECURITY.md) and `upm run security:scan`.
 
 ### Environment traps that each cost a real debugging session
 
@@ -296,15 +298,15 @@ if you cannot tick a line, say why in the PR rather than deleting the line.
 □ Requirements understood — and any conflict with the docs written down, not silently resolved
 □ Relevant existing code inspected (not just the file being edited)
 □ Minimal change implemented — no speculative abstraction, no unrelated cleanup
-□ npm run typecheck passes (all 3 configs)
-□ npm test passes — BOTH suites, not just the one you touched
+□ upm run typecheck passes (all 3 configs)
+□ upm test passes — BOTH suites, not just the one you touched
 □ If the boundary moved: phoenix-core/test/boundary.test.ts still passes
 □ If Go changed: go:build + go:vet + go:test all pass
 □ If a claim is on a boundary: verified against a real host/core, not only a fixture
 □ Any new detector has had a negative control run against it
 □ Edge cases considered: empty, missing, failure, and the fail-closed path
 □ Security implications reviewed — no secret logged, echoed, or committed
-□ npm run security:scan passes
+□ upm run security:scan passes
 □ Documentation updated where it now describes something false
 □ git diff inspected; no unrelated files modified; no generated file hand-edited
 □ Commit message says why, not what
@@ -322,9 +324,9 @@ Two additions for routes, connectors, fleet storage or MCP handler registration,
 ### The commands a reviewer will run
 
 ```bash
-npm run typecheck      # 3 configs: root, phoenix-core, simorgh-platform
-npm test               # BOTH suites
-npm run security:scan  # secrets scan + dependency audit — the same script CI runs
+upm run typecheck      # 3 configs: root, phoenix-core, simorgh-platform
+upm test               # BOTH suites
+upm run security:scan  # secrets scan + dependency audit — the same script CI runs
 ```
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs three jobs: TypeScript

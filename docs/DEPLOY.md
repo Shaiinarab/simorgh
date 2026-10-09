@@ -41,6 +41,11 @@ npm is running a `package.json` script, not installing anything. The reasoning, 
 in the manifest and in the security gate to get here, is
 [ADR-0004](adr/ADR-0004-toolchain-upm.md).
 
+> **Command spelling policy (2026-10-09, ROADMAP-SPINE A2):** instructions in this document use
+> `upm run …` / `upx …`. Where a section reports *what was observed at a point in time* (an "✅ Verified"
+> or evidence line quoting `npm run …`), the original spelling is deliberately preserved — evidence is
+> immutable; only instructions are canonicalised.
+
 Node is the **only** JavaScript runtime; `engines.node` is `>=22.3` and CI pins `node-version: 22`.
 Bun was removed on 2026-10-03 and must not come back — see [`HOST-PORTABILITY.md`](HOST-PORTABILITY.md)
 §6 and its closing note for what that deletion did, and did not, lose.
@@ -75,16 +80,17 @@ token, no credit card, and no outbound request to pass its own test suites.
 upm install
 export NO_PROXY=127.0.0.1,localhost
 
-npm run typecheck        # ✅ exit 0 — three configs: root, phoenix-core, simorgh-platform
-npm test                 # ✅ exit 0 — BOTH suites, workers first
-npm run platform:smoke   # ✅ 5/5, exit 0
-npm run e2e:ask          # ✅ 10/10, exit 0
-npm run security:scan    # ⚠️ needs network for the throwaway audit tree (ADR-0004 §4)
+upm run typecheck        # ✅ exit 0 — three configs: root, phoenix-core, simorgh-platform
+upm test                 # ✅ exit 0 — BOTH suites, workers first (138 + 500 as of 2026-10-09)
+upm run platform:smoke   # ✅ 5/5, exit 0
+upm run e2e:ask          # ✅ 10/10, exit 0
+upm run security:scan    # ⚠️ needs network for the throwaway audit tree (ADR-0004 §4)
 ```
 
-Observed suite composition on 2026-10-08: **workers 14 files / 129 tests, node 22 files / 368 tests.**
-That is the number to compare against, and it is *not* the number
-[`STATE-OF-PROJECT.md`](STATE-OF-PROJECT.md) §3.1 records (11/93 and 19/261) — see **Provenance**, at the end of this file.
+Observed suite composition on 2026-10-08: **workers 14 files / 129 tests, node 22 files / 368 tests**
+(re-run 2026-10-09 after the swarm/session/capability suites grew: **138 workers + 500 node**, both
+green — the current canonical baseline lives in `ROADMAP-SPINE.md` §0). The old
+[`STATE-OF-PROJECT.md`](STATE-OF-PROJECT.md) §3.1 numbers (11/93 and 19/261) are stale; see **Provenance**, at the end of this file.
 
 Three of those deserve a note:
 
@@ -107,7 +113,7 @@ Three of those deserve a note:
 node simorgh-platform/src/runtimes/node.ts --port 8788
 
 # or through the CLI, which warns when auth is unconfigured
-npm run simorgh -- serve --port 8788
+upm run simorgh -- serve --port 8788
 ```
 
 ✅ Both boot. Verified against `node simorgh-platform/src/runtimes/node.ts --port 8788`:
@@ -160,11 +166,11 @@ Flagged rather than fixed — see **Provenance**, at the end of this file.
 
 ```bash
 export NO_PROXY=127.0.0.1,localhost
-npm run simorgh -- connect node http://127.0.0.1:8788 --api-key "$SIMORGH_API_KEY"
-npm run simorgh -- status      # health + flock of every recorded instance
-npm run simorgh -- ask "who is simorgh" --prefer rest
-npm run simorgh -- doctor      # exit 0 healthy, 1 unhealthy, stable codes either way
-npm run simorgh -- disconnect <id>
+upm run simorgh -- connect node http://127.0.0.1:8788 --api-key "$SIMORGH_API_KEY"
+upm run simorgh -- status      # health + flock of every recorded instance
+upm run simorgh -- ask "who is simorgh" --prefer rest
+upm run simorgh -- doctor      # exit 0 healthy, 1 unhealthy, stable codes either way
+upm run simorgh -- disconnect <id>
 ```
 
 The fleet is a versioned `fleet.json` (default path under the platform's data dir; `--fleet <path>`
@@ -208,7 +214,7 @@ account here.
 ### 2. Local loop
 
 ```bash
-npm run dev     # = wrangler dev --local --port 8787
+upm run dev     # = wrangler dev --local --port 8787
 ```
 
 ✅ Verified: it boots and serves `/health` → `200 {"status":"ok","timestamp":"…"}` and
@@ -224,7 +230,7 @@ in .dev.vars` confirms it. Nothing in it is ever committed.
 ### 3. Deploy
 
 ```bash
-npm run deploy           # = npm run typecheck && wrangler deploy
+upm run deploy           # = upm run typecheck && wrangler deploy
 ```
 
 ✅ `npm run typecheck` exit 0; ✅ `npx wrangler deploy --dry-run --outdir dist` bundles clean

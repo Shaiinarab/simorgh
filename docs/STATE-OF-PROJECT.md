@@ -1,9 +1,10 @@
 # Simorgh — project scope and current state
 
-**Written:** 2026-09-22 · **Updated:** 2026-10-08 (§11) · **Branch:**
-`feat/phoenix-core-modularization`, stacked on `e0053fc` (= the head of PR #1,
-`origin/production-readiness-v0-3`) · **Status:** all TS suites green (**134 + 462**, up from 93 + 261
-on 2026-09-22 — see §11 for what grew), the Go workspace green
+**Written:** 2026-09-22 · **Updated:** 2026-10-09 (§12 truth reconciliation; §11 was 2026-10-08) ·
+**Canonical plan:** [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md) — read §12 first; it supersedes any older
+roadmap prose in this file · **Status:** all TS suites green (**138 workers + 500 node**, re-derived
+2026-10-09 on Node 22.23.3 / upm 1.4.0 / tsgo, typecheck exit 0), Go workspace green on go1.26.0
+(6 modules build+test clean)
 
 > **Read this as a claim set, not a fact set.** Every number and path below was true when written and
 > every one is re-derivable with the commands given. If this file and the code disagree, **the code
@@ -492,3 +493,65 @@ set, the same endpoint answers `inference ok 1/5 available: ollama` — the key-
 unbounded and always present. Neither `true` (a refilling quota that does not exist) nor `false` (a
 one-time grant, spend last) is true, so this needs a third state decided rather than a value guessed.
 Recorded in `DEFAULT_PROVIDER_COST` and in `mailbox/OUTBOX/TASK-017-REPORT.md` §4.
+
+---
+
+## 12. Truth reconciliation — 2026-10-09 (§0 of `ROADMAP-SPINE.md` is the canonical ledger)
+
+Everything in §1–§11 above was written against older branch states; per this file's own policy the
+prose is kept, and this section records what changed and where truth now lives. **§1's branch table is
+stale**: we are on `main` at `6a4e634` (PR #2 `feat/phoenix-core-modularization` merged as `190a847`).
+
+### 12.1 The roadmap changed shape: from feature list to vertical spine
+
+The project crossed the point where another module adds capability. The plan is now one executable
+spine — `Principal → Goal → Task DAG → Capability → Quota/Cost Plan → Provider+Account+Model →
+Execution → Tools/MCP/Retrieval → Result → Verification → Persist → Memory → Next Task` — encoded in
+[`ROADMAP-SPINE.md`](ROADMAP-SPINE.md) with epics A–F and an explicit freeze list (no Rust core, no
+second scheduler/task DB, no provider chase, no pooled free credentials, no giant PWA yet). Phase
+ledger: Foundation/Routing/Capability/Task-model **done**; Durable execution **active** (Phase 4);
+Retrieval / Memory / Autonomous loop **next**; Connectors / UI **later**.
+
+### 12.2 Toolchain: verified green on Node 22 + Go 1.26, upm-everywhere
+
+| Check (all run 2026-10-09) | Result |
+|---|---|
+| `fnm`-managed Node | **v22.23.3 default** (`.nvmrc`=22), **v26.11.1** available for eval slices |
+| `upm install --frozen-lockfile` | ✅ 93 pkgs |
+| `upm run typecheck` (tsgo ×3 projects) | ✅ exit 0 |
+| `upm run test:workers` | ✅ 14 files / **138 passed** |
+| `upm run test:node` | ✅ 27 files / **500 passed** (was 473 — swarm/session/capability suites grew) |
+| Go workspace on **go1.26.0** | ✅ all modules build/vet/test clean (`./...` must be run per-module or from a module dir; root repo dir is not itself a Go module) |
+| npm/Bun/pnpm remnants in docs & scripts | ✅ swept — instructions now say `upm run …` / `upx …`; historical evidence lines keep their original commands, labelled |
+
+TypeScript note: stable TS 7 (native compiler, ~8–12× full-build speedups per Microsoft's 7.0
+announcement) is the target; `@typescript/native-preview` (`tsgo`) stays canonical until an isolated
+`typescript@7`/`tsc` evaluation slice passes all three tsconfigs — never mixed with feature work
+(ROADMAP-SPINE A2). Vitest stays at 4.x pinned by `@cloudflare/vitest-pool-workers` compat; do not
+bump to 5 blindly.
+
+### 12.3 What §11.4 left open is now formally EPIC-A3 / EPIC-B
+
+- **AUTH-004** (caller-supplied `X-Simorgh-User-Id` still believed by `/api/v1/agent/execute`) is
+  promoted to the **gate**: multi-user autonomous execution is forbidden until credential-derived
+  `principalId` owns every task/schedule/memory/retrieval/connector/ledger operation, with the seven
+  cross-principal negative tests listed in ROADMAP-SPINE A3.
+- **The quota brain is still disconnected from the machine that spends quota.** `planTaskRun()` calls
+  `planQuotaRun()`, but production scheduled execution is claim→fly. EPIC-B makes the invariant real:
+  *nothing spends provider quota until the capacity planner says it can*, then closes the usage loop
+  (`recordUsage()` → health → ledger). B4 proves one end-to-end durable task through the whole spine.
+- **Retrieval remains unbuilt** — confirmed again by the 2026-10 external audits; EPIC-C starts with a
+  `RetrievalPort` in phoenix-core (core never imports `env.AI_SEARCH`), Cloudflare AI Search adapter
+  first (hybrid search, built-in storage, namespace isolation; Free ≈1k semantic + 1k full-text
+  queries/mo, billing from 2026-11-01), plus a tiny `POST /knowledge` slice with retrieval provenance.
+- Swarm (`swarm.ts`) plans but does not drive execution — EPIC-D gives it exactly one real job
+  (multi-source research digest) rather than a second framework.
+
+### 12.4 Where planning truth lives now
+
+`docs/ROADMAP-SPINE.md` (phases, epics, freeze list, ordering) → `_bmad-output/implementation-artifacts/sprint-status.yaml`
+(epic-1..13 marked HISTORICAL with a disposition map; current epics A–F tracked) → `mailbox/BOARD.md`
+(TASK-001..017 closed; TASK-014 dashboard descoped to Phase F3 per the spine). BMAD Method v10 skills
+installed (`.agents/skills/bmad-*`); story acceptance criteria end with
+`upm install --frozen-lockfile && upm run typecheck && upm test` green (+ per-module `go build/vet/test`
+when Go is touched). Order of attack: **A3 → B1 → B2 → B3 → B4 → C1..C4 → D1 → E1..E3**.

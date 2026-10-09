@@ -16,6 +16,13 @@ fly together as one Simorgh, and when one bird tires, the flock reroutes.**
 
 ## Quick Start
 
+**Roadmap & status:** the canonical forward plan is [`docs/ROADMAP-SPINE.md`](docs/ROADMAP-SPINE.md)
+(vertical execution spine, epics A–F, phase ledger: Foundation/Routing/Capability/Task-model **done**,
+Durable execution **active**, Retrieval/Memory/Autonomy **next**). Current verified baseline:
+**138 workerd + 500 node tests green**, typecheck exit 0 (Node 22.23.3 · upm 1.4.0 · Go 1.26.0).
+The old PRD epic list (`docs/prd/`) is marked historical; BMAD tracks truth in
+`_bmad-output/implementation-artifacts/sprint-status.yaml`.
+
 Package manager is **upm**, runtime is **Node**. There is no `package-lock.json`; `upm.lock` is
 committed and is the reproducible build input. `npm run <script>` still works — `npm` here is only
 running a package.json script, not installing anything.
@@ -25,25 +32,25 @@ running a package.json script, not installing anything.
 upm install
 
 # typecheck — TypeScript 7 (tsgo, the native Go port)
-npm run typecheck
+upm run typecheck
 
 # local dev (miniflare) — Homā works with no secrets at all
-npm run dev              # wrangler dev (--local --port 8787)
+upm run dev              # wrangler dev (--local --port 8787)
 #   → http://127.0.0.1:8787/dashboard
 #   → http://127.0.0.1:8787/api/v1/flock/status
 
 # run a core on this box instead — see docs/DEPLOY.md
 export NO_PROXY=127.0.0.1,localhost
-npm run simorgh -- serve --port 8788   # keys come from process.env
+upm run simorgh -- serve --port 8788   # keys come from process.env
 
 # deploy (typecheck-gated; needs your Cloudflare auth)
-npm run deploy           # tsgo --noEmit && wrangler deploy
+upm run deploy           # tsgo --noEmit && wrangler deploy
 
 # add extra birds (optional — absent = dormant, safe-by-default)
-npx wrangler secret put GROQ_API_KEY
-npx wrangler secret put HF_TOKEN
-npx wrangler secret put GEMINI_API_KEY
-npx wrangler secret put OPENROUTER_API_KEY
+upx wrangler secret put GROQ_API_KEY
+upx wrangler secret put HF_TOKEN
+upx wrangler secret put GEMINI_API_KEY
+upx wrangler secret put OPENROUTER_API_KEY
 ```
 
 **Three places, not one.** Cloudflare is the *optional* path. A local Node run is a first-class way to
@@ -71,21 +78,21 @@ The repo holds two packages, linked by a one-way dependency: the platform import
 
 ## Testing
 
-Two suites, split by what each can actually prove. `npm test` runs both, workers first.
+Two suites, split by what each can actually prove. `upm test` runs both, workers first.
 
 ```bash
-npm test                                                # both suites
-npm run test:workers                                    # workerd: the Cloudflare app
-npm run test:node                                       # plain Node: engine + platform
-npx vitest run --config vitest.node.config.ts <file>    # one file, scoped
+upm test                                                # both suites
+upm run test:workers                                    # workerd: the Cloudflare app
+upm run test:node                                       # plain Node: engine + platform
+upx vitest run --config vitest.node.config.ts <file>    # one file, scoped
 ```
 
 Plus three commands that check the *assembled* thing rather than a unit:
 
 ```bash
-npm run e2e:ask          # the CLI reaches a live core over REST *and* MCP, and compares the answers
-npm run platform:smoke   # boots a real core on an ephemeral port, probes it, exits 0/1
-npm run simorgh -- doctor # diagnoses a fleet that will not answer
+upm run e2e:ask          # the CLI reaches a live core over REST *and* MCP, and compares the answers
+upm run platform:smoke   # boots a real core on an ephemeral port, probes it, exits 0/1
+upm run simorgh -- doctor # diagnoses a fleet that will not answer
 ```
 
 | Suite | Config | Files | Runs against |
@@ -124,14 +131,14 @@ suite that will eventually be disabled.
 the types — so there is no build step between you and a running core.
 
 ```bash
-npm run simorgh -- targets                              # where a core can live
-npm run simorgh -- plan node --origin 127.0.0.1:8788     # what deploying there involves
-npm run simorgh -- deploy node --mode cli --yes          # deploy (preflight-gated)
-npm run simorgh -- serve                                # run a phoenix-core on this box
-npm run simorgh -- connect node http://127.0.0.1:8788 --api-key <token>
-npm run simorgh -- ask "who is simorgh" --prefer rest     # ask the fleet, with failover
-npm run simorgh -- status                                # what is up, and what it can answer with
-npm run simorgh -- doctor                                # why one of them is not answering
+upm run simorgh -- targets                              # where a core can live
+upm run simorgh -- plan node --origin 127.0.0.1:8788     # what deploying there involves
+upm run simorgh -- deploy node --mode cli --yes          # deploy (preflight-gated)
+upm run simorgh -- serve                                # run a phoenix-core on this box
+upm run simorgh -- connect node http://127.0.0.1:8788 --api-key <token>
+upm run simorgh -- ask "who is simorgh" --prefer rest     # ask the fleet, with failover
+upm run simorgh -- status                                # what is up, and what it can answer with
+upm run simorgh -- doctor                                # why one of them is not answering
 ```
 
 Four things it is opinionated about:
@@ -158,9 +165,9 @@ below because it is the one with a moving part; the other two, and what is genui
 them, are in **[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
 
 ```bash
-npx wrangler login
-npx wrangler kv namespace create CONTEXT_STORE   # paste the id into wrangler.toml
-npm run deploy                                   # typecheck-gated wrangler deploy
+upx wrangler login
+upx wrangler kv namespace create CONTEXT_STORE   # paste the id into wrangler.toml
+upm run deploy                                   # typecheck-gated wrangler deploy
 ```
 
 The KV namespace id is the one placeholder this repo ships with. `wrangler dev` and
@@ -230,7 +237,7 @@ simorgh-platform/
 │   ├── security.ts         #   host adapter → engine security
 │   ├── telegram.ts         #   Telegram client + webhook (secret-token verified)
 │   └── dashboard.ts        #   Self-contained Mission Control HTML (inline CSS/JS, no build)
-├── test/                   # 11 files, 93 tests — the workerd suite (vitest.config.ts)
+├── test/                   # the workerd suite (vitest.config.ts) — see Testing section for current counts
 ├── packages/               # Go workspace modules
 │   ├── config/             #   provider config load/validate
 │   ├── crypto/             #   AES-256-GCM sealing, argon2id key derivation
@@ -252,7 +259,7 @@ simorgh-platform/
 `worker-configuration.d.ts` is generated and supersedes `@cloudflare/workers-types`:
 
 ```bash
-npm run types   # wrangler types — rerun after editing wrangler.toml
+upm run types   # wrangler types — rerun after editing wrangler.toml
 ```
 
 It is committed so a fresh clone typechecks without booting Wrangler. Because it is

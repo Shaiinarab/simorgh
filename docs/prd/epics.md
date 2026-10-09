@@ -1,8 +1,12 @@
-# Simorgh — Epics (canonical, sprint-planning format)
+# Simorgh — Epics (historical, sprint-planning format)
 
-> Canonical epic/story list derived from [PRD.md](./PRD.md). This file is the
-> machine-parsed source for sprint tracking (`sprint_plan.py`). Statuses below
-> reflect the PRD; the tracking file records them explicitly.
+> ⚠️ **HISTORICAL as of 2026-10-09.** This file records the original Epic 1–13 / 63-story breakdown
+> derived from [PRD.md](./PRD.md) and remains valid documentation of Phases 0–3 (foundation → task
+> model), most of which shipped. It is **no longer the planning source**: new stories must be
+> generated from [`docs/ROADMAP-SPINE.md`](../ROADMAP-SPINE.md) epics A–F via BMAD
+> (`bmad-create-epics-and-stories`) into `_bmad-output/`. Do not add stories here. The
+> old→new disposition map lives in ROADMAP-SPINE §3 (e.g. Epic 12 survivor = A3 AUTH-004,
+> Epic 10 → E3 evidence-gated birds only, Epic 8/9 → E1 MCP modernization).
 
 ---
 
