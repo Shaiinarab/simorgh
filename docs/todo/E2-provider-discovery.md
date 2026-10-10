@@ -10,7 +10,7 @@ tags:
   - quota
   - epic-e
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "draft"
 work_status: "later"
@@ -21,13 +21,13 @@ depends_on:
 stale_after: "2026-10-17T00:00:00Z"
 sources:
   - id: roadmap-spine
-    resource: "ROADMAP-SPINE.md"
+    resource: "../ROADMAP-SPINE.md"
     title: "Canonical roadmap"
   - id: continuation-review
-    resource: "research/CONTINUATION-REVIEW-2026-10-10.md"
+    resource: "../research/CONTINUATION-REVIEW-2026-10-10.md"
     title: "Continuation review, October 10 2026"
   - id: free-only-adr
-    resource: "adr/ADR-0005-free-only-mode.md"
+    resource: "../adr/ADR-0005-free-only-mode.md"
     title: "FREE_ONLY and unknown-cost rules"
 ---
 # E2 — Evidence-backed provider and capability discovery
