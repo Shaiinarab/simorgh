@@ -1,6 +1,6 @@
 # Host portability — evaluating Vercel, and the `SqlPort` finding behind it
 
-**Written:** 2026-09-22 · **Status:** evaluation complete, implementation deliberately not started
+**Written:** 2026-09-22 · **Updated:** 2026-10-03 (Bun host removed) · **Status:** evaluation complete for Vercel; implementation deliberately not started
 
 > This document exists because "add a Vercel adapter" is the obvious next step and **the obvious next
 > step is the wrong one**. Running the evaluation turned up a constraint in the engine's own port
@@ -18,7 +18,8 @@ portability claim tested only on the runtimes it was designed against is not tes
 
 ## 2. What a host must supply
 
-From `phoenix-core/src/ports.ts`, the engine needs exactly six things:
+From `phoenix-core/src/ports.ts`, the engine needs six runtime capabilities; the ledger arrives as a
+seventh port, which a serverless host still has to supply:
 
 | Port | Node supplies | Cloudflare supplies | Vercel |
 |---|---|---|---|

@@ -26,7 +26,7 @@ Every file below exists and is in the build. This is the map to reach for before
 
 | File | Owns |
 |------|------|
-| `ports.ts` | The seven ports. The only place any of them is declared. |
+| `ports.ts` | Every port the engine declares, and nowhere else: `SqlPort`, `FetchLike`, `HttpLike`, `PhoenixPorts`, `ContextStorePort`, `LedgerPort`, `WorkersAiPort`, plus their row/option types. |
 | `provider.ts` | The `Provider` contract plus factories (`openAiCompatibleProvider`, `geminiProvider`, `workersAiProvider`) — one per **wire shape**, not one per vendor |
 | `flock.ts` | `flyFlock()`: priority routing, dormant skip, cooldowns, fail-through, exhaustion, and `describeFlock()` status assembly |
 | `agent.ts` | The agent loop: registry, argument extraction, per-tool failure capture, truncation, the synthesis prompt, the iteration budget |
@@ -38,6 +38,15 @@ Every file below exists and is in the build. This is the map to reach for before
 | `quota.ts` | **Free-compute capacity.** Quota windows, reset horizons, `capacityFor`, `postSpendValue`, `planQuotaRun`, the `quota_state` table, and the latency EMA. Pure over `(states, workload, now)` — see [`adr/ADR-0003`](adr/ADR-0003-free-compute-capacity.md) |
 | `ledger.ts` | `createLedger()` / `LEDGER_SCHEMA` — the transparency ledger, on any `SqlPort` |
 | `models.ts` | The model catalog |
+| `swarm.ts` | Decomposition + placement, bounded by `planTaskRun` |
+| `tasks.ts` | The task graph — a goal as data, ordered and scheduled |
+| `scheduled.ts` | Eligibility and delayed wake |
+| `session.ts` | Affinity and prompt-cache economics |
+| `capabilities.ts` | The capability vocabulary and readiness |
+| `capability-probes.ts` | The shared probe layer behind `GET /api/v1/capabilities` |
+| `complexity.ts` | `estimateComplexity` — it orders, never excludes |
+| `failures.ts` | What a failure string means — the one definition (`isRateLimitError`) |
+| `index.ts` | The barrel |
 | `node/index.ts` | The Node adapter (`node:sqlite`, `node:crypto`). The package's only `node:` import. |
 
 **`simorgh-platform`** — the control plane:
@@ -56,8 +65,10 @@ Every file below exists and is in the build. This is the map to reach for before
 | `runtimes/node.ts` | A complete phoenix-core on Node, runnable unbuilt |
 | `runtimes/providers.ts`, `runtimes/smoke.ts` | The Node provider catalog, and the boot-probe the `node` target's deploy step runs |
 | `cli.ts` | The `simorgh` command itself |
+| `doctor.ts` | `simorgh doctor`, 12 tests |
+| `index.ts` | The barrel |
 
-**Root `src/`** — the Cloudflare host: `index.ts` (Hono routes), `flock.ts` (provider catalog + the `FlockCoordinator` DO), `data-trust.ts` (the `DataTrustVault` DO), `agent-service.ts` (the request pipeline bound to `Env`), `telegram.ts`, and the host adapters (`health.ts`, `rate-limit.ts`, `models.ts`, `agent.ts`, `security.ts`) that delegate to the engine.
+**Root `src/`** — the Cloudflare host: `index.ts` (Hono routes, 13 registrations), `flock.ts`, `data-trust.ts`, `agent-service.ts`, `telegram.ts`, `platform.ts`, `dashboard.ts` (`GET /dashboard`), and the five host adapters (`health.ts`, `rate-limit.ts`, `models.ts`, `agent.ts`, `security.ts`).
 
 ---
 
@@ -103,7 +114,7 @@ Every capability the engine needs arrives through an interface declared in `phoe
 | `PhoenixPorts` | `phoenix-core/src/ports.ts` | All engine capabilities: `fetch`, `sha256`, `randomUUID()`, `now()` | Constructed at `src/index.ts` from runtime globals | `createNodePorts()` at `phoenix-core/src/node/index.ts` |
 | `ContextStorePort` | `phoenix-core/src/ports.ts` | Key/value offload with TTL: `put(key, value, {expirationTtl})`, `get(key)` | KV namespace at `src/index.ts` | `memoryContextStore()` at `phoenix-core/src/node/index.ts` |
 | *(no new port for quota)* | — | `quota.ts` needs only `SqlPort` and an injected clock | `SqlStorage` (DO) and `node:sqlite` both already satisfy it; the whole capacity model is pure functions over a value type | — |
-| `LedgerPort` | `phoenix-core/src/ports.ts` | Transparency ledger: `logEntry()`, `getUserLogs()` | The `DataTrustVault` Durable Object at `simorgh-platform/src/data-trust.ts`, bound to storage via `createLedger(this.ctx.storage.sql)` | `createLedger(sql)` at `phoenix-core/src/ledger.ts`, re-exported as `sqlLedger` from the `/node` subpath |
+| `LedgerPort` | `phoenix-core/src/ports.ts` | Transparency ledger: `logEntry()`, `getUserLogs()` | The `DataTrustVault` Durable Object at `src/data-trust.ts`, bound to storage via `createLedger(this.ctx.storage.sql)` | `createLedger(sql)` at `phoenix-core/src/ledger.ts`, re-exported as `sqlLedger` from the `/node` subpath |
 | `WorkersAiPort` | `phoenix-core/src/ports.ts` | Cloudflare Workers AI: `run(model, input)` | Workers AI binding at `src/index.ts` | Not supplied — Node host omits it; providers needing it report themselves unavailable |
 
 The Node adapter lives at `phoenix-core/src/node/index.ts` and is exposed as the subpath export `@simorgh/phoenix-core/node` (see `phoenix-core/package.json` `exports`). It is the **only** place in `phoenix-core` that names a `node:` module.
@@ -194,10 +205,10 @@ Two test suites, deliberately separate.
 
 | Command | Config | What runs | What it catches | What it cannot catch |
 |---------|--------|-----------|-----------------|----------------------|
-| `upm run test:workers` (canonical; legacy spelling `npm run test:workers`) | `vitest.config.ts` (via `upm test` → `test:workers` → `vitest run`) | `simorgh-platform/test/**/*.test.ts` — the Workers app suite, 6 files | Runtime behavior of the app in workerd: Durable Object RPC, KV reads/writes, cron handler shape, HTTP route contracts, the full request path through Hono. Uses real `cloudflare:workers` bindings from `wrangler.toml`. | Nothing about the engine in isolation — the Workers tests import the app, not the core directly. |
+| `upm run test:workers` (canonical; legacy spelling `npm run test:workers`) | `vitest.config.ts` (via `upm test` → `test:workers` → `vitest run`) | `test/**/*.test.ts` — the Workers app suite, 14 files | Runtime behavior of the app in workerd: Durable Object RPC, KV reads/writes, cron handler shape, HTTP route contracts, the full request path through Hono. Uses real `cloudflare:workers` bindings from `wrangler.toml`. | Nothing about the engine in isolation — the Workers tests import the app, not the core directly. |
 | `upm run test:node` (canonical; legacy spelling `npm run test:node`) | `vitest.node.config.ts` (via `upm test` → `test:node` → `vitest run --config vitest.node.config.ts`) | `phoenix-core/test/**/*.test.ts` + `simorgh-platform/test/**/*.test.ts` (engine + platform unit suites) | Engine correctness in isolation: `flyFlock` routing, agent tool loop, request validation, SQL via `SqlPort` (real SQLite in-memory), rate limiting, boundary invariants. No runtime, no network, no Cloudflare account. | Nothing about the Workers runtime — no `cloudflare:workers` resolution, no Durable Objects, no KV, no AI binding. |
 
-Why separate? `simorgh-platform/test/` imports `cloudflare:workers` (DurableObject) and uses `@cloudflare/vitest-pool-workers` with `remoteBindings: false`. The engine tests must run on plain Node to prove portability — if the engine ever picks up a `cloudflare:` import or a global binding, the Node suite stops resolving and goes red, while the workers suite keeps passing. That signal is the point. `upm test` runs both, in order; the workers suite runs first (it is listed first in `package.json`). As of 2026-10-09 the counts are **138 passed / 14 files** (workers) and **500 passed / 27 files** (node) on Node 22.23.3.
+Why separate? `simorgh-platform/test/` imports `cloudflare:workers` (DurableObject) and uses `@cloudflare/vitest-pool-workers` with `remoteBindings: false`. The engine tests must run on plain Node to prove portability — if the engine ever picks up a `cloudflare:` import or a global binding, the Node suite stops resolving and goes red, while the workers suite keeps passing. That signal is the point. `upm test` runs both, in order; the workers suite runs first (it is listed first in `package.json`). As of 2026-10-10 the counts are **138 passed / 14 files** (workers) and **504 passed / 28 files** (node) on Node 26.7.0.
 
 Both suites share `phoenix-core/test/boundary.test.ts`, which runs under the Node config and asserts every portability invariant in section 5.
 
@@ -205,12 +216,14 @@ Both suites share `phoenix-core/test/boundary.test.ts`, which runs under the Nod
 
 ## 8. Spine surfaces — what is being built now (2026-10-09)
 
-Per [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md), the next architectural surfaces are **planned, not yet
-present**; this section exists so future contributors find the intended home instead of inventing one:
+Per [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md), these are the spine's surfaces. Some already have a first
+implementation — `tasks.ts`, `scheduled.ts` and `swarm.ts` exist and are tested (§1.1) — and the
+Status column names the wiring that remains. This section exists so future contributors find the
+intended home instead of inventing one:
 
 | Surface | Home | Rule | Status |
 |---|---|---|---|
-| Unified Task/Execution/Schedule | `phoenix-core/src/tasks.ts` + host `scheduled.ts` | `Task`=what, `Execution`=one attempt, `Schedule`=eligibility. One canonical model; **no second task DB, no second scheduler** | EPIC-B1 |
+| Unified Task/Execution/Schedule | `phoenix-core/src/tasks.ts` + `phoenix-core/src/scheduled.ts` | `Task`=what, `Execution`=one attempt, `Schedule`=eligibility. One canonical model; **no second task DB, no second scheduler** | EPIC-B1 |
 | Quota-gated execution | DO scheduler claim path → `planTaskRun()` | Invariant: **nothing spends provider quota until the capacity planner says it can.** claim → load quota states → plan → {run ∣ delay(wake) ∣ unavailable} | EPIC-B2 |
 | Usage loop close | provider result → `recordUsage()` → health → ledger | Actual tokens/requests recorded after every execution; reset-aware scheduling becomes real | EPIC-B3 |
 | Principal identity | credential → authenticated `principalId` | Client-supplied `X-Simorgh-User-Id` is never believed; principal owns task/schedule/memory/retrieval/connector/ledger ops | EPIC-A3 🔴 gate |

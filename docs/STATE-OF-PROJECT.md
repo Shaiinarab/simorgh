@@ -2,8 +2,8 @@
 
 **Written:** 2026-09-22 · **Updated:** 2026-10-09 (§12 truth reconciliation; §11 was 2026-10-08) ·
 **Canonical plan:** [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md) — read §12 first; it supersedes any older
-roadmap prose in this file · **Status:** all TS suites green (**138 workers + 500 node**, re-derived
-2026-10-09 on Node 22.23.3 / upm 1.4.0 / tsgo, typecheck exit 0), Go workspace green on go1.26.0
+roadmap prose in this file · **Status:** all TS suites green (**138 workers + 504 node**, re-derived
+2026-10-10 on Node 26.7.0 / upm 1.4.0 / tsgo, typecheck exit 0), Go workspace green on go1.26.0
 (6 modules build+test clean)
 
 > **Read this as a claim set, not a fact set.** Every number and path below was true when written and
@@ -22,12 +22,11 @@ roadmap prose in this file · **Status:** all TS suites green (**138 workers + 5
 
 | Fact | Value |
 |---|---|
-| Branch | `feat/phoenix-core-modularization` |
-| HEAD | `0e7e1f0 chore(mailbox): report TASK-017 done, and record what its endpoint revealed` |
-| `main` / `origin/main` | `2dca0dd` (local == remote) |
-| Shared base with `main` | `1f529d3` |
-| Commits beyond that shared base | 47 |
-| `origin/production-readiness-v0-3` | `e0053fc` — **an ancestor of HEAD**, so the work it introduced is folded into this branch, not pending against `main` |
+| Branch | `main` — HEAD `64e6bd3` |
+| `main` / `origin/main` | `64e6bd3` / `1f286942` (local ahead by 10) |
+| Shared base with `main` | `64e6bd3` |
+| Commits beyond that shared base | 0 |
+| `origin/production-readiness-v0-3` | `e0053fc` — **an ancestor of HEAD**, so the work it introduced is folded in, not pending |
 
 > The prose below was written when the branch was much younger. Some of it still describes reality
 > accurately; some is marked stale and kept for context. When in doubt, re-derive from git rather than
@@ -94,13 +93,14 @@ and was merely *assumed* in the other. Now the order exists once.
 
 Every row below was executed, not inferred. Commands are copy-pasteable from the repo root.
 **§3.1 is explicitly stale** (the per-file composition describes a tree three commits old) — the live
-suite counts you should measure regressions against are in §11.5.
+suite counts you should measure regressions against are in §11.5. The workers suite is root `test/**`,
+not `simorgh-platform/test/**` — the latter is part of the Node suite.
 
 | # | Claim | Command | Result |
 |---|---|---|---|
 | 1 | Types pass across all three configs | `npm run typecheck` | clean (0 errors) |
 | 2 | The Workers app works in workerd | `npm run test:workers` | **138 passed** (14 files) — current as of HEAD |
-| 3 | The engine + platform pass on plain Node | `npm run test:node` | **473 passed** (25 files) — current as of HEAD |
+| 3 | The engine + platform pass on plain Node | `npm run test:node` | **504 passed** (28 files) — current as of HEAD |
 | 4 | The platform reaches a live core **over REST and MCP**, and the answers match | `npm run e2e:ask` | **10/10 checks** |
 | 5 | A real core boots **unbuilt** and answers | `npm run simorgh -- smoke` | 5/5 checks (health, flock status, auth-fails-closed, execute-degrades-honestly, mcp-initialize) |
 | 6 | The engine runs on a different runtime | `freebuff2 bash -lc 'cd … && npx vitest run --config vitest.node.config.ts'` | **202 passed on Node 22.23** (host is Node 26.7) |
@@ -145,13 +145,13 @@ totals above are asserted per file rather than by intent.
 | Rate limiting | ✅ | ✅ | ✅ | Per-user SQL counter in a Durable Object |
 | Persistence | ✅ | ✅ | ✅ | SQLite both sides: DO `SqlStorage` on the edge, `node:sqlite` self-hosted |
 | Transparency ledger | ✅ | ✅ | ✅ | Append-only, written *before* the flight. One implementation, two hosts |
-| Telegram | ✅ | ✅ | ✅ | Client + webhook; `src/telegram.ts:115` reads `X-Telegram-Bot-Api-Secret-Token`, and `test/telegram.test.ts` covers it (4 tests) |
-| Dashboard | ✅ | ✅ | ✅ | `src/dashboard.ts` rendered by `GET /dashboard` (`src/index.ts:135`), asserted by `test/http.test.ts` (12 tests) |
+| Telegram | ✅ | ✅ | ✅ | Client + webhook; `src/telegram.ts:116` reads `X-Telegram-Bot-Api-Secret-Token`, and `test/telegram.test.ts` covers it (4 tests) |
+| Dashboard | ✅ | ✅ | ✅ | `src/dashboard.ts` rendered by `GET /dashboard` (`src/index.ts:195`), asserted by `test/http.test.ts` (25 tests) |
 | Cron | ✅ | ✅ | ✅ | Stale-health sweep |
-| Multi-target deploy | ✅ | ✅ | ✅ | 3 real targets (`cloudflare-workers`, `node`, `byo-endpoint`), manual and cli modes |
-| Deploy preflight gate | ✅ | ✅ | ✅ | 16 tests; verified live against a real core *and* an impostor on a port |
+| Multi-target deploy | ✅ | ✅ | ✅ | 3 real targets (`cloudflare-workers`, `node`, `byo-endpoint`), manual mode for all three; `cli` for `cloudflare-workers` and `node` only |
+| Deploy preflight gate | ✅ | ✅ | ✅ | 33 tests; verified live against a real core *and* an impostor on a port |
 | Platform MCP server | ✅ | ✅ | ✅ | 13 tests; session-enforced, MCP-spec-correct tool errors |
-| Connector conformance kit | ✅ | ✅ | ✅ | 6 tests; runs both connectors against one double and fails a deliberately broken one |
+| Connector conformance kit | ✅ | ✅ | ✅ | 7 conformance checks (`conformance.test.ts`: 13 tests); runs both connectors against one double and fails a deliberately broken one |
 | Fleet + failover across cores | ✅ | ✅ | ✅ | `Fleet.ask` reports *every* failure, not just the last |
 | `doctor` (diagnose a broken fleet) | ✅ | ✅ | ✅ | 12 tests; stable codes, never throws on an unhealthy fleet |
 | Observability | ⚠️ | partial | partial | Request IDs + structured errors. No metrics/tracing. |
@@ -170,7 +170,7 @@ totals above are asserted per file rather than by intent.
 > without running the command. Verified below.
 
 `go.work` declares **eight Go modules** — `bot`, `gateway`, `tools`, and
-`packages/{config,crypto,ledger,providers,providers/groq}` — 16 `.go` files, ~1 900 lines. It is
+`packages/{config,crypto,ledger,providers,providers/groq}` — 17 `.go` files, 2 864 lines. It is
 **committed** (`7a54d64 feat(go): land the self-hosted gateway workspace`) and it is **green**, both
 locally and in CI (the `go` job in `.github/workflows/ci.yml`):
 
@@ -178,14 +178,14 @@ locally and in CI (the `go` job in `.github/workflows/ci.yml`):
 |---|---|---|
 | Build | `GOFLAGS=-mod=readonly go build all` | exits 0 |
 | Vet | `GOFLAGS=-mod=readonly go vet github.com/shaiinarab/simorgh/...` | exits 0 |
-| Test | `GOFLAGS=-mod=readonly go test github.com/shaiinarab/simorgh/...` | 5 packages `ok`, 3 `no test files` |
+| Test | `GOFLAGS=-mod=readonly go test github.com/shaiinarab/simorgh/...` | 6 packages `ok`, 3 `no test files` |
 
 Override `GOFLAGS` per command: the host's `~/.config/go/env` holds `GOFLAGS=-mod=vendor` written by
 another project, which makes every non-vendored build fail with a *misleading* "inconsistent vendoring".
 
 ### 4.1 `gateway/` is a real answering runtime, with a *different* wire contract
 
-This is not scaffolding. `gateway/internal/server/server.go` (321 lines) serves:
+This is not scaffolding. `gateway/internal/server/server.go` (328 lines) serves:
 
 - `POST /v1/chat/completions` — OpenAI-compatible, **with SSE streaming** — which no TypeScript host implements.
 - `GET /v1/models` — aggregated catalog across adapters, with per-provider warnings.
@@ -209,9 +209,9 @@ here: two half-maintained truths, not duplicated code.
 **none** of those. So today the product's central promise — *connect a core wherever it runs* — holds
 only for TypeScript hosts.
 
-Second gap: `gateway/internal/server` has **no test files**. `packages/providers/selection_test.go`
-(142 lines), `packages/crypto`, `packages/config` and `packages/ledger` are tested; the HTTP surface,
-the SSE writer, and the failover loop are not.
+Second gap: the HTTP surface was untested until `server_test.go` landed; the SSE writer and failover
+loop remain the thinnest Go coverage. `packages/providers/selection_test.go` (142 lines),
+`packages/crypto`, `packages/config`, `packages/ledger` and `gateway/internal/server` are tested.
 
 Decision recorded in [`adr/ADR-0001-go-workspace-role.md`](adr/ADR-0001-go-workspace-role.md).
 **Nothing is deleted.**
@@ -240,22 +240,22 @@ hardened". The lesson generalises: on this repo, *run the suite* — do not read
 ## 6. How to run it
 
 ```bash
-cd projects/opensource/simorgh-platform
+cd projects/simorgh
 
-npm test                                     # both suites, workers first
-npm run typecheck                            # three configs
+upm test                                     # both suites, workers first
+upm run typecheck                            # three configs
 
-npm run e2e:ask                              # the CLI reaching a live core, over REST and MCP
-npm run platform:smoke                        # boot a real core, probe it, exit 0/1
+upm run e2e:ask                              # the CLI reaching a live core, over REST and MCP
+upm run platform:smoke                        # boot a real core, probe it, exit 0/1
 
-npm run simorgh -- targets                    # where a core can live
-npm run simorgh -- plan node --origin 127.0.0.1:8788
-npm run simorgh -- deploy node --mode cli --dry-run   # preflight-gated; prints, runs nothing
-npm run simorgh -- serve                      # run a phoenix-core here
-npm run simorgh -- connect node http://127.0.0.1:8788 --api-key <token>
-npm run simorgh -- ask "who is simorgh" --prefer rest
-npm run simorgh -- status
-npm run simorgh -- doctor
+upm run simorgh -- targets                    # where a core can live
+upm run simorgh -- plan node --origin 127.0.0.1:8788
+upm run simorgh -- deploy node --mode cli --dry-run   # preflight-gated; prints, runs nothing
+upm run simorgh -- serve                      # run a phoenix-core here
+upm run simorgh -- connect node http://127.0.0.1:8788 --api-key <token>
+upm run simorgh -- ask "who is simorgh" --prefer rest
+upm run simorgh -- status
+upm run simorgh -- doctor
 ```
 
 Two environment notes, both load-bearing:
@@ -457,11 +457,11 @@ paths now agree. Worth noting as a pattern: the test that caught this was not wr
 |---|---|
 | `npm run typecheck` | clean, 3 configs |
 | `npm run test:workers` | **138 passed**, 14 files |
-| `npm run test:node` | **473 passed**, 25 files |
+| `npm run test:node` | **504 passed**, 28 files |
 | `npm run platform:smoke` | **5/5** |
 | `npm run e2e:ask` | **10/10** |
 | `go build` / `go vet` / `go test` | green, 6 packages |
-| `npm run security:scan` | PASS |
+| `npm run security:scan` | PASS — `.dev.vars` present but never tracked |
 
 The per-file composition in §3.1 is **stale** and is left as written 2026-09-22 rather than
 re-derived: it described a tree three commits old, and the totals above are the ones a regression
@@ -500,7 +500,7 @@ Recorded in `DEFAULT_PROVIDER_COST` and in `mailbox/OUTBOX/TASK-017-REPORT.md` �
 
 Everything in §1–§11 above was written against older branch states; per this file's own policy the
 prose is kept, and this section records what changed and where truth now lives. **§1's branch table is
-stale**: we are on `main` at `6a4e634` (PR #2 `feat/phoenix-core-modularization` merged as `190a847`).
+stale**: we are on `main` at `64e6bd3` (PR #2 `feat/phoenix-core-modularization` merged as `190a847`).
 
 ### 12.1 The roadmap changed shape: from feature list to vertical spine
 
@@ -520,7 +520,7 @@ Retrieval / Memory / Autonomous loop **next**; Connectors / UI **later**.
 | `upm install --frozen-lockfile` | ✅ 93 pkgs |
 | `upm run typecheck` (tsgo ×3 projects) | ✅ exit 0 |
 | `upm run test:workers` | ✅ 14 files / **138 passed** |
-| `upm run test:node` | ✅ 27 files / **500 passed** (was 473 — swarm/session/capability suites grew) |
+| `upm run test:node` | ✅ 28 files / **504 passed** (was 473 — swarm/session/capability suites grew) |
 | Go workspace on **go1.26.0** | ✅ all modules build/vet/test clean (`./...` must be run per-module or from a module dir; root repo dir is not itself a Go module) |
 | npm/Bun/pnpm remnants in docs & scripts | ✅ swept — instructions now say `upm run …` / `upx …`; historical evidence lines keep their original commands, labelled |
 

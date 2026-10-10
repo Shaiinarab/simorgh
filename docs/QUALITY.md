@@ -2,7 +2,7 @@
 
 > **Snapshot notice (2026-10-09):** the numbers in this audit (82 + 202 tests, 10 + 17 files) were true
 > when written and are kept unedited as historical evidence — original command spellings included.
-> Current verified baseline: **138 workerd + 500 node tests**, typecheck exit 0, on Node 22.23.3 /
+> Current verified baseline: **138 workerd + 504 node tests (28 files)**, typecheck exit 0, on Node 26.7.0 /
 > upm 1.4.0 / tsgo (see `docs/STATE-OF-PROJECT.md` §12.2 and `docs/ROADMAP-SPINE.md` §0). Canonical
 > commands today are `upm run typecheck`, `upm test`. The §7 "ten things to fix first" list still
 > stands as open quality debt; it is folded into EPIC-A/B acceptance criteria in the spine.
@@ -40,7 +40,7 @@ npx vitest run --coverage 2>&1 | tail -20
 ```
 Would error: Coverage provider @vitest/coverage-v8 is not installed (provider missing, could not measure).
 
-**Per-file test counts:** 24 test files across 3 suites (9 phoenix-core engine tests, 17 simorgh-platform tests, 10 Workers host tests).
+**Test files:** 42 as of the 2026-10-10 re-audit — 18 `phoenix-core/test/`, 10 `simorgh-platform/test/`, 14 root `test/` (9 + 17 + 10 = 24 when written).
 
 **Source reading:** All files in `phoenix-core/src/`, `simorgh-platform/src/`, `src/` (root Workers host) were read in full. All 24 test files were read in full. Dynamic-reference patterns checked: string-keyed dispatch (case statements in `mcp/server.ts`, `cli.ts`, `tools.ts`), `Object.entries()` (1 use in `runtimes/node.ts`, for headers not dispatch), MCP tool-name dispatch, CLI subcommand table, import * as (none found), .ts extension imports (only in `simorgh-platform/src/runtimes/`, intentional for unbuilt Node).
 
@@ -54,13 +54,13 @@ Plus in package.json scripts: `"test:coverage": "vitest run --coverage"`
 
 | symbol | defined at | referenced from | verdict |
 |--------|-----------|----------------|---------|
-| `findModelBird` | `src/models.ts:19` | `src/models.ts:14,18` (self + comment only) | dead — no code imports this alias; only docs/ARCHITECTURE.md mentions it by name. Confirmed: `grep -rn findModelBird` across all .ts files shows only definition at line 19 and declaration at line 14. |
+| `findModelBird` | `src/models.ts:19` | `src/models.ts:14,18` (self + comment only) | dead — no code imports this alias; referenced only by `README.md:249` and the retention note at `src/models.ts:8-10`. Confirmed: `grep -rn findModelBird` across all .ts files shows only definition at line 19 and declaration at line 14. |
 
 Dynamic-reference checks performed (all symbols checked, none falsely flagged):
-- **String-keyed dispatch**: `mcp/server.ts:178,207,265` (case "initialize", "tools/call", "platform_targets"/"platform_fleet"/"platform_ask") — all strings correspond to real handlers. `tools.ts:65,68` (case "get_server_time", "search_web") — both in AGENT_TOOLS. CLI `cli.ts:115-135` — all 12 commands reachable.
+- **String-keyed dispatch**: `mcp/server.ts:178,207,265` (case "initialize", "tools/call", "platform_targets"/"platform_fleet"/"platform_ask") — all strings correspond to real handlers. `tools.ts:65,68` (case "get_server_time", "search_web") — both in AGENT_TOOLS. CLI `cli.ts:113-137` — all 11 commands reachable.
 - **Object.keys/Object.entries**: `runtimes/node.ts:253` — iterates outcome.headers for HTTP forwarding, not dispatch.
 - **MCP tool-name dispatch**: `mcp/server.ts:270-284` — all three platform_* tools have handlers.
-- **CLI subcommand table**: `cli.ts:115-135` — all 12 commands have implementation functions.
+- **CLI subcommand table**: `cli.ts:113-137` — all 11 commands have implementation functions.
 - **.ts extension imports**: Only in `simorgh-platform/src/runtimes/` for unbuilt Node runtime. All resolve.
 - **import * as**: None found in any .ts file.
 
@@ -85,10 +85,12 @@ Dynamic-reference checks performed (all symbols checked, none falsely flagged):
 | tools/list advertises all three platform tools with schemas | `simorgh-platform/test/mcp-server.test.ts:201-207` | An extra tool could be added without failing — toContain checks membership not exact set. No `expect(names.length).toBe(3)` assertion exists. A 4th tool with inputSchema would pass silently. |
 | unknown tool reports a tool failure without throwing | `simorgh-platform/test/mcp-server.test.ts:300` | expect(json.error).toBeDefined() would pass if server returned { error: null } or { error: "garbage" }. No check on error.code or error.message. |
 | platform_ask against a dead fleet reports a tool failure | `simorgh-platform/test/mcp-server.test.ts:311` | expect(json.result).toBeDefined() would pass if result were any non-null value (empty object, wrong shape). No shape assertion. |
-| unknown tool reports a tool failure without throwing | `simogh-platform/test/mcp-server.test.ts:319` | Same as above — expect(json.error).toBeDefined() without content check. |
+| unknown tool reports a tool failure without throwing | `simorgh-platform/test/mcp-server.test.ts:319` | Same as above — expect(json.error).toBeDefined() without content check. |
 | sends a bearer token and the request body the core expects | `simorgh-platform/test/connectors.test.ts:119` | expect(result).toMatchObject({ success: true, answer: "thirty birds" }) — toMatchObject passes with extra fields. Does not assert answeredBy, so a connector mapping answeredBy incorrectly would pass. |
 | returns the same answer as REST | `simorgh-platform/test/integration.test.ts:155` | Expects overMcp.answer === overRest.answer but does not also assert answeredBy parity. A regression in answeredBy mapping would not be caught. |
 | restConnector ask sends correct payload | `simorgh-platform/test/connectors.test.ts:119` | toMatchObject omits answeredBy assertion. A connector dropping provenance would pass. |
+
+**Fixed since this audit:** items 1 and 5 gained shape assertions; `connectors.test.ts:120` still omits `answeredBy`.
 
 ## 5. Duplication still present
 
@@ -96,18 +98,18 @@ The seven extracted modules — body comparison, not import comparison:
 
 | file | defined at | verdict |
 |------|-----------|---------|
-| src/flock.ts | src/flock.ts:1-46 | Thin adapter — re-exports 10 symbols from @simorgh/phoenix-core; the 2 non-re-exports (FLOCK, executeAgent(env,input)) are host-specific bindings, not core logic. No duplication. |
-| src/health.ts | src/health.ts:1-21 | Pure re-export of 10 symbols. No duplication. |
-| src/rate-limit.ts | src/rate-limit.ts:1-14 | Pure re-export of 3 symbols + type. No duplication. |
-| src/models.ts | src/models.ts:1-21 | Re-exports 2 symbols + findModelBird alias (dead). No duplication. |
-| src/agent.ts | src/agent.ts:1-14 | Pure re-export of 11 symbols. No duplication. |
-| src/security.ts | src/security.ts:1-42 | Re-exports constants + parseExecuteBody + RequestValidationError from core; has own sha256 (Workers WebCrypto) and 4 host-specific wrapper overloads. No core logic duplicated. |
-| src/agent-service.ts | src/agent-service.ts:1-95 | Has own executeAgent wrapping coreExecuteAgent with Worker bindings (ledger via DO, fly via RPC stub). Host-specific, not duplication. |
-| src/data-trust.ts | src/data-trust.ts:1-44 | DataTrustVault DO class — thin wrapper over createLedger/ensureLedgerSchema from core. No duplication. |
+| src/flock.ts | src/flock.ts | Thin adapter — re-exports 10 symbols from @simorgh/phoenix-core; the 2 non-re-exports (FLOCK, executeAgent(env,input)) are host-specific bindings, not core logic. No duplication. |
+| src/health.ts | src/health.ts | Pure re-export of 10 symbols. No duplication. |
+| src/rate-limit.ts | src/rate-limit.ts | Pure re-export of 3 symbols + type. No duplication. |
+| src/models.ts | src/models.ts | Re-exports 2 symbols + findModelBird alias (dead). No duplication. |
+| src/agent.ts | src/agent.ts | Pure re-export of 11 symbols. No duplication. |
+| src/security.ts | src/security.ts | Re-exports constants + parseExecuteBody + RequestValidationError from core; has own sha256 (Workers WebCrypto) and 4 host-specific wrapper overloads. No core logic duplicated. |
+| src/agent-service.ts | src/agent-service.ts | Has own executeAgent wrapping coreExecuteAgent with Worker bindings (ledger via DO, fly via RPC stub). Host-specific, not duplication. |
+| src/data-trust.ts | src/data-trust.ts | DataTrustVault DO class — thin wrapper over createLedger/ensureLedgerSchema from core. No duplication. |
 
 **Tool executor**: Defined once at phoenix-core/src/tools.ts:58 (createToolExecutor). runtimes/node.ts calls via import, not copy. No host copy. No duplication.
 
-**Ledger schema**: Defined once at phoenix-core/src/ledger.ts (LEDGER_SCHEMA, createLedger, ensureLedgerSchema). Re-exported via phoenix-core/src/node/index.ts:55-60. ledger.test.ts:57 explicitly asserts sqlLedger === createLedger (identity check). No duplicate.
+**Ledger schema**: Defined once at phoenix-core/src/ledger.ts (LEDGER_SCHEMA, createLedger, ensureLedgerSchema). Re-exported via phoenix-core/src/node/index.ts:116-124. ledger.test.ts:145 explicitly asserts sqlLedger === createLedger (identity check). No duplicate.
 
 **Conclusion**: The extraction is complete. No surviving duplication between src/ and phoenix-core/.
 
@@ -138,5 +140,5 @@ npx vitest run --config vitest.node.config.ts --coverage --reporter=text phoenix
 6. `simorgh-platform/test/connectors.test.ts:119` — toMatchObject on ask result omits answeredBy; a connector dropping provenance passes.
 7. `src/models.ts:19` — findModelBird alias is dead code referenced only by definition and docs; remove or document retention policy.
 8. `phoenix-core/src/models.ts` — zero tests for getModelCatalog/findModelProvider; catalog lookup is untested.
-9. `phoenix-core/src/security.ts:156` — parseExecuteBody tier validation edge cases (number, empty string, unknown string) untested beyond basic rejection.
+9. `phoenix-core/src/security.ts:226` — parseExecuteBody tier validation edge cases (number, empty string, unknown string) untested beyond basic rejection.
 10. `simorgh-platform/src/runtimes/node.ts:253` — Object.entries(outcome.headers) iterates raw HTTP response headers into Node server response; no test verifies header forwarding correctness.

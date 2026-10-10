@@ -81,15 +81,15 @@ upm install
 export NO_PROXY=127.0.0.1,localhost
 
 upm run typecheck        # ✅ exit 0 — three configs: root, phoenix-core, simorgh-platform
-upm test                 # ✅ exit 0 — BOTH suites, workers first (138 + 500 as of 2026-10-09)
+upm test                 # ✅ exit 0 — BOTH suites, workers first (138 + 504 as of 2026-10-10)
 upm run platform:smoke   # ✅ 5/5, exit 0
 upm run e2e:ask          # ✅ 10/10, exit 0
 upm run security:scan    # ⚠️ needs network for the throwaway audit tree (ADR-0004 §4)
 ```
 
 Observed suite composition on 2026-10-08: **workers 14 files / 129 tests, node 22 files / 368 tests**
-(re-run 2026-10-09 after the swarm/session/capability suites grew: **138 workers + 500 node**, both
-green — the current canonical baseline lives in `ROADMAP-SPINE.md` §0). The old
+(re-run 2026-10-10: **138 workers + 504 node**, both green — the current canonical baseline lives in
+`ROADMAP-SPINE.md` §0). The old
 [`STATE-OF-PROJECT.md`](STATE-OF-PROJECT.md) §3.1 numbers (11/93 and 19/261) are stale; see **Provenance**, at the end of this file.
 
 Three of those deserve a note:
@@ -285,14 +285,21 @@ Preflight runs *before* the consent prompt and is read-only — required secrets
 this tree with no Cloudflare credentials present:
 
 ```
-Blocked by 4 checkers:
+Blocked by 3 checkers:
   ✗ missing-secret: Required secret CLOUDFLARE_API_TOKEN … is not set
   ✗ unresolved-origin: Step verify contains unresolved {origin} in argv: {origin}/health
     → Provide --origin when building the plan
+
+Warnings (1):
+  ⚠ endpoint-live: Endpoint probe failed: TypeError: fetch failed
+    → Check the endpoint or your network
+
 Preflight blocked — cloudflare-workers/simorgh cannot proceed.
 Refusing to deploy: preflight found blockers, and nothing was executed.
 ```
-exit 2. `--skip-preflight` overrides, explicitly and loudly.
+exit 2. `--skip-preflight` overrides, explicitly and loudly. The `missing-secret` count tracks which
+of the target's three required secrets are unset in the calling environment — the block above is the
+two-Cloudflare-credentials case, and is one checker higher when `SIMORGH_API_KEY` is unset locally too.
 
 ### Step 1 installs with `upm`, and it completes
 
@@ -475,6 +482,7 @@ registries:
 |---|---|---|
 | `GET /health`, `GET /api/v1/flock/status`, `POST /api/v1/agent/execute` | ✅ | ✅ |
 | `GET /api/v1/user/:id/logs`, `GET /api/v1/context/:refId` | ✅ | ✅ |
+| `GET /api/v1/capabilities` | ✅ | ✅ |
 | `POST /mcp` | ❌ **absent** | ✅ |
 | `GET /dashboard` | ✅ | ❌ |
 | `GET /api/v1/quota` | ✅ | ❌ |
@@ -482,8 +490,8 @@ registries:
 | `GET /api/v1/platform/connectors` | ✅ | ❌ |
 | `POST /api/v1/telegram/webhook` | ✅ | ❌ |
 
-✅ Verified by grepping `src/*.ts` for every `.get(`/`.post(` registration — 12 routes on the Workers
-side, 7 on the Node side — and by reading the Node runtime's handler. **The Workers host serves no `/mcp` at all** — `mcp` appears in
+✅ Verified by grepping `src/*.ts` for every `.get(`/`.post(` registration — 13 routes on the Workers
+side, 8 on the Node side — and by reading the Node runtime's handler. **The Workers host serves no `/mcp` at all** — `mcp` appears in
 `src/` only inside dashboard prose. That has a direct consequence for a deployer:
 `simorgh connect <core> --connector mcp` works against a Node core and will fail against a deployed
 Worker. Prefer `--connector rest` for anything on the edge. It also means `AGENTS.md`'s "a core
@@ -552,7 +560,7 @@ Everything marked ✅ was executed in this repository on 2026-10-08 and the exit
 | `npm run simorgh -- targets` | 3 targets listed, exit 0 |
 | `npm run simorgh -- doctor` | exit 1, one finding: `no-instances` |
 | `npm run simorgh -- plan cloudflare-workers --mode manual` | 5 steps, 3 missing required secrets |
-| `npm run simorgh -- deploy cloudflare-workers --mode cli --dry-run` | 4 preflight blockers, exit 2, nothing executed |
+| `npm run simorgh -- deploy cloudflare-workers --mode cli --dry-run` | 3 preflight blockers (+1 endpoint-live warning), exit 2, nothing executed |
 | `npm run simorgh -- deploy node --mode cli --origin … --skip-preflight` | consent gate, exit 2, nothing executed |
 | `npx wrangler --version` / `wrangler kv namespace --help` | 4.146.0; `wrangler kv namespace create <namespace>` |
 | `npx wrangler deploy --dry-run --outdir …` | exit 0, placeholder printed verbatim |

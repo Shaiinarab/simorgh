@@ -6,9 +6,9 @@
 
 | Signal | Where | Notes |
 |---|---|---|
-| Request correlation | `src/index.ts:19-20`, `simorgh-platform/src/runtimes/node.ts` | `X-Request-Id` on every response, and used as the correlation field in every error payload |
-| Error logging | `src/index.ts:91`, node runtime `catch` | `console.error(JSON.stringify({ event, requestId, … }))` — structured, not prose |
-| Cron event | `src/index.ts:270` | `{ event: "flock_sweep", changed }` |
+| Request correlation | `src/index.ts:35-36`, `simorgh-platform/src/runtimes/node.ts` | `X-Request-Id` on every response, and used as the correlation field in every error payload |
+| Error logging | `src/index.ts:151`, node runtime `catch` | `console.error(JSON.stringify({ event, requestId, … }))` — structured, not prose |
+| Cron event | `src/index.ts:570` | `{ event: "flock_sweep", changed }` |
 | Provider health | `phoenix-core/src/health.ts` `bird_health` table | `status`, `consecutive_failures`, `cooldown_until`, `last_ok`, `total_calls`, `total_failures` |
 | Flock view | `GET /api/v1/flock/status` | The persisted health table, read back |
 | Transparency ledger | `phoenix-core/src/ledger.ts` | Append-only: user, tier, ref, timestamp, action, details — written **before** the flight |
@@ -103,7 +103,7 @@ for this.**
 ## 6. Evidence
 
 ```bash
-grep -rIn 'latency\|latencyMs\|duration\|elapsed' --include='*.ts' phoenix-core/src src   # → no results
+grep -rIn 'latency\|latencyMs\|duration\|elapsed' --include='*.ts' phoenix-core/src src   # → 22 hits, all in quota.ts (latency_ema_ms / last_latency_ms)
 grep -n -A 12 'HEALTH_SCHEMA' phoenix-core/src/health.ts                                  # no timing column
 grep -n 'latencyEMA\|RecordResult' packages/providers/adapter.go                          # Go does record it
 grep -rIn 'console\.\|process.stderr' --include='*.ts' src simorgh-platform/src | head    # structured logs
