@@ -20,7 +20,6 @@ by name when the task calls for it:
 | [`simorgh-testing`](.agents/skills/simorgh-testing/SKILL.md) | Writing or judging tests, or deciding which suite a change needs |
 | [`simorgh-deploy-boundary`](.agents/skills/simorgh-deploy-boundary/SKILL.md) | Anything touching targets, deploy, `doctor`, preflight, or conformance |
 | [`simorgh-go-workspace`](.agents/skills/simorgh-go-workspace/SKILL.md) | Touching `gateway/`, `packages/`, `bot/`, `tools/`, or a `go.work` / `GOFLAGS` problem |
-| [`simorgh-lanes`](.agents/skills/simorgh-lanes/SKILL.md) | Dispatching parallel agent work through the mailbox |
 
 Start with [the live task queue](docs/todo/index.md). A task document records its dependencies,
 acceptance, evidence, and current status; update that document when work changes. The roadmap sets
