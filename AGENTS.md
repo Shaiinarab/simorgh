@@ -14,7 +14,8 @@ Two surfaces, and the distinction is load-bearing:
 
 - **a core** *answers* — rate-limit → authenticate → validate → run allow-listed tools → write the
   transparency ledger → fly the flock → answer. `/health`, `/api/v1/flock/status`,
-  `/api/v1/agent/execute`, `/api/v1/user/{id}/logs`, `/mcp`.
+  `/api/v1/agent/execute`, `/api/v1/user/{id}/logs`, `/mcp` (Node runtime only — the Workers host
+  registers no `/mcp` route).
 - **the platform** *places, finds, watches and fails over between cores* — targets, connectors, deploy,
   fleet. Its MCP tools are `platform_*`.
 
@@ -29,7 +30,7 @@ Persist → Memory → Next task), epics **A–F**, phase ledger, and an explici
 attack: **A3 (AUTH-004 principal gate) → B1–B4 (wire quota into the scheduler, prove one durable
 task) → C1–C4 (RetrievalPort + knowledge) → D1 (swarm's first real job) → E1–E3**. BMAD Method v10
 skills are installed (`.agents/skills/bmad-*`); planning truth lives in ROADMAP-SPINE +
-`_bmad-output/implementation-artifacts/sprint-status.yaml`; the old epic-1–13 list in `docs/prd/` is
+`_bmad-output/implementation-artifacts/sprint-status.yaml`; the old epic-1–17 list in `docs/prd/` is
 historical. Every story's acceptance ends with:
 `upm install --frozen-lockfile && upm run typecheck && upm test` green (+ per-module Go build/vet/test
 when Go is touched). If a doc you open contradicts the spine, mark it stale the same session — do not
@@ -95,6 +96,8 @@ never re-run hoping.
   unrelated project), which makes every non-vendored Go build fail with a **misleading**
   `inconsistent vendoring in <dir>` even though no `vendor/` exists. Override per command:
   `GOFLAGS=-mod=readonly go build all`. **Do not delete that file** — other projects on this box want it.
+  The same file sets `GOPROXY=off`/`GOSUMDB=off`/`GOTOOLCHAIN=local`, so the `-mod=readonly` override
+  only builds off a warm module cache.
 - **`go test all` / `go build all` in a workspace also pulls the stdlib's and dependencies' own tests.**
   For scoped runs use the module-path pattern: `go test github.com/shaiinarab/simorgh/...`.
 - **Never use `mirror.kargadan.ir` as a Go module proxy** — it serves tampered modules (a verified
@@ -103,9 +106,9 @@ never re-run hoping.
   second resolution of the same manifest, and nothing would compare them — the same
   "two definitions, nothing comparing them" trap `ledger.ts` documents. If a tool regenerates it,
   delete it rather than committing it.
-- **There is one JavaScript runtime: Node.** Bun was removed on 2026-10-03 (commit `5c53dfe` has the
-  third-runtime host it used to prove `SqlPort` is not Node-shaped). Do not reintroduce it as a
-  runtime, a package manager, or a dependency.
+- **There is one JavaScript runtime: Node.** Bun was removed on 2026-10-03 (commit `efc4769` removed
+  it; `5c53dfe` had landed the third-runtime host it used to prove `SqlPort` is not Node-shaped). Do
+  not reintroduce it as a runtime, a package manager, or a dependency.
 - **`deploy --mode cli` requires `--yes`.** No env var, no config file, no CI exemption. That is the
   point: a doomed plan must never start, because a half-applied deploy is the most expensive state a
   deployer can leave behind.
@@ -135,7 +138,8 @@ So, on this repo:
 
 ## Conventions
 
-- ESM, `"type": "module"`, TypeScript 7 via `tsgo` (`@typescript/native-preview`). Strict.
+- ESM, `"type": "module"`, TypeScript 7 via `tsgo` (`@typescript/native-preview` — pinned dev preview
+  7.0.0-dev.20260707.2, unpublished since 2026-07-07; stable 7.0.2 now on npm). Strict.
 - **Never weaken a type, a test, or a security check to make something pass.** If a test fails because
   the implementation is wrong, fix the implementation; if it fails because the *contract* changed
   deliberately, update the test **and say so in the commit message**.
@@ -145,6 +149,15 @@ So, on this repo:
   `Env` and `Cloudflare.Env` or it will typecheck in the router and fail inside a Durable Object.
 - Prefer the standard library and the primitives already here over a new dependency. Boring is a
   feature in a gateway.
+- **Composition over invention — most of what we build is joining what already works.** Before
+  writing new code, find the system that already solved the stage (the dossiers in
+  `docs/research/` and the cross-walk in `docs/REFERENCE-ARCHITECTURE.md` are the starting
+  point). Adopt proven *patterns* behind our ports; copy code only when the upstream license
+  allows it — every ported file carries its MIT attribution line (ADR-0007 §5). Refuse the
+  mechanism when it violates an invariant (no pooled credentials, no web-account automation,
+  honest degradation always); ADR-0007 §3 is the refusal list and it is load-bearing. A new
+  dependency is the last resort, never the first — stdlib, then what is already installed,
+  then upstream.
 - Comments explain **why**, and carry the evidence for a non-obvious decision. Several comments in this
   repo are load-bearing; do not strip them as "noise".
 - Documentation must describe **reality**, not intent. If you change behaviour, change the doc that

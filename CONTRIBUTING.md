@@ -107,10 +107,10 @@ disabled.
 
 **Per-file test counts are part of the guard.** A suite that silently *shrinks* is the easiest failure
 mode to miss, and a total can stay green while a file disappears. The counts live in
-[`docs/STATE-OF-PROJECT.md`](docs/STATE-OF-PROJECT.md) §3.1 and in
-[the testing skill](.agents/skills/simorgh-testing/SKILL.md) — **update them when you add or remove
-tests**, and if a number you find there disagrees with what the suite actually prints, the suite is
-right and the doc is stale.
+[`docs/STATE-OF-PROJECT.md`](docs/STATE-OF-PROJECT.md) §11.5 (which says 473/25 — itself stale; the
+suite prints the truth) and in [the testing skill](.agents/skills/simorgh-testing/SKILL.md) —
+**update them when you add or remove tests**, and if a number you find there disagrees with what
+the suite actually prints, the suite is right and the doc is stale.
 
 ### Three commands that check the assembled thing
 
@@ -178,10 +178,12 @@ The short form ([`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §6; longer form 
 Three assertions pin the *complete* shipped flock by id, so adding a bird turns all three red — update
 them deliberately rather than loosening them:
 
-- `test/http.test.ts:154` — `GET /api/v1/flock/status` route contract
-- `test/flock-routing.test.ts:271` — "is ordered Shāhīn → Bulbul → Homā, with Homā key-free"
-- `test/durable-objects.test.ts:33` — the same list over Durable Object RPC, plus
-  `toHaveLength(3)` and the `[10, 20, 30]` priorities
+- `test/durable-objects.test.ts:26` — the only literal roster pin: 5 ids, `toHaveLength(5)` and the
+  `[10, 15, 20, 25, 30]` priorities
+- `test/flock-routing.test.ts:269` — the same five ids in the same order, via `toEqual`
+- `test/http.test.ts:164` is deliberately **not** a pin — it asserts only that Homā is present and
+  non-dormant (its comment says why: two literals to keep in step would say nothing about the HTTP
+  layer)
 
 And **conditionally** `phoenix-core/test/boundary.test.ts`: not because adding a provider breaks it,
 but because it is the guard you will trip *if* you implement the provider inside `phoenix-core/src/`
@@ -232,7 +234,8 @@ after: a cross-language contract has no compiler. Read
 
 ## Conventions
 
-- **ESM**, `"type": "module"`, TypeScript 7 via `tsgo` (`@typescript/native-preview`). Strict.
+- **ESM**, `"type": "module"`, TypeScript 7 via `tsgo` (`@typescript/native-preview` — pinned dev
+  preview 7.0.0-dev.20260707.2, unpublished since 2026-07-07; stable 7.0.2 now on npm). Strict.
 - **Relative imports inside packages carry an explicit `.ts` extension**, because plain `node` runs
   these sources unbuilt. Match the surrounding style.
 - **No TypeScript-only runtime syntax** — no parameter properties, no `enum`, no `namespace`. Node's

@@ -9,7 +9,7 @@ the fragmented free tiers of the internet into one resilient, sovereign intellig
 Its founding metaphor is literal architecture: **many small "birds" (free-tier providers)
 fly together as one Simorgh, and when one bird tires, the flock reroutes.**
 
-- **Stack:** Cloudflare Workers · Hono · TypeScript 7 (tsgo — `@typescript/native-preview`) · Durable Objects (SQLite) · KV
+- **Stack:** Cloudflare Workers · Hono · TypeScript 7 (tsgo — `@typescript/native-preview`; pinned dev preview 7.0.0-dev.20260707.2, unpublished since 2026-07-07; stable 7.0.2 now on npm) · Durable Objects (SQLite) · KV
 - **Cost to run:** $0 — every primitive used is on a genuinely free, no-credit-card tier.
 
 ---
@@ -19,7 +19,7 @@ fly together as one Simorgh, and when one bird tires, the flock reroutes.**
 **Roadmap & status:** the canonical forward plan is [`docs/ROADMAP-SPINE.md`](docs/ROADMAP-SPINE.md)
 (vertical execution spine, epics A–F, phase ledger: Foundation/Routing/Capability/Task-model **done**,
 Durable execution **active**, Retrieval/Memory/Autonomy **next**). Current verified baseline:
-**138 workerd + 500 node tests green**, typecheck exit 0 (Node 22.23.3 · upm 1.4.0 · Go 1.26.0).
+**138 workerd + 504 node tests green**, typecheck exit 0 (upm 1.4.0; suites also green on Node 26.7 / Go 1.27).
 The old PRD epic list (`docs/prd/`) is marked historical; BMAD tracks truth in
 `_bmad-output/implementation-artifacts/sprint-status.yaml`.
 
@@ -73,6 +73,18 @@ The repo holds two packages, linked by a one-way dependency: the platform import
 | `@simorgh/phoenix-core` | `phoenix-core/` | Runtime-agnostic engine: provider routing, agent tool loop, request validation, rate limiting, ledger. No runtime bindings — every capability arrives as an injected port. |
 | `simorgh-platform` | `simorgh-platform/` | Control plane: deployment targets, REST/MCP connectors, the connector conformance kit, deploy plans + preflight gate, fleet management, and the self-hosted Node runtime. |
 | the Cloudflare app | `src/` (root) | The Workers host: the Hono routes, the Durable Object shells, and the host adapters that bind `phoenix-core` to Cloudflare's bindings. |
+
+---
+
+## Standing on working shoulders
+
+Simorgh's architecture is a composition, not an invention — every stage of the spine has a
+working, starred precedent, and this repo's job is joining them under free/no-KYC constraints
+with honest degradation. The cross-walk lives in
+[`docs/REFERENCE-ARCHITECTURE.md`](docs/REFERENCE-ARCHITECTURE.md); what was studied, taken,
+and refused (with reasons) is in [`docs/research/`](docs/research/) and
+[ADR-0007](docs/adr/ADR-0007-adopted-patterns-from-working-open-source.md). Code that is
+copied carries its MIT attribution; the refusal list is as load-bearing as the adoption list.
 
 ---
 
@@ -200,8 +212,10 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 | `GET`  | `/api/v1/context/:refId` | Retrieve an offloaded request payload from KV. |
 | `GET`  | `/api/v1/user/:userId/logs` | Data-Trust transparency: a user's ledger entries. |
 | `GET`  | `/api/v1/quota` | Every declared account's quota row, over RPC from the Durable Object. |
+| `GET`  | `/api/v1/capabilities` | What this deployment can actually do: per-provider capability probes, the unclaimed ones, and a rendered summary. Bearer-gated (unlike `/api/v1/flock/status`) because the payload names which providers the deployment holds keys for. |
 | `GET`  | `/api/v1/schedule` | The Durable Object's scheduled flights, with state, attempts and outcome. |
 | `POST` | `/api/v1/schedule` | Schedule a prompt to run through the flock at or after `resumeAt`. Bounds are the execute bounds plus a 30-day horizon. |
+| `POST` | `/api/v1/telegram/webhook` | The Telegram chat gateway — verified by the shared webhook secret *before* the body is parsed. |
 | `GET`  | `/api/v1/platform/connectors` | The connector matrix — Cloudflare, Telegram, GitHub — with readiness derived from the live environment, and the tool surface. |
 | `GET`  | `/dashboard` | The unified control plane: flock, scheduler, quota, connectors, tools and chat. Unauthenticated, ships no secret, and bearer-gates its own calls. |
 | `GET`  | `/` | Health text. |
@@ -220,11 +234,11 @@ simorgh-platform/
 ├── phoenix-core/           # @simorgh/phoenix-core — runtime-agnostic engine (ports, routing, agent, validation)
 │   ├── src/                # engine source: ports.ts, flock.ts, agent.ts, security.ts, execute.ts, health.ts, rate-limit.ts, models.ts, provider.ts
 │   │   └── node/           # Node adapter: nodeSqlPort, createNodePorts, memoryContextStore, sqlLedger (the only node: import in the engine)
-│   └── test/               # engine tests: boundary.test.ts, execute.test.ts, flock.test.ts, security.test.ts, storage.test.ts, agent.test.ts
+│   └── test/               # engine tests: 18 files — see the directory
 ├── simorgh-platform/       # the control plane package (imports phoenix-core; nothing imports it)
 │   ├── src/                #   targets, connectors (rest/mcp) + conformance kit, deploy (plan/runner/preflight), fleet, mcp/server, runtimes (node/smoke), cli, doctor
 │   ├── scripts/            #   e2e-ask.ts — the CLI reaching a live core over REST *and* MCP
-│   └── test/               #   9 files, 113 tests (vitest.node.config.ts)
+│   └── test/               #   10 files, 147 tests (vitest.node.config.ts)
 ├── src/                    # the Cloudflare host — the Worker itself
 │   ├── index.ts            #   Hono app: routes, Intent Shield, Data Trust, Context Offload, cron
 │   ├── flock.ts            #   host adapter → engine routing, plus the FlockCoordinator DO
@@ -245,7 +259,7 @@ simorgh-platform/
 │   └── providers/          #   symmetric adapter interface + latency/health registry
 ├── gateway/                # Go: the self-hosted gateway binary
 ├── bot/  tools/            # Go: companions
-├── docs/prd/               # PRD.md (13 epics / 63 stories) + EPICS_AND_STORIES.md
+├── docs/prd/               # PRD.md (17 epics / 78 stories) + EPICS_AND_STORIES.md
 ├── mailbox/                # Agent task protocol (briefs, board, selftests)
 ├── worker-configuration.d.ts  # GENERATED by `wrangler types` — do not edit
 ├── env.d.ts                # Hand-written: the secrets `wrangler types` cannot see
