@@ -9,19 +9,19 @@ tags:
   - research
   - okf
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "stable"
 stale_after: "2026-10-17T00:00:00Z"
 sources:
   - id: roadmap-spine
-    resource: "ROADMAP-SPINE.md"
+    resource: "../ROADMAP-SPINE.md"
     title: "Canonical roadmap"
   - id: security-audit
-    resource: "SECURITY-AUDIT.md"
+    resource: "../SECURITY-AUDIT.md"
     title: "Security audit"
   - id: reference-architecture
-    resource: "REFERENCE-ARCHITECTURE.md"
+    resource: "../REFERENCE-ARCHITECTURE.md"
     title: "Open-source reference architecture"
 ---
 # Continuation Review — October 10, 2026
