@@ -1,4 +1,30 @@
+---
+type: "Reference Architecture"
+title: "Reference Architecture — Working Systems Behind the Spine"
+description: "Maps proven open-source mechanisms to Simorgh's extension points and records what to adopt or refuse."
+tags:
+  - simorgh
+  - architecture
+  - open-source
+  - okf
+generated:
+  by: "agent:gpt-6"
+  at: "2026-10-10T15:05:00Z"
+status: "stable"
+stale_after: "2026-11-10T00:00:00Z"
+sources:
+  - id: roadmap-spine
+    resource: "ROADMAP-SPINE.md"
+    title: "Canonical roadmap"
+  - id: continuation-review
+    resource: "research/CONTINUATION-REVIEW-2026-10-10.md"
+    title: "Continuation review, October 10 2026"
+---
 # Reference Architecture — what the studied systems contribute to the spine
+
+> **TL;DR:** reuse proven mechanisms behind Simorgh's existing ports. Keep the unique core in the
+> orchestration glue: principal ownership, quota-aware durable continuation, evidence-rich retrieval,
+> and honest failure. Read this alongside [the live TODO queue](todo/index.md).
 
 > **What this document is.** The 2026-10-09/10 reconnaissance pass studied ~50 systems
 > (dossiers: `docs/research/adoption/`, `docs/research/GITHUB-INSPIRATION-2026-10-10.md`,

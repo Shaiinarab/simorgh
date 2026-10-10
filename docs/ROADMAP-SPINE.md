@@ -1,4 +1,29 @@
-# Simorgh Roadmap — The Vertical Spine (2026-10-09)
+---
+type: "Project Roadmap"
+title: "Simorgh Roadmap — The Vertical Spine"
+description: "Canonical architecture, phase order, dependencies and frozen non-goals for Simorgh."
+tags:
+  - simorgh
+  - planning
+  - roadmap
+  - okf
+generated:
+  by: "agent:gpt-6"
+  at: "2026-10-10T15:05:00Z"
+status: "stable"
+stale_after: "2026-10-17T00:00:00Z"
+sources:
+  - id: security-audit
+    resource: "SECURITY-AUDIT.md"
+    title: "Security audit"
+  - id: reference-architecture
+    resource: "REFERENCE-ARCHITECTURE.md"
+    title: "Reference architecture"
+  - id: continuation-review
+    resource: "research/CONTINUATION-REVIEW-2026-10-10.md"
+    title: "Continuation review, October 10 2026"
+---
+# Simorgh Roadmap — The Vertical Spine
 
 > **North star:** one executable spine, no new frameworks:
 > `Principal → Goal → Task DAG → Capability → Quota/Cost Plan → Provider+Account+Model →
@@ -9,15 +34,15 @@
 > `_bmad-output/implementation-artifacts/sprint-status.yaml` as a *statement of current truth*;
 > old epics are reclassified below, not deleted.
 
-## 0. Truth baseline (verified this session, Node 22.23.3 + upm 1.4.0 + Go 1.26.0)
+## 0. Truth baseline (repository-reported at commit 9687eb3; not rerun in this docs pass)
 
 | Check | Result |
 |---|---|
 | `upm install --frozen-lockfile` | ✅ 93 pkgs, exit 0 |
 | `upm run typecheck` (tsgo ×3 projects) | ✅ exit 0 |
-| `upm run test:workers` (workerd/vitest) | ✅ 14 files / **138 tests passed** |
+| `upm run test:workers` (workerd/vitest) | 🟡 repository-reported: 14 files / **138 tests passed** |
 | `upm run test:node` (Node 22/vitest) | ✅ 27 files / **500 tests passed** |
-| Go workspace (`bot gateway packages/* tools`) | ✅ all modules build + test clean on go1.26 |
+| Go workspace (`bot gateway packages/* tools`) | 🟡 repository-reported: 6 modules build/test clean; 3 have no tests |
 | `.gitignore` now excludes `package-lock.json`; stray lock removed | ✅ ADR-0004 enforced |
 | `package.json` `test` script now uses `upm run …` (was `npm run …`) | ✅ self-referential npm remnant fixed |
 | BMAD Method installed (`_bmad/`, `.claude/skills/`, `.agents/skills/`, 29 bmad-* skills) | ✅ |
@@ -36,6 +61,13 @@ PHASE 7  Autonomous loop       NEXT   (swarm plans but does not drive execution)
 PHASE 8  Connectors            LATER  (Notion/Drive/Telegram/GitHub sync)
 PHASE 9  UI                    LATER  (PWA only after tasks/goals/knowledge APIs exist)
 ```
+
+## TL;DR
+
+A3 is the gate. Then make the existing task model actually execute through quota admission and
+correct usage accounting. Only after one durable end-to-end task works should retrieval, layered
+memory, the research swarm, current-revision MCP and provider discovery expand. The executable queue
+is [`todo/index.md`](todo/index.md).
 
 ## 1. Explicit non-goals (freeze list)
 
@@ -139,13 +171,17 @@ new CPU-heavy feature → benchmark → profile → only then consider native co
 | 12 rate-limit/auth | → **A3** (AUTH-004 is the survivor of this epic) |
 | 13 docs | ongoing; A1 refreshes STATE-OF-PROJECT/ARCHITECTURE against this file |
 
-## 4. Working agreement with BMAD
+## 4. Working agreement
 
-1. Planning lives here + `_bmad-output/planning-artifacts/`; implementation stories under
-   `_bmad-output/implementation-artifacts/` generated via `bmad-create-epics-and-stories` from
-   EPIC-A…F (do not regenerate from the 2026-08-31 epic list).
-2. Every story acceptance criterion ends with: `upm install --frozen-lockfile && upm run typecheck
-   && upm test` green (+ `go build/vet/test` when Go touched).
-3. Order of attack: **A3 → B1 → B2 → B3 → B4 → C1..C4 → D1 → E1..E3**; A2 leftovers run parallel.
-4. One commit discipline per audit finding: truth, identity, execution, quota, retrieval, memory,
-   swarm, autonomy, MCP, connectors, scale, UI.
+1. This roadmap owns architecture, phase order, dependencies and the freeze list.
+2. [`docs/todo/index.md`](todo/index.md) owns the live queue. Each task is a separate OKF v0.2
+   concept under `docs/todo/`, with evidence, explicit dependencies and acceptance checks.
+3. BMAD remains an optional helper. Its generated artifacts may support execution but must not
+   override the roadmap or TODO documents. Do not regenerate a plan from the historical 2026-08 PRD.
+4. Every implementation task ends with `upm install --frozen-lockfile && upm run typecheck && upm test`
+   green (+ per-module Go build/vet/test when Go is touched).
+5. Verify claims against real code/hosts where possible. Record what could not be run; repository-
+   reported test counts are not a claim that this documentation pass reran the suites.
+6. No new framework, second scheduler, second task database, provider-count chase, pooled free
+   credentials, automatic account creation, Rust/Wasm core, or giant PWA without a new evidence-based
+   decision.

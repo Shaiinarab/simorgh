@@ -35,15 +35,11 @@ Thumbs.db
 # BMAD state
 .bmad/cache/
 
-# Mailbox internal state (locks, seen/claimed markers) — regenerated, never shared
-mailbox/.state/
-
 # Local scratch
 *.bak
 
-# Agent scratch. Several mailbox briefs direct a worker to write a throwaway demo to
-# .openclaw/tmp/<name>.ts *inside the repo*, so this path is expected to appear — it must never be
-# committed. Real temp files belong at the workspace root (.openclaw/tmp), not here.
+# Agent scratch. Tools may write throwaway demos under .openclaw/tmp inside the repo; these are
+# never source and must not be committed. Real temp files belong at the workspace root.
 .openclaw/
 
 # Package manager: upm (see docs/adr/ADR-0004-toolchain-upm.md). `upm.lock` IS committed --

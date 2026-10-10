@@ -1,6 +1,36 @@
+---
+type: "Project State"
+title: "Simorgh — Project Scope and Current State"
+description: "Evidence-oriented description of the current repository, verified capabilities and unresolved gaps."
+tags:
+  - simorgh
+  - project-state
+  - architecture
+  - okf
+generated:
+  by: "agent:gpt-6"
+  at: "2026-10-10T15:05:00Z"
+status: "stable"
+stale_after: "2026-10-12T00:00:00Z"
+sources:
+  - id: roadmap-spine
+    resource: "ROADMAP-SPINE.md"
+    title: "Canonical roadmap"
+  - id: security-audit
+    resource: "SECURITY-AUDIT.md"
+    title: "Security audit"
+  - id: continuation-review
+    resource: "research/CONTINUATION-REVIEW-2026-10-10.md"
+    title: "Continuation review, October 10 2026"
+---
 # Simorgh — project scope and current state
 
-**Written:** 2026-09-22 · **Updated:** 2026-10-09 (§12 truth reconciliation; §11 was 2026-10-08) ·
+> **TL;DR:** latest pinned repository snapshot is `main` at `9687eb3`. The committed baseline reports
+> 138 workerd and 504 Node tests; this docs pass did not rerun them. The remaining execution blockers are
+> AUTH-004 principal ownership, quota admission/usage integration, then retrieval and memory. Follow
+> [the OKF TODO queue](todo/index.md); this file's older sections are historical evidence where marked.
+
+**Written:** 2026-09-22 · **Updated:** 2026-10-10 (§12 truth reconciliation; older subsections are retained as marked evidence) ·
 **Canonical plan:** [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md) — read §12 first; it supersedes any older
 roadmap prose in this file · **Status:** all TS suites green (**138 workers + 504 node**, re-derived
 2026-10-10 on Node 26.7.0 / upm 1.4.0 / tsgo, typecheck exit 0), Go workspace green on go1.26.0
@@ -492,7 +522,7 @@ set, the same endpoint answers `inference ok 1/5 available: ollama` — the key-
 `renewing` means "does this allowance refill", and a local daemon has no allowance — your own hardware,
 unbounded and always present. Neither `true` (a refilling quota that does not exist) nor `false` (a
 one-time grant, spend last) is true, so this needs a third state decided rather than a value guessed.
-Recorded in `DEFAULT_PROVIDER_COST` and in `mailbox/OUTBOX/TASK-017-REPORT.md` §4.
+Track the resolution in [provider discovery](todo/E2-provider-discovery.md) and [ADR-0005](adr/ADR-0005-free-only-mode.md); do not guess whether local inference is a renewing free allowance.
 
 ---
 
@@ -549,9 +579,14 @@ bump to 5 blindly.
 
 ### 12.4 Where planning truth lives now
 
-`docs/ROADMAP-SPINE.md` (phases, epics, freeze list, ordering) → `_bmad-output/implementation-artifacts/sprint-status.yaml`
-(epic-1..13 marked HISTORICAL with a disposition map; current epics A–F tracked) → `mailbox/BOARD.md`
-(TASK-001..017 closed; TASK-014 dashboard descoped to Phase F3 per the spine). BMAD Method v10 skills
-installed (`.agents/skills/bmad-*`); story acceptance criteria end with
-`upm install --frozen-lockfile && upm run typecheck && upm test` green (+ per-module `go build/vet/test`
-when Go is touched). Order of attack: **A3 → B1 → B2 → B3 → B4 → C1..C4 → D1 → E1..E3**.
+- [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md) owns the architecture, dependencies, phase order and freeze list.
+- [`todo/index.md`](todo/index.md) and its linked OKF v0.2 task documents own the live implementation queue.
+- [`index.md`](index.md) maps the documentation bundle. New/updated task concepts carry provenance,
+  generation time, lifecycle/freshness and work-status metadata.
+- BMAD skills remain available as optional tools; generated sprint/planning artifacts are derived and
+  never override the roadmap or TODO queue.
+- The 17 old coordination tasks are closed. Their durable conclusions live in the existing ADRs,
+  architecture/security docs and research reports; the retired framework and task files are summarized
+  in [the retirement record](history/coordination-retirement-2026-10-10.md).
+
+**Order of attack:** A3 → B1 → B2 → B3 → B4 → C1 → C2 → C3 → C4 → D1 → E1 → E2 → E3.
