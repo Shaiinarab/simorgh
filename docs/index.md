@@ -8,7 +8,7 @@ tags:
   - documentation
   - okf
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "stable"
 stale_after: "2026-11-10T00:00:00Z"
