@@ -9,13 +9,13 @@ tags:
   - no-rust
   - okf
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "stable"
 stale_after: "2027-01-10T00:00:00Z"
 sources:
   - id: native-audit-harness
-    resource: "../bench/native-audit/run.mjs"
+    resource: "https://github.com/Shaiinarab/simorgh/blob/9687eb30a35d9e3ef403333c1ca82b4de9fae68a/bench/native-audit/run.mjs"
     title: "Benchmark harness"
   - id: roadmap-spine
     resource: "ROADMAP-SPINE.md"
