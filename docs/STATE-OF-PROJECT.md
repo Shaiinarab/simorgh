@@ -8,7 +8,7 @@ tags:
   - architecture
   - okf
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "stable"
 stale_after: "2026-10-12T00:00:00Z"
@@ -30,11 +30,10 @@ sources:
 > AUTH-004 principal ownership, quota admission/usage integration, then retrieval and memory. Follow
 > [the OKF TODO queue](todo/index.md); this file's older sections are historical evidence where marked.
 
-**Written:** 2026-09-22 · **Updated:** 2026-10-10 (§12 truth reconciliation; older subsections are retained as marked evidence) ·
-**Canonical plan:** [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md) — read §12 first; it supersedes any older
-roadmap prose in this file · **Status:** all TS suites green (**138 workers + 504 node**, re-derived
-2026-10-10 on Node 26.7.0 / upm 1.4.0 / tsgo, typecheck exit 0), Go workspace green on go1.26.0
-(6 modules build+test clean)
+**Written:** 2026-09-22 · **Updated:** 2026-10-10 · **Canonical plan:** [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md).
+**Status:** repository-reported baseline at `9687eb3` is 138 Workers tests + 504 Node tests, with typecheck
+exit 0; this docs migration did not rerun the suites. The Go baseline is repository-reported as 6 modules
+with tests and 3 without tests. Earlier sections preserve dated context, not current instructions.
 
 > **Read this as a claim set, not a fact set.** Every number and path below was true when written and
 > every one is re-derivable with the commands given. If this file and the code disagree, **the code
@@ -52,11 +51,9 @@ roadmap prose in this file · **Status:** all TS suites green (**138 workers + 5
 
 | Fact | Value |
 |---|---|
-| Branch | `main` — HEAD `64e6bd3` |
-| `main` / `origin/main` | `64e6bd3` / `1f286942` (local ahead by 10) |
-| Shared base with `main` | `64e6bd3` |
-| Commits beyond that shared base | 0 |
-| `origin/production-readiness-v0-3` | `e0053fc` — **an ancestor of HEAD**, so the work it introduced is folded in, not pending |
+| Public repository branch | `main` — HEAD `9687eb3` (2026-10-10) |
+| Local worktree / remote divergence | Not inspected in this hosted documentation update |
+| Historical branch details | Retained below only as dated context; not an active task |
 
 > The prose below was written when the branch was much younger. Some of it still describes reality
 > accurately; some is marked stale and kept for context. When in doubt, re-derive from git rather than
@@ -295,18 +292,17 @@ Two environment notes, both load-bearing:
 - **`deploy --mode cli` requires `--yes`.** There is no env var, no config file, and no "we're in CI
   so obviously yes". Without it the CLI prints what it *would* run and exits 2.
 
-### Consensus gate (how the recent work was produced and reviewed)
+### Historical coordination process (retired)
 
-Work runs as **mailbox lanes** (`mailbox/PROTOCOL.md`): a brief in `INBOX/`, a report in `OUTBOX/`
-ending with `TASK-<id>-END`, and `mailbox/bin/fbmail check <id>` as the machine-readable verdict
-(`0` done, `1` open, `2` no END marker, `3` malformed brief). Lanes run headless and in parallel; the
-Lead integrates.
+The project previously coordinated work with brief/report files and a custom board. That framework was
+removed on 2026-10-10 because the 17 coordination tasks are closed and their durable results have been
+moved into source, tests, ADRs and research documents. The active queue is now
+[`docs/todo/index.md`](todo/index.md); see the
+[retirement record](history/coordination-retirement-2026-10-10.md) for the destination of each result.
 
-**Grade a lane on artifacts + `fbmail check`, never on the driver's exit code.** This has burned the
-project twice: once a lane exited `0` after delivering one of three files, once a lane exited `0`
-while another lane's half-written file made typecheck fail. The board currently reads
-`reported=6 claimed=0 open=0 malformed=0 bad-reports=0`.
-
+**Current review rule:** grade work on changed artifacts and acceptance evidence, not a runner's exit
+code. Verify boundary claims against a real core or builder, use negative controls for detectors, and
+run both TS suites before merging runtime changes.
 ---
 
 ## 7. Open decisions (need a human or a deliberate choice)
@@ -348,7 +344,7 @@ ADR-0001 with a prerequisite.
 
 Everything above was produced on 2026-09-22 from the working tree at `e0053fc`, by: reading the source,
 running both suites, running the e2e and smoke harnesses, running the suites again inside a clean
-container, building/vetting/testing the Go workspace, and reading the lane reports in `mailbox/OUTBOX/`.
+container and building/vetting/testing the Go workspace. The old coordination reports are retired; their durable outcomes are mapped in [the retirement record](history/coordination-retirement-2026-10-10.md).
 
 ### 9.1 Claims this file got wrong, and how they were caught
 
@@ -388,7 +384,7 @@ head, so this branch is stacked directly on the PR rather than on `main`):
 | `fe4bdb3` | `refactor(core)`: the engine extraction — `phoenix-core/`, the eight Worker host adapters, the affected tests, the workspace wiring |
 | `4f99637` | `feat(platform)`: the control plane — targets, connectors + conformance, deploy + preflight, fleet, MCP server, Node runtime, CLI |
 | `f9d9dec` | `docs`: ARCHITECTURE.md, this file, and `adr/ADR-0001` |
-| `a8ce109` | `chore(mailbox)`: the six lane briefs and their reports |
+| `a8ce109` | Historical coordination commit; its custom workflow has since been retired |
 | `07d7266` | `ci`: the comment recording that one `npm test` invocation covers both suites |
 | `1f38842` | `docs(readme)`: the module split, both suites, the platform CLI, and the repository-map fix |
 
@@ -400,7 +396,7 @@ the repository owner, not for an agent.
 | Claim | Was | Now |
 |---|---|---|
 | README repository map | nested the root `src/*.ts` files under `simorgh-platform/`, describing a tree that does not exist | corrected, with the host adapters and both suites listed |
-| mailbox `README.md` | "the repo has **uncommitted** Go work" | the Go workspace is committed (`7a54d64`) and green |
+| Old coordination note | claimed Go work was uncommitted | the Go workspace is committed (`7a54d64`); current gates live in CI and `CONTRIBUTING.md` |
 | `AGENTS.md` | described a single-package Worker; never mentioned the split, the two suites, the CLI, or the Go workspace | rewritten around the real tree, the boundary rule, the environment traps, and a definition of done |
 | `.gitignore` | `.openclaw/` not ignored, although several briefs direct a worker to write a throwaway demo *inside the repo* | ignored |
 
@@ -417,13 +413,13 @@ answered this question was built, proven, and then removed by owner decision (`5
 **provider latency is recorded nowhere on the TypeScript side** (while the Go side keeps an EMA).
 - **`scripts/security-scan.sh`** — the secrets + dependency gate, wired into CI *and* runnable locally as
 `npm run security:scan`. Verified with a negative control: exit `1` with a planted token, `0` clean.- **`.agents/skills/`** — five project skills: `simorgh-architecture`, `simorgh-testing`,
-  `simorgh-deploy-boundary`, `simorgh-go-workspace`, `simorgh-lanes`.
+  `simorgh-deploy-boundary`, `simorgh-go-workspace`.
 
 ---
 
 ## 11. The 2026-10-08 pass — the launch-blocking security fix, and two commits
 
-**Written 2026-10-08 by the fb2 lane.** Everything below was run, not read; commands are in §6.
+**Historical evidence, written 2026-10-08.** Its commands and conclusions describe that session's snapshot; re-run them before treating the results as current.
 
 ### 11.1 The finding that mattered: a fix that was staged but not wired
 
@@ -530,7 +526,7 @@ Track the resolution in [provider discovery](todo/E2-provider-discovery.md) and 
 
 Everything in §1–§11 above was written against older branch states; per this file's own policy the
 prose is kept, and this section records what changed and where truth now lives. **§1's branch table is
-stale**: we are on `main` at `64e6bd3` (PR #2 `feat/phoenix-core-modularization` merged as `190a847`).
+stale**: the public repository snapshot used for this update is `main` at `9687eb3`.
 
 ### 12.1 The roadmap changed shape: from feature list to vertical spine
 
