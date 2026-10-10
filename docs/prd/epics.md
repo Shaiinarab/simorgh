@@ -554,3 +554,136 @@ OpenAPI/Swagger spec for all Simorgh API endpoints; interactive docs.
 
 - **Acceptance:** OpenAPI spec; interactive docs
 - **PRD status:** backlog
+
+---
+
+## Epic 14: Chat Gateways — one engine, many messengers (ADR-0008)
+
+A new gateway is a host-side connector module (`src/<gateway>.ts`) plus a `src/platform.ts`
+declaration. The engine never learns which messenger it is. Telegram is the proven shape.
+
+### Story 14.1: Telegram gateway ✅
+
+Webhook with body bound, constant-time webhook-secret verification, 4096-char splitting,
+answers via the agent path. Shipped: `src/telegram.ts`, mounted at
+`POST /api/v1/telegram/webhook`, declared in `src/platform.ts`.
+
+### Story 14.2: Discord gateway
+
+Interactions endpoint + Ed25519 signature verification + 2000-char splitting, same connector
+shape as 14.1.
+
+- **Acceptance:** Discord bot answers a real message through the flock; negative control on the signature check
+- **PRD status:** backlog
+
+### Story 14.3: Slack gateway
+
+Events API + signing-secret verification + block-aware splitting.
+
+- **Acceptance:** Slack app answers through the flock; negative control on the signing check
+- **PRD status:** backlog
+
+### Story 14.4: Gateway parity tests
+
+Per gateway: parse/split/auth unit tests plus a negative control on the secret check.
+
+- **Acceptance:** suite reddens when a gateway's auth comparison is removed
+- **PRD status:** backlog
+
+---
+
+## Epic 15: Memory ports — durable by default, snapshotted for free
+
+DO SQLite stays the source of truth. Telegram and Google Drive are snapshot-transport ports,
+best-effort, never on the answer path.
+
+### Story 15.1: MemoryStore port
+
+One port, default = DO SQLite, snapshots behind the same interface.
+
+- **Acceptance:** engine imports only the port; boundary test untouched
+- **PRD status:** backlog
+
+### Story 15.2: Telegram snapshot store
+
+Snapshot + append-only log to a private chat via `sendDocument`; restore path round-trips.
+
+- **Acceptance:** snapshot → wipe → restore reproduces the ledger; negative control with the transport failed on purpose
+- **PRD status:** backlog
+
+### Story 15.3: Google Drive snapshot store
+
+Same snapshot/restore shape against a free Google account's Drive.
+
+- **Acceptance:** round-trip against a real Drive folder; failure degrades to local-only
+- **PRD status:** backlog
+
+### Story 15.4: Honest degradation
+
+A failed snapshot is reported, never blocks an answer.
+
+- **Acceptance:** with the transport black-holed, answers still return and the status says local-only
+- **PRD status:** backlog
+
+---
+
+## Epic 16: Setup wizards — CLI and GitHub Pages
+
+Two front-ends over the existing deploy planner (`simorgh-platform/src/deploy/`).
+
+### Story 16.1: CLI wizard
+
+Zero-dependency script, Termux-safe: secrets → target pick → config generate → deploy → live probe.
+
+- **Acceptance:** a first-time operator reaches a verified core from Termux following prompts only
+- **PRD status:** backlog
+
+### Story 16.2: GitHub Pages wizard
+
+Static, client-side; validates tokens live, writes secrets, dispatches the deploy workflow.
+
+- **Acceptance:** wizard run creates a working deployment with no server behind the page
+- **PRD status:** backlog
+
+### Story 16.3: Target matrix as data
+
+Every wizard target carries a verified-free citation and date, re-verified on a schedule.
+
+- **Acceptance:** the matrix ships as data with sources; stale entries fail CI
+- **PRD status:** backlog
+
+### Story 16.4: The HF lesson displayed
+
+The 2026-07-08 Docker-Space PRO gate is shown when a user asks about Hugging Face, not
+rediscovered by a failed run.
+
+- **Acceptance:** the wizard states the PRO gate with its source before a user attempts it
+- **PRD status:** backlog
+
+---
+
+## Epic 17: Deploy-target portability
+
+"Free to sign up, no KYC" is a verified property of the deployment, not a slogan (ADR-0008 §4).
+
+### Story 17.1: Cloudflare free path
+
+The default target: core + gateways on Workers free.
+
+- **Acceptance:** the wizard's first row deploys and verifies on Workers free
+- **PRD status:** backlog
+
+### Story 17.2: Deno Deploy secondary path
+
+Same deploy planner, second target.
+
+- **Acceptance:** a Deno Deploy target passes the same verification probe
+- **PRD status:** backlog
+
+### Story 17.3: Target re-verification job
+
+CI re-checks each target's free policy and fails loudly on change — the bird-catalog
+discipline applied to infrastructure.
+
+- **Acceptance:** a deliberately stale matrix entry reddens the job
+- **PRD status:** backlog

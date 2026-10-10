@@ -361,6 +361,60 @@ Based on 2026 research, these additional free-tier providers could join the floc
 
 ---
 
+### Epic 14: Chat Gateways — Telegram Today, Discord and Slack Next
+
+**Objective:** one engine behind many messengers; a new gateway is a host-side connector module
+and a `src/platform.ts` declaration, never an engine change (ADR-0008).
+
+| Story | Description | Acceptance Criteria | Status |
+|-------|-------------|---------------------|--------|
+| 14.1 | Telegram gateway | Webhook + body bound + constant-time secret check + 4096-char splitting; answers via the agent path | ✅ |
+| 14.2 | Discord gateway | Interactions endpoint + signature verification + 2000-char splitting; same connector shape as 14.1 | ⬜ |
+| 14.3 | Slack gateway | Events API + signing-secret verification + block-aware splitting | ⬜ |
+| 14.4 | Gateway parity tests | Per gateway: parse/split/auth unit tests + a negative control on the secret check | ⬜ |
+
+---
+
+### Epic 15: Memory Ports — Durable by Default, Snapshotted for Free
+
+**Objective:** persistent memory with zero new infrastructure: DO SQLite is the source of truth;
+snapshot transports (Telegram, Google Drive) are ports, best-effort, never on the answer path.
+
+| Story | Description | Acceptance Criteria | Status |
+|-------|-------------|---------------------|--------|
+| 15.1 | MemoryStore port | DO SQLite as default implementation; snapshot transports behind one port | ⬜ |
+| 15.2 | Telegram snapshot store | Snapshot + append-only log to a private chat via `sendDocument`; restore path | ⬜ |
+| 15.3 | Google Drive snapshot store | Free-account Drive folder target; same snapshot/restore shape | ⬜ |
+| 15.4 | Honest degradation | A failed snapshot degrades to local-only and is reported, never blocking an answer | ⬜ |
+
+---
+
+### Epic 16: Setup Wizards — CLI and GitHub Pages
+
+**Objective:** a first-time operator reaches a live, verified core in minutes from a phone
+(Termux), a terminal, `cmd`, or a browser — with no wizard step that can silently fail free.
+
+| Story | Description | Acceptance Criteria | Status |
+|-------|-------------|---------------------|--------|
+| 16.1 | CLI wizard | Zero-dependency script; secret collection → target pick → config generate → deploy → live probe | ⬜ |
+| 16.2 | GitHub Pages wizard | Static, client-side; validates tokens live, writes secrets, dispatches the deploy workflow | ⬜ |
+| 16.3 | Target matrix as data | Every wizard target carries a verified-free citation + date; re-verified on a schedule | ⬜ |
+| 16.4 | The HF lesson displayed | The 2026-07-08 Docker-Space PRO gate is shown, not rediscovered, when a user asks | ⬜ |
+
+---
+
+### Epic 17: Deploy-Target Portability
+
+**Objective:** "free to sign up, no KYC" is a verified property of the deployment, not a slogan.
+
+| Story | Description | Acceptance Criteria | Status |
+|-------|-------------|---------------------|--------|
+| 17.1 | Cloudflare free path | The default: core + gateways on Workers free; the wizard's first row | ⬜ |
+| 17.2 | Deno Deploy secondary path | Same deploy planner, second target | ⬜ |
+| 17.3 | Target re-verification job | CI job re-checks each target's free policy and fails loudly on change | ⬜ |
+
+---
+
 ## 6. Non-Functional Requirements
 
 | Category | Requirement | Target |
