@@ -207,9 +207,22 @@ happy with it — verified here, exit 0, and it cheerfully prints
 placeholder it choked on. Edit the `id`, then deploy.
 
 The subcommand name is verified against the installed wrangler (4.146.0): `wrangler kv namespace
-create <namespace>` — the older `wrangler kv:namespace create` spelling is gone. ⚠️ Creating the
-namespace against a **real** account is the one step in this document I could not execute; there is no
-account here.
+create <namespace>` — the older `wrangler kv:namespace create` spelling is gone.
+
+#### If a namespace already exists
+
+⚠️ **Do not create a duplicate.** On an account where `CONTEXT_STORE` was previously provisioned
+(running `wrangler kv namespace create CONTEXT_STORE` again returns a conflict), find the existing
+namespace instead:
+
+```bash
+npx wrangler kv namespace list   # find the row with title "CONTEXT_STORE"
+```
+
+Read the `id` field and paste it into `wrangler.toml`. The namespace on the account verified against
+this repo (account `d741cc3dcc5095fe3cde98d8d0bcf6ec`) already exists with
+`id = "984ba26b093b4c5a8a1661ac36831c1b"`. If you are starting fresh, the `create` subcommand above
+is correct and will return the new ID.
 
 ### 2. Local loop
 
@@ -234,8 +247,30 @@ upm run deploy           # = upm run typecheck && wrangler deploy
 ```
 
 ✅ `npm run typecheck` exit 0; ✅ `npx wrangler deploy --dry-run --outdir dist` bundles clean
-(149.78 KiB / 41.20 KiB gzip at the time of writing). ⚠️ A real `wrangler deploy` needs an account and
-was not run.
+(165.10 KiB / 45.25 KiB gzip). ✅ A real `npx wrangler deploy` succeeds — verified live,
+deployed to `https://simorgh-edge-gateway.shahino3ozone1353.workers.dev`. No migration
+warnings, no errors.
+
+#### Migration note (v1 → v2)
+
+The remote script carries a `v2` migration tag that was applied before the local
+`wrangler.toml` was reconciled with the repo. The original `v1` used `new_classes`
+(KV-backed Durable Objects); the remote `v2` bumped the tag to migrate to SQLite-backed
+DOs via `new_sqlite_classes`. If `v2` is missing from `wrangler.toml`, wrangler warns:
+
+> The published script … has a migration tag "v2", which was not found in your wrangler.toml
+
+and then fails with `Cannot apply new_sqlite_classes migration to existing class …` because
+it tries to re-create already-existing classes. The fix is a no-op `v2`:
+
+```toml
+[[migrations]]
+tag = "v2"
+```
+
+This matches the remote tag without re-declaring classes the `v1` migration already created.
+See [docs/ADR-0006-do-migrations.md](adr/ADR-0006-do-migrations.md) if it exists, otherwise
+the `wrangler.toml` comment block is the canonical record.
 
 ### Secrets vs vars
 
@@ -535,6 +570,7 @@ Other host-owned differences, all deliberate and all documented in
 | `npm ci` → `EUSAGE: can only install with an existing package-lock.json` | You typed it. The deploy plan does **not** — step 1 is `upm install --frozen-lockfile` | `upm install --frozen-lockfile`. There is no lockfile by design and there will not be one ([ADR-0004](adr/ADR-0004-toolchain-upm.md)) |
 | A `package-lock.json` reappeared in your working tree | A tool regenerated it | Delete it. It is gitignored on purpose — a second lockfile is a second resolution of the manifest, with nothing comparing the two. [ADR-0004](adr/ADR-0004-toolchain-upm.md) |
 | A real `wrangler deploy` fails while `wrangler dev` and `--dry-run` are both fine | The KV placeholder is still in `wrangler.toml` | `npx wrangler kv namespace create CONTEXT_STORE`, paste the id into `id = …`. Nothing warns you |
+| `Cannot apply new_sqlite_classes migration to existing class …` (code 10074) or `has a migration tag "v2", which was not found in your wrangler.toml` | The remote script has a `v2` migration tag that the local `wrangler.toml` does not declare, so wrangler tries to re-apply `v1` and collides with existing DO classes | Add `[[migrations]] tag = "v2"` as a no-op entry in `wrangler.toml` (see §B Step 3). This matches the remote tag without re-declaring classes `v1` already created |
 | `Refusing to execute. N step(s) would run real commands on this machine.` exit 2 | `deploy --mode cli` without `--yes` | Intentional. Add `--yes`, or `--dry-run` to see the calls without running them. There is no exemption path, and adding one would delete the feature |
 | `Preflight blocked — … cannot proceed.` exit 2 | Missing required secret, or an unresolved `{origin}` | Read the checker output; each line carries its own fix. `--skip-preflight` overrides, loudly |
 | `✗ [no-instances] fleet: No instances recorded` and `doctor` exits 1 | An empty fleet is a finding, not a crash | `npm run simorgh -- connect node http://127.0.0.1:8788 --api-key "$SIMORGH_API_KEY"` |
