@@ -1,9 +1,37 @@
+---
+type: "Review Brief"
+title: "Simorgh — External Review Brief"
+description: "Historical self-contained prompt for reviewing Simorgh's architecture and next moves."
+tags:
+  - simorgh
+  - review
+  - historical
+  - okf
+generated:
+  by: "openai/gpt-6"
+  at: "2026-10-10T15:05:00Z"
+status: "deprecated"
+stale_after: "2026-10-17T00:00:00Z"
+sources:
+  - id: roadmap-spine
+    resource: "ROADMAP-SPINE.md"
+    title: "Current canonical roadmap"
+  - id: todo-index
+    resource: "todo/index.md"
+    title: "Current implementation queue"
+  - id: continuation-review
+    resource: "research/CONTINUATION-REVIEW-2026-10-10.md"
+    title: "Continuation review, October 10 2026"
+---
 # Simorgh — external review brief
 
-**Purpose:** hand this to an external model (ChatGPT) to brainstorm the *next move*. It is
+> **TL;DR:** this document is a historical review prompt with intentionally dated measurements. The
+> live plan is [the roadmap](ROADMAP-SPINE.md); the live action queue is [the OKF TODO index](todo/index.md).
+
+**Purpose: hand this to an external model (ChatGPT) to brainstorm the *next move*. It is
 self-contained; no repository access is needed to reason about it.
-**Written:** 2026-09-24 · **Repo state:** `feat/phoenix-core-modularization` @ `5c53dfe`, working tree clean.
-**2026-10-10:** now `main` @ `64e6bd3`; `5c53dfe` is still an ancestor, but 51 commits back — no longer the tip. §3's figures stay frozen at 2026-09-24 by design; §4 and §5.1's conclusions still hold.
+**Written:** 2026-09-24 · **Reviewed for continuation:** 2026-10-10 · **Current repository snapshot:** `main` @ `9687eb3`.
+**Snapshot note:** §3's measurements stay frozen at their stated dates. For current next actions, use `docs/todo/index.md` and `docs/ROADMAP-SPINE.md`; this brief is a historical review prompt, not the live backlog.
 **How to read the numbers:** §3 says explicitly which figures I re-ran today and which are carried
 from the project's own docs. Treat anything unmarked as a *claim*, not a measurement.
 
@@ -236,23 +264,13 @@ Three of the load-bearing claims were independently re-verified against the code
 
 ## 6. Process and environment (this shapes what is cheap)
 
-- **Work runs as mailbox lanes**: a brief in `INBOX/`, a report in `OUTBOX/` ending `TASK-<id>-END`,
-  and `fbmail check <id>` as the machine-readable verdict. 17 lanes have closed (`mailbox/BOARD.md`,
-  regenerated 2026-10-09 — a snapshot, not a live count).
-- **Grade a lane on artifacts + `fbmail check`, never on the driver's exit code.** This has burned the
-  project twice — once a lane exited 0 having delivered 1 of 3 files, once a lane's *false-negative*
-  assertion was read as a real defect for two days.
-- **Hardware:** i5-3570, 16 GB, **no AVX2** → API-only, no local inference, ever.
-- **Network (Iran):** PyPI blocked, a specific Go proxy is banned (tampered modules), npm works via a
-  mirror, and a global proxy env var intercepts localhost unless `NO_PROXY` is set. Costs and
-  connectivity are real constraints on any "just run it in CI/hosted" plan.
-- **Every free-tier provider used is rate-capped and quota-limited** — which is why §5.1's quota
-  modelling on the Go side is interesting and its absence on the TS side is a gap.
-- **Deliberately not pushed.** PR #1 (`production-readiness-v0-3`) was open at the time of writing —
-  unverified on 2026-10-10 (no network; `e0053fc` *is* an ancestor of HEAD). This branch is stacked
-  directly on that PR's head commit, not on `main`.
-
----
+- **Current planning contract:** the roadmap owns sequence; one OKF v0.2 document per task owns
+  dependencies, evidence and acceptance. Start with `docs/todo/index.md`.
+- **Review discipline:** a green suite is not proof by itself. Confirm boundary behavior against a
+  real core or actual plan builder, include a negative control for detectors, and report checks that
+  were not run.
+- **Environment:** Node + upm is the JavaScript toolchain; run both Workers and Node suites, and the
+  Go gates when touching Go. No coordination-specific runtime or side channel is required.
 
 ## 7. Open decisions I want pressure-tested
 
@@ -319,9 +337,9 @@ parallelism worth it *anywhere*, or is that a solution looking for a problem?
 
 ### Provenance
 
-Written 2026-09-24 by Buffy (a Freebuff CLI session) from: the working tree at `5c53dfe`; commands
-re-run that day (§3.1); `docs/{STATE-OF-PROJECT,QUALITY,SECURITY-AUDIT,HOST-PORTABILITY,OBSERVABILITY}.md`,
-`docs/adr/ADR-0001`, `docs/adr/ADR-0002`; and the ten lane reports in `mailbox/OUTBOX/`.
+Written 2026-09-24 from the working tree at `5c53dfe`; commands re-run that day (§3.1); the state,
+quality, security, host-portability and observability docs; and ADR-0001/0002. The former coordination
+reports are retired; their durable conclusions are mapped in [the retirement record](history/coordination-retirement-2026-10-10.md).
 
 **This brief inherits its sources' errors.** §3.1 is measured; §3.2 is not, and is marked as such. If a
 number here disagrees with the repo, the repo wins — and the disagreement is itself a finding worth
