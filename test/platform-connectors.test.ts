@@ -30,6 +30,24 @@ const KEY = "test-bearer-key-0123456789";
 const withKey = Object.assign({}, env, { SIMORGH_API_KEY: KEY }) as Env;
 const authed = { Authorization: "Bearer " + KEY };
 
+/**
+ * The deployment with **no** service key configured — stated explicitly, not inherited.
+ *
+ * The fail-closed suites used to pass the ambient `env` and expect `503
+ * AUTH_NOT_CONFIGURED`. That only held on a machine with no `SIMORGH_API_KEY` set, and
+ * `.dev.vars` is gitignored, so CI proved nothing about the local case: an operator who
+ * had ever run `upm run dev` with a key in `.dev.vars` got two red tests claiming the
+ * app does not fail closed, when in fact the app *is* configured and correctly answers
+ * `401` to a request with no token.
+ *
+ * The premise is now an object, so the test proves the fail-closed branch rather than
+ * the absence of a local file. A test that passes because of what is not on disk is
+ * not a test.
+ */
+const unconfigured = Object.assign({}, env, {
+  SIMORGH_API_KEY: undefined,
+}) as Env;
+
 const UUID = "00000000-0000-4000-8000-000000000000";
 
 /** Substitute the route params so a declared surface can actually be dialled. */
@@ -106,7 +124,7 @@ describe("the declared surface is the real surface", () => {
       const res = await app.request(
         concrete(surface.path),
         { method: surface.method },
-        env
+        unconfigured
       );
 
       // 404 is the only answer that means "no such route". The rest are real handlers
@@ -136,7 +154,7 @@ describe("control-plane routes", () => {
       "/api/v1/schedule",
       "/api/v1/platform/connectors",
     ]) {
-      const res = await app.request(path, undefined, env);
+      const res = await app.request(path, undefined, unconfigured);
       expect(res.status, path).toBe(503);
       const body = (await res.json()) as { error?: { code?: string } };
       expect(body.error?.code).toBe("AUTH_NOT_CONFIGURED");
