@@ -8,7 +8,7 @@ tags:
   - roadmap
   - okf
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "stable"
 stale_after: "2026-10-17T00:00:00Z"
@@ -38,10 +38,10 @@ sources:
 
 | Check | Result |
 |---|---|
-| `upm install --frozen-lockfile` | ✅ 93 pkgs, exit 0 |
-| `upm run typecheck` (tsgo ×3 projects) | ✅ exit 0 |
+| `upm install --frozen-lockfile` | 🟡 repository-reported: 93 packages, exit 0 |
+| `upm run typecheck` (tsgo ×3 projects) | 🟡 repository-reported: exit 0 |
 | `upm run test:workers` (workerd/vitest) | 🟡 repository-reported: 14 files / **138 tests passed** |
-| `upm run test:node` (Node 22/vitest) | ✅ 27 files / **500 tests passed** |
+| `upm run test:node` | 🟡 repository-reported: 28 files / **504 tests passed** |
 | Go workspace (`bot gateway packages/* tools`) | 🟡 repository-reported: 6 modules build/test clean; 3 have no tests |
 | `.gitignore` now excludes `package-lock.json`; stray lock removed | ✅ ADR-0004 enforced |
 | `package.json` `test` script now uses `upm run …` (was `npm run …`) | ✅ self-referential npm remnant fixed |
