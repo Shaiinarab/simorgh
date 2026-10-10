@@ -1,24 +1,5 @@
 ---
 okf_version: "0.2"
-type: "Knowledge Bundle"
-title: "Simorgh Documentation"
-description: "Portable Markdown knowledge bundle for Simorgh architecture, decisions, research and implementation tasks."
-tags:
-  - simorgh
-  - documentation
-  - okf
-generated:
-  by: "openai/gpt-6"
-  at: "2026-10-10T15:05:00Z"
-status: "stable"
-stale_after: "2026-11-10T00:00:00Z"
-sources:
-  - id: okf-spec
-    resource: "https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md"
-    title: "Open Knowledge Format v0.2 specification"
-  - id: roadmap
-    resource: "ROADMAP-SPINE.md"
-    title: "Simorgh roadmap spine"
 ---
 # Simorgh documentation
 
