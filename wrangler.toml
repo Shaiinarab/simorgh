@@ -8,7 +8,7 @@ remote = true
 
 [[kv_namespaces]]
 binding = "CONTEXT_STORE"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "984ba26b093b4c5a8a1661ac36831c1b"
 
 [[durable_objects.bindings]]
 name = "FLOCK_COORDINATOR"
@@ -18,9 +18,15 @@ class_name = "FlockCoordinator"
 name = "DATA_TRUST_VAULT"
 class_name = "DataTrustVault"
 
+# ── Durable Object migrations ────────────────────────────
+# v1 creates both classes as SQLite-backed Durable Objects (both use
+# `this.state.storage.sql`). v2 is an empty tag bump — see docs/DEPLOY.md §C.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["FlockCoordinator", "DataTrustVault"]
+
+[[migrations]]
+tag = "v2"
 
 [triggers]
 crons = ["15 6 * * *"]
