@@ -8,7 +8,7 @@ tags:
   - historical
   - okf
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "deprecated"
 stale_after: "2026-10-17T00:00:00Z"
@@ -337,9 +337,9 @@ parallelism worth it *anywhere*, or is that a solution looking for a problem?
 
 ### Provenance
 
-Written 2026-09-24 by Buffy (a Freebuff CLI session) from: the working tree at `5c53dfe`; commands
-re-run that day (§3.1); `docs/{STATE-OF-PROJECT,QUALITY,SECURITY-AUDIT,HOST-PORTABILITY,OBSERVABILITY}.md`,
-`docs/adr/ADR-0001`, `docs/adr/ADR-0002`; and the ten lane reports in `mailbox/OUTBOX/`.
+Written 2026-09-24 from the working tree at `5c53dfe`; commands re-run that day (§3.1); the state,
+quality, security, host-portability and observability docs; and ADR-0001/0002. The former coordination
+reports are retired; their durable conclusions are mapped in [the retirement record](history/coordination-retirement-2026-10-10.md).
 
 **This brief inherits its sources' errors.** §3.1 is measured; §3.2 is not, and is marked as such. If a
 number here disagrees with the repo, the repo wins — and the disagreement is itself a finding worth
