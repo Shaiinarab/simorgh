@@ -8,19 +8,19 @@ tags:
   - migration
   - okf
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "stable"
 stale_after: "2027-10-10T00:00:00Z"
 sources:
   - id: todo-index
-    resource: "todo/index.md"
+    resource: "../todo/index.md"
     title: "Current TODO queue"
   - id: roadmap-spine
-    resource: "ROADMAP-SPINE.md"
+    resource: "../ROADMAP-SPINE.md"
     title: "Canonical roadmap"
   - id: continuation-review
-    resource: "research/CONTINUATION-REVIEW-2026-10-10.md"
+    resource: "../research/CONTINUATION-REVIEW-2026-10-10.md"
     title: "Continuation review"
 ---
 # Coordination Framework Retirement — October 10, 2026
