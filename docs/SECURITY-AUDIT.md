@@ -1,7 +1,7 @@
 # Security Audit — simorgh-platform / TASK-009
 
 > **What can an attacker make a Simorgh agent, connector, or deployer do that the user did not explicitly authorize?**
-> An attacker who controls the Telegram bot token or the fleet file can cause a Simorgh agent to execute arbitrary search queries and execute real shell commands on the operator's machine via `--yes`-gated deploy, or read any user's ledger logs and context by enumerating IDs in URLs — because authentication stops at the service token and authorization stops at the URL path.
+> An attacker who controls the Telegram bot token or the fleet file can cause a Simorgh agent to execute arbitrary search queries and execute real shell commands on the operator's machine via `--yes`-gated deploy, or (before 2026-10-08) read any user's ledger logs and context by enumerating IDs in URLs — because authentication stops at the service token and authorization stops at the URL path.
 
 ## Trust-Boundary Diagram
 
@@ -55,15 +55,15 @@
   connector/credential/ledger operation, with seven cross-principal negative tests (A cannot execute /
   schedule / read context / read logs / consume quota / search knowledge / invoke connectors as B).
   Multi-user autonomous execution is forbidden until A3 ships.
-- **Evidence:** `src/index.ts:156` (edge rate limit key), `src/security.ts:131` (userId from header or body)
+- **Evidence:** `src/index.ts:374` (edge rate limit key), `simorgh-platform/src/runtimes/node.ts:148-150` (the Node host's key), `phoenix-core/src/security.ts:226` (`parseExecuteBody` — userId from header or body)
 - **Impact:** The rate limit is keyed on `execute:{userId}` where `userId` comes from the `X-Simorgh-User-Id` header or request body. An unauthenticated caller (hitting `/api/v1/agent/execute`... wait, that route requires auth). However, a holder of any valid bearer token can set `X-Simorgh-User-Id` to any value, causing rate-limit collisions — they can exhaust another user's quota, or reset their own by changing the key. The Telegram rate limit (`telegram:{from_id}`) is keyed on Telegram's own `from` field, which is not attacker-controlled but also not scoped to the operator's identity.
 - **Recommended fix:** Derive the rate-limit key from the authenticated identity (e.g., a hash of the bearer token or a user claim in the token), not from a client-supplied header.
 
 ### INJ-001 — Provider response content is folded into the next prompt
 - **Severity:** medium
-- **Evidence:** `phoenix-core/src/agent.ts:188` (`buildSynthesisPrompt`), `phoenix-core/src/tools.ts:143` (tool executor returns provider content)
+- **Evidence:** `phoenix-core/src/agent.ts:146` (`buildSynthesisPrompt`, called at `:198`), `phoenix-core/src/tools.ts:58` (`createToolExecutor` returns provider content)
 - **Impact:** The `search_web` tool fetches DuckDuckGo results and returns them as a string. That string is folded into the provider's prompt via `buildSynthesisPrompt`. If the provider were a different model (or if a provider were compromised), it could interpret content in the tool result as instructions. The agent loop itself is deterministic (iterates the caller's tool list, one tool per iteration), so the tool-call decision is not model-driven — but the model's *answer* is shaped by attacker-controlled web content.
-- **Recommended fix:** The current design is safe against *tool-calling* injection because the loop, not the model, selects tools. Document this explicitly. Consider content-length limits on tool results (already `MAX_TOOL_RESULT_CHARS = 2000`) and consider isolating provider-facing text from tool-result text in the synthesis prompt.
+- **Recommended fix:** The current design is safe against *tool-calling* injection because the loop, not the model, selects tools. Document this explicitly. Consider content-length limits on tool results (already `MAX_TOOL_RESULT_CHARS = 2_000`, `agent.ts:32/118`) and consider isolating provider-facing text from tool-result text in the synthesis prompt.
 
 ### INJ-002 — Telegram commands are user-supplied prompts
 - **Severity:** low
@@ -73,8 +73,8 @@
 
 ### SSRF-001 — No validation on fleet endpoint targets
 - **Severity:** high
-- **Evidence:** `simorgh-platform/src/fleet.ts:171` (`instanceIdFor` — no URL validation), `simorgh-platform/src/connectors/rest.ts:12` (connector dials any endpoint), `simorgh-platform/src/connectors/mcp.ts:55` (same)
-- **Impact:** The fleet file (`~/.simorgh/fleet.json`) can contain any endpoint URL. The platform dials these endpoints via `connectorFor`, which calls `config.fetch(base + path, ...)`. An attacker who modifies the fleet file can point the platform at `http://169.254.169.254`, `http://localhost:8080`, or any internal host. There is **no validation** — no private-IP block, no localhost check, no allow-list. The `byo-endpoint` target exists precisely for this purpose ("point the platform at a core someone else runs"). The attack vector requires fleet file access, which is local to the operator's machine.
+- **Evidence:** `simorgh-platform/src/fleet.ts:161` (`instanceIdFor` — no URL validation), `simorgh-platform/src/connectors/rest.ts:38` (connector dials any endpoint), `simorgh-platform/src/connectors/mcp.ts:96` (same)
+- **Impact:** The fleet file (`~/.simorgh/fleet.json`) can contain any endpoint URL. The platform dials these endpoints via `connectorFor`, which calls `config.fetch(base + path, ...)`. An attacker who modifies the fleet file can point the platform at `http://169.254.169.254`, `http://localhost:8080`, or any internal host. There is **no private-IP block, no localhost check and no allow-list** — only `new URL()` parsing for the instance id. The `byo-endpoint` target exists precisely for this purpose ("point the platform at a core someone else runs"). The attack vector requires fleet file access, which is local to the operator's machine.
 - **Recommended fix:** Add endpoint validation in `connectorFor` or `fleet-store.ts` — reject private/link-local IP ranges (169.254.0.0/16, 127.0.0.0/8, 10.0.0.0/8, etc.) and require HTTPS for non-localhost endpoints. Document whether this is an accepted risk (operator trusts their own fleet file).
 
 ### SSRF-002 — `OLLAMA_BASE_URL` is an operator-supplied fetch target
@@ -85,43 +85,43 @@
 
 ### DEP-001 — `--yes` gate is explicit but plan argv is operator-influenced
 - **Severity:** medium
-- **Evidence:** `simorgh-platform/src/deploy/apply.ts:41` (`if (!options.confirmed)`), `simorgh-platform/src/cli.ts:237` (`values.yes !== true`), `simorgh-platform/src/deploy/runner.ts:33` (`shell: false`)
+- **Evidence:** `simorgh-platform/src/deploy/apply.ts:54` (`if (!options.confirmed)`), `simorgh-platform/src/cli.ts:237` (`values.yes !== true`), `simorgh-platform/src/deploy/runner.ts:33` (`shell: false`)
 - **Impact:** The `--yes` gate cannot be satisfied implicitly — no env var, no config file, no default. The gate is solid. However, plan `argv` is built from `--origin` and `--service` template substitution (`plan.ts:145-146`). An operator who supplies `--origin="http://attacker.com;rm -rf /"` cannot inject commands because `runner.ts:33` uses `shell: false`. But the argument is still passed to the subprocess — a malicious origin could cause a downstream tool to make an unexpected HTTP request. The `byo-endpoint` target's endpoint template `{origin}` is similarly substituted into `curl` verify commands (`targets.ts:122`).
 - **Recommended fix:** The shell-injection defense is solid. Consider validating that `--origin` is a well-formed URL with a host that resolves to a trusted network.
 
 ### DEP-002 — Deploy steps execute on the operator's machine with full env
 - **Severity:** medium
-- **Evidence:** `simorgh-platform/src/deploy/runner.ts:38-42` (`env: { ...process.env, ...options.env }`), `simorgh-platform/src/deploy/apply.ts:80` (`env` passed to runner)
+- **Evidence:** `simorgh-platform/src/deploy/runner.ts:46-51` (`env: { ...process.env, ...options.env }`), `simorgh-platform/src/deploy/apply.ts:60` (`env` passed to runner)
 - **Impact:** Every deploy step inherits `process.env` plus step-specific env. If the operator's shell has secrets loaded (e.g., `AWS_SECRET_ACCESS_KEY`, `GITHUB_TOKEN`), deploy steps can access them. This is by design (steps need env) but means a compromised step or supply-chain attack in `npm ci` would have access to all environment variables.
 - **Recommended fix:** Document the env inheritance as an accepted risk. Consider an opt-in env allow-list for production deploys.
 
 ### MCP-001 — Platform MCP server: no authentication on the MCP HTTP endpoint
 - **Severity:** high
-- **Evidence:** `simorgh-platform/src/mcp/server.ts` (MCP handler is a `FetchLike` — the route registration that calls it is not shown, but `platformMcpHandler` itself has no auth), `simorgh-platform/src/runtimes/node.ts:470` (`/mcp` route calls `handleMcpRequest` which calls `requireAuth`)
+- **Evidence:** `simorgh-platform/src/mcp/server.ts:143` (MCP handler is a `FetchLike` — the route registration that calls it is not shown, but `platformMcpHandler` itself has no auth), `simorgh-platform/src/runtimes/node.ts:361` (`/mcp` route), `:398` (`handleMcpRequest`), `:403` (its `requireAuth`)
 - **Impact:** On the Node runtime, `/mcp` requires auth (`requireAuth` → checks `SIMORGH_API_KEY`). On the Workers edge, the MCP server is exposed via a route — if that route does not enforce auth, any internet caller can call `platform_targets`, `platform_fleet` (which reveals all instance endpoints and health), and `platform_ask` (which executes prompts against the fleet). The platform MCP server exposes fleet topology and can trigger queries. This is a critical separation issue.
 - **Recommended fix:** Verify the Workers route that serves `platformMcpHandler` has the same auth guard as other API routes. If it does not, add `requireServiceAuth` before the MCP handler.
 
 ### MCP-002 — Core MCP server exposes `simorgh_ask` which can execute arbitrary prompts
 - **Severity:** medium
-- **Evidence:** `runtimes/node.ts:420-448` (`MCP_TOOL_ASK` handler calls `executeAgent`), `simorgh-platform/src/mcp/server.ts:275-320` (`platform_ask` does the same at platform level)
+- **Evidence:** `runtimes/node.ts:492` (`MCP_TOOL_ASK` handler calls `executeAgent`; declared `:449`/`:454`), `simorgh-platform/src/mcp/server.ts:275-320` (`platform_ask` does the same at platform level)
 - **Impact:** An MCP client with auth can send any prompt to the agent with any allowed tools. This is the intended function, but there is no per-user authorization — a token that can call `simorgh_ask` can ask the agent to search the web, fetch content, and synthesize answers on any topic. Combined with `simorgh_status`, an attacker can map the fleet and then query it.
 - **Recommended fix:** This is by design for an MCP server. Document that MCP token holders are trusted operators. Consider scoping `simorgh_ask` to per-user rate limits and tool allow-lists.
 
 ### MCP-003 — Platform and core MCP prefixes are properly separated
 - **Severity:** info (positive finding)
-- **Evidence:** `simorgh-platform/src/mcp/server.ts:14` (comment: "this server publishes nothing under `simorgh_*`"), `runtimes/node.ts:377` (core exposes `simorgh_status` and `simorgh_ask` only)
+- **Evidence:** `simorgh-platform/src/mcp/server.ts:19` (comment: "this server publishes nothing under `simorgh_*`"), `runtimes/node.ts:449/454` (core exposes `simorgh_status` and `simorgh_ask` only)
 - **Impact:** No confusion between "ask this core" (`simorgh_ask`) and "ask the fleet" (`platform_ask`). An agent reading tool lists can distinguish platform-level queries from core-level queries. This is a deliberate design choice that prevents prompt confusion attacks.
 - **Recommended fix:** None. Document as a control.
 
 ### SEC-001 — Fleet file stores core API keys in plaintext
 - **Severity:** high
-- **Evidence:** `simorgh-platform/src/fleet-store.ts:74` (JSON write), `simorgh-platform/src/fleet.ts:15` (`CoreInstance` has `apiKey?: string`), `simorgh-platform/src/connectors/rest.ts:23` (connector reads `config.apiKey`), `simorgh-platform/src/connectors/mcp.ts:36` (same)
-- **Impact:** The fleet file at `~/.simorgh/fleet.json` stores instance records including `apiKey` fields for REST and MCP connectors, in plaintext JSON. There is no file-permission enforcement beyond the OS's (`chmod` on the directory/file). The Go side (`packages/crypto/crypto.go`) seals provider keys with AES-256-GCM, but the TypeScript side has **no equivalent** — fleet file API keys are plaintext.
+- **Evidence:** `simorgh-platform/src/fleet-store.ts:74` (JSON write), `simorgh-platform/src/fleet.ts:31` (`CoreInstance` has `apiKey?: string`), `simorgh-platform/src/connectors/rest.ts:23` (connector reads `config.apiKey`), `simorgh-platform/src/connectors/mcp.ts:36` (same)
+- **Impact:** The fleet file at `~/.simorgh/fleet.json` stores instance records including `apiKey` fields for REST and MCP connectors, in plaintext JSON. There is no file-permission enforcement — **no `chmod` anywhere in `fleet-store.ts`** — it relies on the directory's mode. The Go side (`packages/crypto/crypto.go`) seals provider keys with AES-256-GCM, but the TypeScript side has **no equivalent** — fleet file API keys are plaintext.
 - **Recommended fix:** Encrypt the `apiKey` field in the fleet file at rest, or store keys in a platform secrets manager (e.g., `wrangler secret` on Workers, OS keychain on Node). At minimum, document the risk.
 
 ### SEC-002 — Asymmetry: Go seals secrets, TypeScript does not
 - **Severity:** medium
-- **Evidence:** `packages/crypto/crypto.go:2` (AES-256-GCM), `packages/crypto/crypto.go:65` (`Encrypt` seals), TypeScript fleet-store.ts (plaintext JSON)
+- **Evidence:** `packages/crypto/crypto.go:2` (AES-256-GCM), `packages/crypto/crypto.go:67` (`Encrypt` seals), TypeScript fleet-store.ts (plaintext JSON)
 - **Impact:** Provider API keys on the Go side are sealed with AES-256-GCM under argon2id-derived keys. The TypeScript fleet file has no encryption at all. A host compromise on the Node side exposes all recorded core API keys in plaintext; the same compromise on the Go side exposes sealed ciphertext. The asymmetry means the Node side is the weak link.
 - **Recommended fix:** Add encryption at rest for the fleet file on the TypeScript side, matching the Go standard. At minimum, use OS keychain storage for the `apiKey` field.
 
@@ -129,8 +129,8 @@
 - **Severity:** high (availability), fixed
 - **Evidence:** `phoenix-core/src/provider.ts:122` returned `data.choices?.[0]?.message?.content ?? ""` with no length bound, and that value reached `sanitizeModelOutput` on every answer (`phoenix-core/src/execute.ts:166`) and every tool result (`:212`). Every *inbound* field was already capped (`MAX_PROMPT_CHARS`, `MAX_EXECUTE_BODY_CHARS`, `MAX_TOOLS`, `MAX_USER_ID_CHARS`); nothing bounded the way out.
 - **Impact:** The sanitize passes are linear in input length, so an upstream — a hostile endpoint, a compromised key, or merely a misbehaving provider — chose how much CPU a request spends. Measured, not assumed (`bench/native-audit`, `docs/research/NATIVE-COMPUTE-AUDIT.md`): at a 128 KB answer the sanitizer cost **4.71 ms median and 11.72 ms p99**, against a **10 ms CPU limit per request** on the Workers Free plan. The p99 exceeded the entire per-request budget on its own, so a single oversized response could exhaust the CPU allowance for a request rather than merely slow it.
-- **Fix:** `MAX_MODEL_OUTPUT_CHARS = 32_000` in `phoenix-core/src/security.ts`, applied as the **first** step of `sanitizeModelOutput` — before any pattern runs, since truncating afterwards would already have spent the CPU the cap exists to save. The value matches `MAX_EXECUTE_BODY_CHARS` deliberately, keeping one length policy instead of two that drift. Recorded as an `output_truncated` finding so the strip stays auditable rather than a silent mutation. Six tests in `phoenix-core/test/security.test.ts`, including the boundary case (an answer exactly at the cap is byte-identical, so the no-op guarantee survives) and the case that matters most for a length cap — that dangerous markup inside the retained prefix is still neutralised, so the bound is not a sanitiser bypass.
-- **Verification:** Negative control run — with the cap removed, 5 of the 6 new tests fail; restored, all 48 pass. `boundary.test.ts` still green (the cap adds no runtime binding), both suites green (129 workerd + 368 node), `typecheck` clean.
+- **Fix:** `MAX_MODEL_OUTPUT_CHARS = 32_000` in `phoenix-core/src/security.ts`, applied as the **first** step of `sanitizeModelOutput` — before any pattern runs, since truncating afterwards would already have spent the CPU the cap exists to save. The value matches `MAX_EXECUTE_BODY_CHARS` deliberately, keeping one length policy instead of two that drift. Recorded as an `output_truncated` finding so the strip stays auditable rather than a silent mutation. Six tests in `phoenix-core/test/security.test.ts` — the file now holds **59** `it(` blocks — including the boundary case (an answer exactly at the cap is byte-identical, so the no-op guarantee survives) and the case that matters most for a length cap — that dangerous markup inside the retained prefix is still neutralised, so the bound is not a sanitiser bypass.
+- **Verification:** Negative control run — with the cap removed, 5 of the 6 new tests fail; restored, all 59 in that file pass. `boundary.test.ts` still green (the cap adds no runtime binding), both suites green (129 workerd + 368 node), `typecheck` clean.
 - **Residual, stated rather than hidden:** cutting the tail can leave an unterminated construct such as `<a href="` with no `>`. That is inert for a consumer rendering the text as text or markdown, and it is the same class of gap already documented for downstream renderers this function cannot see.
 
 ### SEC-003 — No secrets found in source files
@@ -141,8 +141,8 @@
 
 ### SEC-004 — No env files on disk
 - **Severity:** info (positive finding)
-- **Evidence:** `ls -la .env .env.* .dev.vars` — "no env files on disk"
-- **Impact:** No `.env` files committed or present in the workspace. Secrets are passed via `wrangler secret` (Workers) or `process.env` (Node), not files.
+- **Evidence:** `ls -la .env .env.* .dev.vars` — `.dev.vars` is present on disk (126 B), gitignored (`.gitignore:11`) and untracked
+- **Impact:** No `.env` file is committed or tracked, and the security gate fails only on a *tracked* env file. `.dev.vars` exists but is never tracked, so the scan still reports **PASS — `.dev.vars` present but never tracked**. Secrets are passed via `wrangler secret` (Workers) or `process.env` (Node), not files.
 - **Recommended fix:** None needed.
 
 ### ERR-001 — Doctor output exposes endpoint URLs and error details
@@ -165,19 +165,19 @@
 
 ### RATE-001 — Rate limiting is a fixed-window SQL counter keyed on userId
 - **Severity:** medium
-- **Evidence:** `phoenix-core/src/rate-limit.ts:34` (`consumeRateLimit`), `src/index.ts:156` (key: `"execute:" + request.userId`)
+- **Evidence:** `phoenix-core/src/rate-limit.ts:34` (`consumeRateLimit`), `src/index.ts:374` (key: `"execute:" + request.userId`)
 - **Impact:** Fixed windows allow a 2x burst at window boundaries (user makes 20 requests at end of window 1, then 20 at start of window 2). More importantly: the key is `execute:{userId}` where `userId` comes from `X-Simorgh-User-Id` header. A holder of any valid bearer token can set this to any string — they can spread requests across many keys to evade limits, or concentrate another user's traffic in one key to trigger their rate limit. The Telegram path (`telegram:{from_id}`) uses Telegram's own user ID, which is better but still not tied to the platform's identity system.
 - **Recommended fix:** Key rate limits on the authenticated identity (hash of bearer token or a server-issued user ID), not on a client-supplied header.
 
 ### TELE-001 — Telegram secret-token check uses constant-time compare
 - **Severity:** info (positive finding)
-- **Evidence:** `src/telegram.ts:79-86` (uses `constantTimeEqual` from `security.ts`)
+- **Evidence:** `src/telegram.ts:128` (uses `constantTimeEqual` from `security.ts`, imported at `:3`)
 - **Impact:** The check is constant-time over SHA-256 digests, preventing timing side-channels on the secret.
 - **Recommended fix:** None needed.
 
 ### TELE-002 — Telegram auth check applied before body parsing
 - **Severity:** info (positive finding)
-- **Evidence:** `src/telegram.ts:79-91` (secret check at line 84, before `request.text()` at line 95)
+- **Evidence:** `src/telegram.ts:128` (secret check, before `request.text()` at line 137)
 - **Impact:** The webhook validates the `X-Telegram-Bot-Api-Secret-Token` before reading the request body. This prevents body-parsing DoS from unauthenticated callers and is the correct order.
 - **Recommended fix:** None needed.
 
@@ -203,7 +203,7 @@ grep -rInE '(ghp_|gho_|ghu_|ghs_|ghr_|sk-ant-|AIza[0-9A-Za-z_-]{20,}|xox[bpas]-|
 → (no output)
 
 ls -la .env .env.* .dev.vars 2>/dev/null || echo "no env files on disk"
-→ no env files on disk
+→ .dev.vars on disk (126 B) — gitignored, never tracked, so still no *tracked* env file
 
 grep -rn 'apiKey\|API_KEY' --include='*.ts' simorgh-platform/src/fleet-store.ts
 → (no output — apiKey is in fleet.ts CoreInstance interface, not fleet-store.ts)
@@ -225,7 +225,7 @@ grep -rn 'apiKey\|API_KEY' --include='*.ts' simorgh-platform/src/fleet-store.ts
 |---|---|---|
 | `/api/v1/flock/status` answers without auth | In-line comment at `runtimes/node.ts:207`: "Not authenticated, matching the edge" | **Undocumented risk.** The comment explains the *reason* (operator needs it before key is configured) but does not frame it as a security trade-off. Any caller can enumerate instance health. Should be an explicit risk acceptance in the PRD or ARCHITECTURE.md. |
 | Fleet file endpoints are dialed without SSRF validation | `byo-endpoint` target in `targets.ts:202-208` exists for this purpose | **Documented by existence.** The "bring your own endpoint" target implies the operator trusts the endpoint. But there is no explicit statement that endpoint validation is intentionally absent. |
-| Deploy steps inherit full `process.env` | No documentation in `deploy/runner.ts` or `apply.ts` | **Undocumented risk.** `runner.ts:38-42` merges `process.env` into step env. A supply-chain attack in `npm ci` or a malformed step could exfiltrate shell-loaded secrets. Should be documented in `docs/ARCHITECTURE.md`. |
+| Deploy steps inherit full `process.env` | No documentation in `deploy/runner.ts` or `apply.ts` | **Undocumented risk.** `runner.ts:46-51` merges `process.env` into step env. A supply-chain attack in `npm ci` or a malformed step could exfiltrate shell-loaded secrets. Should be documented in `docs/ARCHITECTURE.md`. |
 | Telegram bot token has no per-user authorization | `src/telegram.ts:240-285` — all commands use the same token | **By design, but undocumented.** Any holder of the webhook secret can issue any Telegram command. The assumption is that the webhook secret is a shared operator secret. Should be stated in the PRD. |
 | `CORS_ORIGINS` unset means "no browser origin" | `security.ts:66-69` and comment at `index.ts` CORS block | **Documented by code comment:** "An absent configuration allows nothing rather than everything." This is a secure default, not a gap. |
 
@@ -246,7 +246,7 @@ wrong in three of four rows: it undercounted High by one while listing six, coun
 as Medium when its finding declares Low, and omitted `MCP-002` and `SEC-002` from Medium
 entirely. A hand-maintained summary of a machine-checkable list is exactly the kind of thing
 that drifts, and a security document that miscounts its own HIGH findings is worse than no
-summary — §4 accepts six of them, so a reader counting five would not know what was agreed to.*
+summary — §4 accepted the six that were open at decision time; three of the seven are since fixed (§1).*
 
 **RES-001 was found after this audit, by measurement rather than reading** — the `bench/native-audit`
 lane (2026-10-07) timed the response-side sanitizer and found the outbound path had no length
@@ -264,7 +264,7 @@ counts one direction of a flow is a description of half a flow.*
 
 ## 4. Risk acceptance — recorded 2026-10-02
 
-**Decision:** the repository owner chose to **defer the six HIGH findings** and proceed with
+**Decision:** the repository owner chose to **defer the six HIGH findings** open at decision time (three of the seven are since fixed — §1) and proceed with
 capability work, on the grounds that this is a single-operator deployment on free tiers with no
 customer data. The findings above are **not** downgraded, not dismissed, and not closed: they stay
 at their audited severity, and this section records *why* they are being carried.

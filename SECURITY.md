@@ -30,16 +30,9 @@ specific commit, say which, and check whether the tip still has the shape you te
 |---|---|
 | Node **22** | `.github/workflows/ci.yml` (`node-version: 22` in two jobs). Its comment states upm requires Node 22.3+ and cites [`docs/adr/ADR-0004-toolchain-upm.md`](docs/adr/ADR-0004-toolchain-upm.md). |
 | Go **1.25** | `.github/workflows/ci.yml` (`go-version: "1.25"`), for the Go workspace under `gateway/`, `packages/`, `bot/`, `tools/`. |
-| TypeScript 7 via `tsgo` | `@typescript/native-preview` in `devDependencies`; `npm run typecheck` runs three configs. |
+| TypeScript 7 via `tsgo` | `@typescript/native-preview` in `devDependencies` (pinned dev preview `7.0.0-dev.20260707.2`, unpublished since 2026-07-07; stable `7.0.2` now on npm); `npm run typecheck` runs three configs. |
 | Cloudflare Workers | `wrangler.toml` (`main = "src/index.ts"`), `wrangler ^4.132.0`. |
 | Package manager | **upm**, with `upm.lock` committed. No `package-lock.json`, and none may be created — see [ADR-0004](docs/adr/ADR-0004-toolchain-upm.md) and `.gitignore`. |
-
-**Known inconsistency, reported rather than smoothed over:** `package.json` declares
-`engines.node: ">=20"`, but CI runs Node 22 and the repository's own rationale is that upm needs
-22.3+. The deploy preflight also rejects any runtime older than the workspace's `engines.node` — so a
-Node 20 host satisfies that check while `upm install` still requires 22.3+. **Proposal (not a claim
-about current behaviour):** raise `engines.node` to `>=22.3`. That is a code change and is
-deliberately not made here.
 
 ---
 
@@ -74,7 +67,7 @@ dramatically faster to act on:
 
 1. **Which boundary it crosses.** The audit's diagram (below) names the trusted components and the
    untrusted input sources — say which one your input arrived through.
-2. **Whether it is already recorded.** The audit's §1 has 25 findings with stable IDs (`AUTH-002`,
+2. **Whether it is already recorded.** The audit's §1 has 26 findings with stable IDs (`AUTH-002`,
    `SSRF-001`, `SEC-001`, …). If yours matches one, say so and give the **new** part: a different path,
    a working proof, or evidence that one of the void conditions below has been met.
 3. **Which host.** A core on the Workers edge, a core on the Node runtime, and the platform CLI are
@@ -101,10 +94,10 @@ when it threatens one of these:
 2. **Leaking an operator's provider credential.** Provider keys are optional by design (the gateway
    runs with zero secrets) but each one the operator adds is a bill and a liability. Relevant surfaces
    are named in [Secrets policy](#secrets-policy) and in audit §2.
-3. **Letting one caller read another's data.** Two IDORs are already recorded and accepted
-   (`AUTH-002` on the ledger, `AUTH-003` on offloaded context) *because the acceptance holds*. What is
-   new and valuable is any **third** cross-principal path, or evidence that the deployment now has a
-   second real principal — which voids the acceptance immediately.
+3. **Letting one caller read another's data.** Two IDORs are already recorded and **fixed**
+   2026-10-08 (`AUTH-002` on the ledger, `AUTH-003` on offloaded context). What is new and valuable is
+   any **third** cross-principal path, or evidence that the deployment now has a second real
+   principal — which voids the acceptance immediately.
 4. **Weakening a fail-closed control.** Authentication returns `503 AUTH_NOT_CONFIGURED` when
    unconfigured and never anonymous-allowed ([`phoenix-core/src/security.ts`](phoenix-core/src/security.ts));
    `CORS_ORIGINS` unset allows **nothing**; `deploy --mode cli` requires `--yes` with no env var, no
@@ -189,19 +182,18 @@ their fix is to bind identity to the request rather than the path.
 ## The accepted HIGH findings and their void conditions
 
 **An accepted finding is not a fixed finding.** The audit's words, quoted because the distinction is
-the whole point: the six HIGH findings are *"**not** downgraded, not dismissed, and not closed: they
-stay at their audited severity, and this section records **why** they are being carried."*
+the whole point: the seven HIGH findings, three already fixed, are *"**not** downgraded, not dismissed,
+and not closed: they stay at their audited severity, and this section records **why** they are being
+carried."*
 
 Full record, with the reason and the cost-to-fix for each: [audit §4](docs/SECURITY-AUDIT.md).
 
 | Finding | Carried because | Fixing it would cost |
 |---|---|---|
-| `AUTH-002` — IDOR on `/api/v1/user/:userId/logs` | One principal; ledger "users" are caller labels | Derive the id from the token instead of the path — small, but a route-contract change |
-| `AUTH-003` — IDOR on `/api/v1/context/:refId` | Same posture; context offload is a KV convenience, not an isolation boundary | Same shape as `AUTH-002` |
 | `AUTH-001` — unauthenticated `/api/v1/flock/status` | The operator dashboard and `doctor` need it before a key exists | One `requireServiceAuth` call — but a fresh deployment could no longer show its own status |
 | `SSRF-001` — fleet endpoints dialed unvalidated | `byo-endpoint` exists so the operator can dial a core they run | A private/link-local blocklist in `connectorFor` |
 | `SEC-001` — plaintext fleet API keys | Single-operator file on the operator's own machine | Encrypt at rest — and `packages/crypto` already does exactly this in Go |
-| `MCP-001` — Workers MCP handler auth unresolved | The finding is that the audit **could not locate** the route; unverified in either direction | One verification, then possibly one guard |
+| `MCP-001` — Platform MCP server: no authentication on the MCP HTTP endpoint | `platformMcpHandler` carries no auth of its own; the Node host's `/mcp` route guards it, so the open question is which other mounts exist | One verification, then possibly one guard |
 
 ### The condition under which the acceptance is void
 
@@ -209,7 +201,8 @@ The acceptance **expires the moment any of these becomes true**. Each is a chang
 *shape*, not its traffic, and each turns a single-principal assumption into a false one:
 
 1. **A second principal.** A teammate, a shared bot, a hosted dashboard. `AUTH-002` and `AUTH-003`
-   become disclosure between real accounts — they are the two to fix **first**, and they are cheap.
+   become disclosure between real accounts. Both are **fixed as of 2026-10-08**; the class they
+   represented returns with any new multi-principal surface.
 2. **Provider credentials arriving from anywhere but the operator's own environment.** Per-account
    credentials are now a first-class concept (`phoenix-core/src/quota.ts`, `Provider.accountId`). Once
    an account's secret can come from anywhere other than the operator's shell or `wrangler secret`,
@@ -283,7 +276,7 @@ keys are exposed is worth more than a report about whether they are encrypted to
 
 | Document | What it holds |
 |---|---|
-| [`docs/SECURITY-AUDIT.md`](docs/SECURITY-AUDIT.md) | The trust-boundary diagram, 25 findings in §1 with file/line evidence, the deliberately-not-protected table, the honest secrets scan, and the §4 risk acceptance |
+| [`docs/SECURITY-AUDIT.md`](docs/SECURITY-AUDIT.md) | The trust-boundary diagram, 26 findings in §1 with file/line evidence, the deliberately-not-protected table, the honest secrets scan, and the §4 risk acceptance |
 | [`AGENTS.md`](AGENTS.md) | The operating contract: commands, conventions, Definition of Done, the "never do" list |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Port table, the invariant list, the target × connector matrix, how-to recipes |
 | [`docs/adr/ADR-0005-free-only-mode.md`](docs/adr/ADR-0005-free-only-mode.md) | Why cost is a three-state fact and why the default is closed |

@@ -3,6 +3,7 @@
 **Purpose:** hand this to an external model (ChatGPT) to brainstorm the *next move*. It is
 self-contained; no repository access is needed to reason about it.
 **Written:** 2026-09-24 · **Repo state:** `feat/phoenix-core-modularization` @ `5c53dfe`, working tree clean.
+**2026-10-10:** now `main` @ `64e6bd3`; `5c53dfe` is still an ancestor, but 51 commits back — no longer the tip. §3's figures stay frozen at 2026-09-24 by design; §4 and §5.1's conclusions still hold.
 **How to read the numbers:** §3 says explicitly which figures I re-ran today and which are carried
 from the project's own docs. Treat anything unmarked as a *claim*, not a measurement.
 
@@ -200,18 +201,18 @@ nothing deleted.
 Go test coverage is now real but uneven: `gateway/internal/server`, `packages/{config,crypto,ledger,providers,groq}`
 all test green; `bot/` and `tools/` have no tests.
 
-### 5.2 Security — 25 audit findings, 6 high. This is the largest *unfinished* work.
+### 5.2 Security — 26 findings, 7 high (4 still open + 3 fixed). This is the largest *unfinished* work.
 
 From `docs/SECURITY-AUDIT.md` (TASK-009). The audit's own framing: *authentication stops at the service
-token and authorization stops at the URL path.* The six highs:
+token and authorization stops at the URL path.* The highs (AUTH-002 and AUTH-003 were fixed 2026-10-08 — marked below):
 
 | ID | Finding | Why it matters |
 |---|---|---|
-| **AUTH-002** | **IDOR** on `/api/v1/user/:userId/logs` | Any authenticated caller reads **any** user's complete ledger (prompts, tools, tiers) by enumerating a URL parameter. Highest-value target: it leaks request history. |
+| **AUTH-002** *(fixed 2026-10-08)* | **IDOR** on `/api/v1/user/:userId/logs` | Any authenticated caller reads **any** user's complete ledger (prompts, tools, tiers) by enumerating a URL parameter. Highest-value target: it leaks request history. |
 | **AUTH-001** | `/api/v1/flock/status` is unauthenticated | Any internet caller learns which providers are configured and their health — a reconnaissance map. |
-| **AUTH-003** | **IDOR** on `/api/v1/context/:refId` | Same pattern as AUTH-002 for offloaded context; the UUID is not secret. |
+| **AUTH-003** *(fixed 2026-10-08)* | **IDOR** on `/api/v1/context/:refId` | Same pattern as AUTH-002 for offloaded context; the UUID is not secret. |
 | **SSRF-001** | No fleet-endpoint validation | The platform dials whatever origin is in the fleet file, with no private/link-local IP guard. |
-| **MCP-001** | Platform MCP handler auth unresolved | The handler itself has no auth check; the lane could not locate the route that mounts it. **Still an open question** — do not treat as either confirmed or dismissed. |
+| **MCP-001** | Platform MCP handler auth unresolved | The handler itself has no auth check; the route is since located (`simorgh-platform/src/runtimes/node.ts:361`); the handler's missing auth check remains the finding. |
 | **SEC-001** | Fleet API keys stored in **plaintext** | `~/.simorgh/fleet.json`, no encryption, no `chmod 0600` — while the Go side already seals keys with AES-256-GCM. A capability asymmetry: the fix exists in the other runtime. |
 
 Plus 8 medium and 11 low/informational, including 7 **negative confirmations** (surfaces checked and
@@ -236,8 +237,8 @@ Three of the load-bearing claims were independently re-verified against the code
 ## 6. Process and environment (this shapes what is cheap)
 
 - **Work runs as mailbox lanes**: a brief in `INBOX/`, a report in `OUTBOX/` ending `TASK-<id>-END`,
-  and `fbmail check <id>` as the machine-readable verdict. 10 lanes have run; the board is currently
-  clean (`reported=10 open=0 stale=0`).
+  and `fbmail check <id>` as the machine-readable verdict. 17 lanes have closed (`mailbox/BOARD.md`,
+  regenerated 2026-10-09 — a snapshot, not a live count).
 - **Grade a lane on artifacts + `fbmail check`, never on the driver's exit code.** This has burned the
   project twice — once a lane exited 0 having delivered 1 of 3 files, once a lane's *false-negative*
   assertion was read as a real defect for two days.
@@ -247,7 +248,8 @@ Three of the load-bearing claims were independently re-verified against the code
   connectivity are real constraints on any "just run it in CI/hosted" plan.
 - **Every free-tier provider used is rate-capped and quota-limited** — which is why §5.1's quota
   modelling on the Go side is interesting and its absence on the TS side is a gap.
-- **Deliberately not pushed.** PR #1 (`production-readiness-v0-3`) is open; this branch is stacked
+- **Deliberately not pushed.** PR #1 (`production-readiness-v0-3`) was open at the time of writing —
+  unverified on 2026-10-10 (no network; `e0053fc` *is* an ancestor of HEAD). This branch is stacked
   directly on that PR's head commit, not on `main`.
 
 ---
