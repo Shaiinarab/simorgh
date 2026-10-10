@@ -1,5 +1,6 @@
 import { executeAgent } from "./agent-service";
-import { readFlockStatus } from "./flock";
+import { formatFlockStatus, readFlockStatus } from "./flock";
+import { splitOutgoingMessage } from "./message-chunks";
 import { constantTimeEqual } from "./security";
 
 const TELEGRAM_MAX_TEXT = 4096;
@@ -16,22 +17,15 @@ export interface TelegramUpdate {
   message?: TelegramMessage;
 }
 
+/**
+ * The limit is Telegram's (4096) and stays a parameter so the splitting is shared with
+ * the other gateways; see `src/message-chunks.ts`.
+ */
 export function splitTelegramMessage(
   text: string,
   maxChars = TELEGRAM_MAX_TEXT
 ): string[] {
-  if (text.length <= maxChars) return [text];
-
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > maxChars) {
-    let cut = remaining.lastIndexOf("\n", maxChars);
-    if (cut < Math.floor(maxChars * 0.6)) cut = maxChars;
-    chunks.push(remaining.slice(0, cut));
-    remaining = remaining.slice(cut).replace(/^\n+/, "");
-  }
-  if (remaining) chunks.push(remaining);
-  return chunks;
+  return splitOutgoingMessage(text, maxChars);
 }
 
 export function parseTelegramUpdate(raw: string): TelegramUpdate | null {
@@ -81,14 +75,10 @@ async function sendTelegramMessage(
 async function getFlockStatus(env: Env): Promise<string> {
   // Story 5.2: the KV fallback applies here too — an operator asking the bot for
   // flock status while the Durable Object is down gets the last known picture,
-  // rather than a webhook failure.
+  // rather than a webhook failure. The line format is shared with the other
+  // gateways via `formatFlockStatus`.
   const status = await readFlockStatus(env);
-  return status.birds
-    .map(
-      (bird) =>
-        bird.name + " · " + bird.status + " · " + bird.provider
-    )
-    .join("\n");
+  return formatFlockStatus(status);
 }
 
 function commandParts(text: string): {

@@ -27,6 +27,7 @@ import {
   subjectMatches,
 } from "./security";
 import { connectorReadiness, toolSurface } from "./platform";
+import { handleDiscordWebhook } from "./discord";
 import { handleTelegramWebhook } from "./telegram";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -544,6 +545,14 @@ app.get("/api/v1/user/:userId/logs", async (c) => {
 
 app.post("/api/v1/telegram/webhook", (c) =>
   handleTelegramWebhook(c.req.raw, c.env)
+);
+
+// Discord's Interactions Endpoint. `c.executionCtx` is the Workers execution context
+// Hono received from the runtime's `fetch(request, env, ctx)` signature, and its
+// `waitUntil` is what lets the gateway acknowledge inside Discord's 3-second deadline
+// and still write the flock's answer afterwards — see src/discord.ts §3.
+app.post("/api/v1/discord/webhook", (c) =>
+  handleDiscordWebhook(c.req.raw, c.env, c.executionCtx)
 );
 
 app.notFound((c) =>

@@ -169,6 +169,20 @@ export function readFlockStatus(env: Env): Promise<HostFlockStatus> {
   return flockStatusWithFallback(() => stub.getFlockStatus(), env.CONTEXT_STORE);
 }
 
+/**
+ * One line per bird, for the chat gateways' `/status`.
+ *
+ * Shared rather than copied per gateway: a status line that formats differently in
+ * Telegram and Discord is a single status described two ways to two operators, with
+ * nothing comparing them. Telegram had this privately and Discord would have had its
+ * own copy.
+ */
+export function formatFlockStatus(status: HostFlockStatus): string {
+  return status.birds
+    .map((bird) => bird.name + " · " + bird.status + " · " + bird.provider)
+    .join("\n");
+}
+
 /** One provider's line in the public flock status payload. */
 export type BirdStatus = ProviderStatus;
 

@@ -68,7 +68,7 @@ Every file below exists and is in the build. This is the map to reach for before
 | `doctor.ts` | `simorgh doctor`, 12 tests |
 | `index.ts` | The barrel |
 
-**Root `src/`** — the Cloudflare host: `index.ts` (Hono routes, 13 registrations), `flock.ts`, `data-trust.ts`, `agent-service.ts`, `telegram.ts`, `platform.ts`, `dashboard.ts` (`GET /dashboard`), and the five host adapters (`health.ts`, `rate-limit.ts`, `models.ts`, `agent.ts`, `security.ts`).
+**Root `src/`** — the Cloudflare host: `index.ts` (Hono routes, 14 registrations), `flock.ts`, `data-trust.ts`, `agent-service.ts`, `telegram.ts`, `discord.ts`, `message-chunks.ts`, `platform.ts`, `dashboard.ts` (`GET /dashboard`), and the five host adapters (`health.ts`, `rate-limit.ts`, `models.ts`, `agent.ts`, `security.ts`).
 
 ---
 

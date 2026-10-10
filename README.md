@@ -226,7 +226,8 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 | `GET`  | `/api/v1/schedule` | The Durable Object's scheduled flights, with state, attempts and outcome. |
 | `POST` | `/api/v1/schedule` | Schedule a prompt to run through the flock at or after `resumeAt`. Bounds are the execute bounds plus a 30-day horizon. |
 | `POST` | `/api/v1/telegram/webhook` | The Telegram chat gateway — verified by the shared webhook secret *before* the body is parsed. |
-| `GET`  | `/api/v1/platform/connectors` | The connector matrix — Cloudflare, Telegram, GitHub — with readiness derived from the live environment, and the tool surface. |
+| `POST` | `/api/v1/discord/webhook` | The Discord chat gateway — verified by Discord's Ed25519 signature *before* the body is parsed, then acknowledged inside Discord's 3-second deadline. |
+| `GET`  | `/api/v1/platform/connectors` | The connector matrix — Cloudflare, Telegram, Discord, GitHub — with readiness derived from the live environment, and the tool surface. |
 | `GET`  | `/dashboard` | The unified control plane: flock, scheduler, quota, connectors, tools and chat. Unauthenticated, ships no secret, and bearer-gates its own calls. |
 | `GET`  | `/` | Health text. |
 
@@ -260,6 +261,8 @@ simorgh-platform/
 │   ├── rate-limit.ts       #   host adapter → engine rate limiter
 │   ├── security.ts         #   host adapter → engine security
 │   ├── telegram.ts         #   Telegram client + webhook (secret-token verified)
+│   ├── discord.ts          #   Discord client + Interactions Endpoint (Ed25519 signature verified)
+│   ├── message-chunks.ts   #   the shared outbound splitter both gateways use
 │   └── dashboard.ts        #   Self-contained Mission Control HTML (inline CSS/JS, no build)
 ├── test/                   # the workerd suite (vitest.config.ts) — see Testing section for current counts
 ├── packages/               # Go workspace modules

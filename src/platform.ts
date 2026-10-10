@@ -62,7 +62,7 @@ export interface Connector {
  * The declared matrix.
  *
  * Every `surfaces` entry below names a route that exists in `src/index.ts` or
- * `src/telegram.ts` today, and every `secrets` entry names a key the code reads. A
+ * `src/telegram.ts` and `src/discord.ts` today, and every `secrets` entry names a key the code reads. A
  * connector whose surface list is aspirational would make the panel a wishlist, so
  * the list is kept to what is wired.
  */
@@ -124,6 +124,31 @@ export const CONNECTORS: readonly Connector[] = [
       },
     ],
     docs: "src/telegram.ts",
+  },
+  {
+    id: "discord",
+    label: "Discord",
+    kind: "chat",
+    summary:
+      "Slash-command gateway: the Interactions Endpoint verifies Discord's Ed25519 signature, then answers through the same flock path as Telegram.",
+    wired: true,
+    secrets: [
+      {
+        name: "DISCORD_PUBLIC_KEY",
+        required: true,
+        description:
+          "Ed25519 public key (hex) from the Developer Portal; without it every delivery is refused, because a webhook that cannot verify is one anyone can answer.",
+      },
+    ],
+    surfaces: [
+      {
+        method: "POST",
+        path: "/api/v1/discord/webhook",
+        auth: false,
+        note: "Authenticated by Discord's request signature, not by bearer",
+      },
+    ],
+    docs: "src/discord.ts",
   },
   {
     id: "github",

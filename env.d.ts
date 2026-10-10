@@ -13,6 +13,13 @@ interface SimorghSecrets {
   SIMORGH_API_KEYS?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
+  /**
+   * The Discord application's Ed25519 **public** key, hex, from the Developer Portal's
+   * General Information page. Not a secret — it is what the endpoint verifies against —
+   * but the Discord gateway fails closed without it, because an unverifiable webhook is
+   * an open one.
+   */
+  DISCORD_PUBLIC_KEY?: string;
   CORS_ORIGINS?: string;
 }
 

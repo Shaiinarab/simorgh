@@ -173,6 +173,7 @@ totals above are asserted per file rather than by intent.
 | Persistence | ✅ | ✅ | ✅ | SQLite both sides: DO `SqlStorage` on the edge, `node:sqlite` self-hosted |
 | Transparency ledger | ✅ | ✅ | ✅ | Append-only, written *before* the flight. One implementation, two hosts |
 | Telegram | ✅ | ✅ | ✅ | Client + webhook; `src/telegram.ts:116` reads `X-Telegram-Bot-Api-Secret-Token`, and `test/telegram.test.ts` covers it (4 tests) |
+| Discord | ✅ | ✅ | ✅ | The second chat gateway (ADR-0008 door 3). Verifies Ed25519 over `timestamp + raw body` before parsing, defers inside Discord's 3-second deadline and edits the response afterwards; `test/discord.test.ts` (20 tests) includes a real keypair generated in workerd and three negative controls |
 | Dashboard | ✅ | ✅ | ✅ | `src/dashboard.ts` rendered by `GET /dashboard` (`src/index.ts:195`), asserted by `test/http.test.ts` (25 tests) |
 | Cron | ✅ | ✅ | ✅ | Stale-health sweep |
 | Multi-target deploy | ✅ | ✅ | ✅ | 3 real targets (`cloudflare-workers`, `node`, `byo-endpoint`), manual mode for all three; `cli` for `cloudflare-workers` and `node` only |
