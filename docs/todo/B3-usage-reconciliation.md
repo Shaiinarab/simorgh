@@ -9,7 +9,7 @@ tags:
   - observability
   - epic-b
 generated:
-  by: "agent:gpt-6"
+  by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "draft"
 work_status: "queued"
@@ -19,13 +19,13 @@ depends_on:
 stale_after: "2026-10-17T00:00:00Z"
 sources:
   - id: roadmap-spine
-    resource: "ROADMAP-SPINE.md"
+    resource: "../ROADMAP-SPINE.md"
     title: "Canonical roadmap"
   - id: continuation-review
-    resource: "research/CONTINUATION-REVIEW-2026-10-10.md"
+    resource: "../research/CONTINUATION-REVIEW-2026-10-10.md"
     title: "Continuation review, October 10 2026"
   - id: quota-adr
-    resource: "adr/ADR-0003-free-compute-capacity.md"
+    resource: "../adr/ADR-0003-free-compute-capacity.md"
     title: "Free compute capacity"
 ---
 # B3 — Actual usage reconciliation
