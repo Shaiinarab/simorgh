@@ -5,7 +5,7 @@
 
 **Version:** 2.0 (PRD-Ready)
 **Date:** August 31, 2026 · **Reconciled:** 2026-10-09
-**Status:** ✅ Historical baseline — §5 (Epics 1–13) and §7 (Milestones) describe what shipped through
+**Status:** ✅ Historical baseline — §5 (Epics 1–17) and §7 (Milestones) describe what shipped through
 Phase 3; they are kept as the record of original intent. **The canonical forward plan is
 [`docs/ROADMAP-SPINE.md`](../ROADMAP-SPINE.md)** (vertical spine, epics A–F, phase ledger, freeze list).
 Where this PRD and the spine disagree about *what happens next*, the spine wins; where they disagree
@@ -194,7 +194,7 @@ Based on 2026 research, these additional free-tier providers could join the floc
 
 ---
 
-### Epic 4: The Real Agent — Useful Tools 🛠️ IN PROGRESS
+### Epic 4: The Real Agent — Useful Tools ✅ SHIPPED
 
 **Objective:** Make the agent genuinely *useful*: real web search + clean answer synthesis.
 
@@ -443,6 +443,9 @@ snapshot transports (Telegram, Google Drive) are ports, best-effort, never on th
 | **M5 — BYOK / MCP** | Epic 9 | 🗓️ backlog |
 | **M6 — Data Trust** | Epic 7 | 🗓️ backlog |
 | **M7 — Production** | Epic 11, 12, 13 | 🗓️ backlog |
+| **M8 — The Unified Surface** | Epic 14, 15, 16, 17 | 🗓️ planned — see ROADMAP-SPINE |
+
+> Epics 14–17 were added by [ADR-0008](../adr/ADR-0008-unified-surface-harness-api-gateways-wizards.md) on 2026-10-10 (14.1 Telegram is ✅; 14.2–17.3 are open). Their sequencing lives in [`docs/ROADMAP-SPINE.md`](../ROADMAP-SPINE.md) — M8 above is a pointer, not a schedule.
 
 ---
 
@@ -474,9 +477,9 @@ Simorgh exists to give an operator **clarity before automation**. Its first loya
 ## 10. Research Evidence
 
 This PRD synthesizes:
-1. **Original platform evidence:** README.md, SOUL.md, AGENT.md, REPULSE_ARCHITECTURE.md, test files
+1. **Original platform evidence:** README.md, SOUL.md, AGENT.md, test files
 2. **Grok-4.6 research digest** (13 turns, 1M context, web search): Architecture epics & stories for federation, Auto-Wrapper, BYOK, Data Trust, Intent Shield, Swarm-State
-3. **Web research (2026):** Competitor landscape (LiteLLM, Portkey, OpenRouter, Requesty, Kong, Cloudflare AI Gateway, Helicone); free no-KYC provider survey (Groq, HuggingFace, Cloudflare Workers AI, Google Gemini, Cerebras, GitHub Models, Mistral, OpenRouter free) — ⚠️ partially superseded by the [2026-10 audit](Simorgh Deep Research Audit (October 2026).md): GitHub Models retired 2026-07-30, Cerebras now card-gated
+3. **Web research (2026):** Competitor landscape (LiteLLM, Portkey, OpenRouter, Requesty, Kong, Cloudflare AI Gateway, Helicone); free no-KYC provider survey (Groq, HuggingFace, Cloudflare Workers AI, Google Gemini, Cerebras, GitHub Models, Mistral, OpenRouter free) — ⚠️ partially superseded by the [2026-10 audit](<../research/Simorgh Deep Research Audit (October 2026).md>): GitHub Models retired 2026-07-30, Cerebras now card-gated
 4. **Research round 2 (2026-08-31):** [2026-08-round2.md](../research/2026-08-round2.md) — MCP 2026-07-28 spec verified & detailed (stateless core, header-based routing, MRTR, CIMD auth; SSE deprecated); DDG Instant Answer API confirmed deprecated → story 4.1 needs a Brave-API fallback; Workers AI free tier = 10,000 Neurons/day no-card (Homā verified); candidate-bird free tiers verified (Gemini no-card, Cerebras ~1M tok/day, Mistral free-mode trains models ⚠️ Data-Pact provider-aware consent), OpenRouter Free Models Router (Feb 2026) — ⚠️ its Cerebras and GitHub Models rows are obsolete as of 2026-10-09 (see the October audit)
 
 ---

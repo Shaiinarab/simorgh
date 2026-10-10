@@ -3,7 +3,9 @@
 > Recovered 2026-09-21 from the original engagement mailbox (that project was de-branded and
 > published as `projects/pabetoop-league/`; its engagement-only `mailbox/` was stripped, and the
 > verbatim original — including the engagement-specific rules — is archived at
-> `_archive/shiraz-league-engagement-mailbox-2026-09-21/`). This file keeps the **generic**
+> `_archive/shiraz-league-engagement-mailbox-2026-09-21/`). **Both paths are workspace-relative** —
+> they resolve from the workspace root (`~/personal/projects/`), not from this repository. This file
+> keeps the **generic**
 > contract and drops the project-specific rule list, which lives in `mailbox/README.md`.
 
 The Lead agent (main session, host) and the fleet workers (podman instances) coordinate **only

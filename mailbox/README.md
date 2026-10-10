@@ -34,15 +34,21 @@ falling back to the live tree.
 - **Never** run `git commit` / `git push` / `git rebase`. The Lead integrates and commits.
 - Workers touch **only** the files in their brief's Allowlist. Lock them first.
 
-## Status (2026-09-24)
+## Status (2026-10-09 — snapshot; `mailbox/bin/fbmail status` is the live board)
 
-- **Ten briefs, all integrated.** TASK-001…006 landed in the modularization pass; TASK-007…009 are the
-  audit lanes (Go gateway tests, quality audit, trust-boundary audit); TASK-010 proves the engine on
-  Bun, a third runtime with a third SQL dialect.
-- **The SQL port is portable across three dialects.** TASK-010 found `bun:sqlite` satisfies the
-  *synchronous* `SqlPort` with **no `phoenix-core` change**, and `createNodePorts` runs unchanged on
-  Bun. The only residual differences (`db.query()` vs `prepare()`, `Uint8Array` bindings) live in the
-  host adapter. Record the verdict in `ADR-0002` so the next host decision does not re-test it.
+- **Seventeen briefs, all closed.** TASK-001…006 landed in the modularization pass; TASK-007…009 are
+  the audit lanes (Go gateway tests, quality audit, trust-boundary audit); TASK-010 proved the engine
+  on Bun, a third runtime with a third SQL dialect; TASK-011…017 are the doctrine lanes (FREE_ONLY
+  enforcement, native-compute audit, routing convergence, dashboard-descoped-to-F3, 1M-user capacity
+  research, context-engineering router, capability endpoint). `BOARD.md` was regenerated 2026-10-09
+  11:22 UTC and shows all 17 closed (`reported=16 claimed=0 open=0 stale=0 malformed=0`; TASK-014 was
+  closed without a report — descoped to spine Phase F3).
+- **The SQL port is portable across three dialects — but Bun is gone.** TASK-010 found `bun:sqlite`
+  satisfies the *synchronous* `SqlPort` with **no `phoenix-core` change**, and `createNodePorts` runs
+  unchanged on Bun; the verdict is recorded in `ADR-0002`. **Bun was removed 2026-10-03** (commit
+  `5c53dfe` has the third-runtime host; ADR-0002 says "done, then removed", ADR-0004's title is "Bun
+  is gone"). There is exactly **one** JavaScript runtime — Node — and no lane may reintroduce a
+  second one, as a runtime, a package manager, or a dependency.
 - **The Go workspace is committed and green** (`7a54d64 feat(go): land the self-hosted gateway workspace`,
   2026-09-16) — build, vet and test all pass, locally and in CI. An earlier version of this section said
   the Go work was uncommitted; that was wrong. Its role is now decided in `docs/adr/ADR-0001`.

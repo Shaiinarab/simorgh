@@ -313,7 +313,7 @@ export function renderDashboard(env: Env): string {
     </div>
     <div class="panel">
       <h3>Adding another MCP server</h3>
-      <p class="micro">A core speaks MCP at <code>/mcp</code>; the platform's own server publishes <code>platform_targets</code>, <code>platform_fleet</code> and <code>platform_ask</code>. Adding a platform is a connector entry in <code>src/platform.ts</code> plus the runtime path that uses it — the panel above is generated from that array, so a connector cannot show as live without a surface behind it.</p>
+      <p class="micro">A core speaks MCP at <code>/mcp</code> (the Node runtime; the Workers host serves the REST routes); the platform's own server publishes <code>platform_targets</code>, <code>platform_fleet</code> and <code>platform_ask</code>. Adding a platform is a connector entry in <code>src/platform.ts</code> plus the runtime path that uses it — the panel above is generated from that array, so a connector cannot show as live without a surface behind it.</p>
     </div>
   </section>
 

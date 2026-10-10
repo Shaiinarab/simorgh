@@ -1,8 +1,10 @@
 # Simorgh — Epics (historical, sprint-planning format)
 
-> ⚠️ **HISTORICAL as of 2026-10-09.** This file records the original Epic 1–13 / 63-story breakdown
-> derived from [PRD.md](./PRD.md) and remains valid documentation of Phases 0–3 (foundation → task
-> model), most of which shipped. It is **no longer the planning source**: new stories must be
+> ⚠️ **HISTORICAL as of 2026-10-09.** Epics 1–13 / the first 63 stories are the original breakdown
+> derived from [PRD.md](./PRD.md) and remain valid documentation of Phases 0–3 (foundation → task
+> model), most of which shipped. Epics 14–17 were appended on 2026-10-10 from
+> [ADR-0008](../adr/ADR-0008-unified-surface-harness-api-gateways-wizards.md) (78 stories total) and
+> mirror the PRD. It is **no longer the planning source**: new stories must be
 > generated from [`docs/ROADMAP-SPINE.md`](../ROADMAP-SPINE.md) epics A–F via BMAD
 > (`bmad-create-epics-and-stories`) into `_bmad-output/`. Do not add stories here. The
 > old→new disposition map lives in ROADMAP-SPINE §3 (e.g. Epic 12 survivor = A3 AUTH-004,
@@ -409,7 +411,7 @@ Document the bird adapter interface; any provider can be added by implementing t
 
 - **Acceptance:** Cerebras adapter; real-prompt tests
 - **VOID 2026-10-09:** Cerebras' free trial requires a verified payment method to activate Playground/API access (official FAQ); fails the repo's no-card core invariant.
-- **PRD status:** backlog
+- **PRD status:** void ⛔ (matches PRD story 10.3)
 
 ### Story 10.4: GitHub Models bird
 
@@ -417,7 +419,7 @@ Document the bird adapter interface; any provider can be added by implementing t
 
 - **Acceptance:** GitHub Models adapter; real-prompt tests
 - **VOID 2026-10-09:** GitHub Models fully retired 2026-07-30 — playground, inference API and BYOK gone for all customers (official docs); no adapter can exist.
-- **PRD status:** backlog
+- **PRD status:** void ⛔ (matches PRD story 10.4)
 
 ### Story 10.5: Flock priority tuning
 

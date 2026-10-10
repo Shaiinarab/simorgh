@@ -2,7 +2,8 @@
 
 - **Status:** accepted
 - **Date:** 2026-10-09
-- **Decides:** which patterns from six studied repositories (plus the Godde3s stack) enter
+- **Decides:** which patterns from the eight studied repositories (three of them the Godde3s
+  stack: GhostBrain, omnirouter, hermes-stack) enter
   `phoenix-core` / `simorgh-platform`, in what order, and which are refused outright
 - **Depends on:** [ADR-0001](ADR-0001-go-workspace-role.md) (two runtimes, one contract),
   [ADR-0003](ADR-0003-free-compute-capacity.md) (capacity), [ADR-0005](ADR-0005-free-only-mode.md)
@@ -13,7 +14,8 @@
 ## 1. Context
 
 The operator's directive was explicit: **modularize toward what already works, do not reinvent**.
-Six repositories were studied against Simorgh's architecture — `phoenix-core` as a
+Eight repositories were studied against Simorgh's architecture — three of them the Godde3s stack
+(`GhostBrain`, `omnirouter`, `hermes-stack`) — with `phoenix-core` as a
 runtime-agnostic engine and `simorgh-platform` as a Cloudflare-Worker control plane around it:
 
 | Repo | What it is | Verdict in one line |

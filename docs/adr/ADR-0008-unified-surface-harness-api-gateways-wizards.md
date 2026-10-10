@@ -54,7 +54,9 @@ splitting, constant-time webhook-secret verification) declared as a connector in
 **Door 1 — the harness.** `phoenix-core`'s `agent.ts` / `tools.ts` / `session.ts` / `tasks.ts` /
 `swarm.ts`. Unchanged by this ADR; it is the product, not the work.
 
-**Door 2 — the API.** REST + `/mcp`. Unchanged.
+**Door 2 — the API.** REST + `/mcp`. Unchanged — with one precision worth recording: the deployed
+Worker (`wrangler.toml` → `src/index.ts`) mounts **no `/mcp` route**; `/mcp` is the Node runtime's
+(`simorgh-platform/src/runtimes/node.ts`). Door 2 exists on both, but only via that runtime.
 
 **Door 3 — chat gateways.** One connector module per gateway in the host (`src/<gateway>.ts`),
 following the telegram shape exactly: parse provider updates → bound the body → verify the
