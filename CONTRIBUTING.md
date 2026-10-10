@@ -6,6 +6,10 @@ providers into one "flock" and answers through whichever is healthy and configur
 for the product and the repository map, and [`AGENTS.md`](AGENTS.md) for the operating contract — this
 document is the contributor-facing view of the same rules.
 
+**TL;DR:** begin at [the TODO index](docs/todo/index.md); read the linked source documents; make the smallest
+change that satisfies the task's acceptance criteria; run both test suites before review. There is no
+mailbox/brief-report protocol. Use OKF v0.2 for new or materially revised planning documents.
+
 **Depth lives in `.agents/skills/`, and this document deliberately does not restate it.** Those files
 are written for the job; if this page and a skill disagree, the skill is closer to the code. Load one
 by name when the task calls for it:
@@ -16,7 +20,10 @@ by name when the task calls for it:
 | [`simorgh-testing`](.agents/skills/simorgh-testing/SKILL.md) | Writing or judging tests, or deciding which suite a change needs |
 | [`simorgh-deploy-boundary`](.agents/skills/simorgh-deploy-boundary/SKILL.md) | Anything touching targets, deploy, `doctor`, preflight, or conformance |
 | [`simorgh-go-workspace`](.agents/skills/simorgh-go-workspace/SKILL.md) | Touching `gateway/`, `packages/`, `bot/`, `tools/`, or a `go.work` / `GOFLAGS` problem |
-| [`simorgh-lanes`](.agents/skills/simorgh-lanes/SKILL.md) | Dispatching parallel agent work through the mailbox |
+
+Start with [the live task queue](docs/todo/index.md). A task document records its dependencies,
+acceptance, evidence, and current status; update that document when work changes. The roadmap sets
+sequence; task documents make the next change executable.
 
 ---
 

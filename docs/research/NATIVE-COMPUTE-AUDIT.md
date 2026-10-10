@@ -1,11 +1,31 @@
-<!--
-  Moved from mailbox/OUTBOX/TASK-012-REPORT.md (2026-10-08, Lead integration).
-  The brief names docs/research/NATIVE-COMPUTE-AUDIT.md as this lane's deliverable;
-  the lane wrote it to the OUTBOX instead. Content is unchanged.
-  Harness + raw numbers: bench/native-audit/.
--->
+---
+type: "Engineering Audit"
+title: "Native Compute Audit"
+description: "Measured CPU-cost study deciding whether any Simorgh request-path component justifies a native rewrite."
+tags:
+  - simorgh
+  - benchmark
+  - performance
+  - no-rust
+  - okf
+generated:
+  by: "openai/gpt-6"
+  at: "2026-10-10T15:05:00Z"
+status: "stable"
+stale_after: "2027-01-10T00:00:00Z"
+sources:
+  - id: native-audit-harness
+    resource: "https://github.com/Shaiinarab/simorgh/blob/9687eb30a35d9e3ef403333c1ca82b4de9fae68a/bench/native-audit/run.mjs"
+    title: "Benchmark harness"
+  - id: roadmap-spine
+    resource: "ROADMAP-SPINE.md"
+    title: "Current freeze list"
+---
+# Native Compute Audit
 
-# TASK-012 — Native Compute Audit
+> **TL;DR:** no Rust/Wasm core now. The measured scheduler is negligible and quota planning is not
+> wired into production. First fix the execution path and the uncapped-input risk; re-measure only
+> after retrieval/reranking creates a real CPU hotspot.
 
 **Question:** does Simorgh need a Rust/Wasm core?
 **Answer:** no. Six candidates measured; five REJECT, one DEFER with a named trigger.

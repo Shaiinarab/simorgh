@@ -97,7 +97,6 @@ runs `frobnicate` produces a missing-tool blocker — that is the guard against 
 doctor              0 healthy · 1 unhealthy (never throws)
 deploy              0 ran · 2 refused (no --yes, or a preflight blocker)
 preflight report    plan.ok === false when any check is a "blocker"
-fbmail check <id>   0 done · 1 no report · 2 not END-terminated · 3 malformed brief
 ```
 
 Scripts depend on these. Changing one is a breaking change — update the docs that state it.

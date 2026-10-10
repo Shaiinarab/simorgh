@@ -24,17 +24,25 @@ collision was found and removed once already.
 
 ## Plan of record (read before starting any work)
 
-[`docs/ROADMAP-SPINE.md`](docs/ROADMAP-SPINE.md) is canonical: one vertical execution spine
-(Principal → Goal → Task DAG → Capability → Quota plan → Provider → Execution → Verification →
-Persist → Memory → Next task), epics **A–F**, phase ledger, and an explicit freeze list. Order of
-attack: **A3 (AUTH-004 principal gate) → B1–B4 (wire quota into the scheduler, prove one durable
-task) → C1–C4 (RetrievalPort + knowledge) → D1 (swarm's first real job) → E1–E3**. BMAD Method v10
-skills are installed (`.agents/skills/bmad-*`); planning truth lives in ROADMAP-SPINE +
-`_bmad-output/implementation-artifacts/sprint-status.yaml`; the old epic-1–17 list in `docs/prd/` is
-historical. Every story's acceptance ends with:
+The strategic plan is [`docs/ROADMAP-SPINE.md`](docs/ROADMAP-SPINE.md). The live task queue is
+[`docs/todo/index.md`](docs/todo/index.md); each task is one Markdown concept in OKF v0.2 format
+with a required `type`, sources, generation metadata, lifecycle/freshness, priority, dependency and
+work-status fields. [`docs/index.md`](docs/index.md) is the documentation map.
+
+**Order of attack:** A3 (credential-derived principal) → B1 (unify task/schedule/execution) → B2
+(quota admission) → B3 (usage reconciliation) → B4 (one correct durable task) → C1–C4 (retrieval,
+knowledge namespaces, memory) → D1 (one evaluated research digest) → E1–E3 (MCP and provider
+discovery). Do not skip dependency gates to add providers or polish the UI.
+
+BMAD skills remain available as optional planning aids. BMAD output is derived scaffolding, not a
+competing source of truth; the roadmap and task documents win. The August PRD epic list is historical.
+There is no mailbox/fbmail workflow in this repository; do not recreate one. Use the task documents,
+Git branches, and pull requests for reviewable work.
+
+Every task's acceptance ends with:
 `upm install --frozen-lockfile && upm run typecheck && upm test` green (+ per-module Go build/vet/test
-when Go is touched). If a doc you open contradicts the spine, mark it stale the same session — do not
-silently rewrite history.
+when Go is touched). A doc that contradicts the code or a more recent decision is stale and must be
+corrected in the same change.
 
 ## The one architectural rule
 
@@ -158,7 +166,7 @@ So, on this repo:
   honest degradation always); ADR-0007 §3 is the refusal list and it is load-bearing. A new
   dependency is the last resort, never the first — stdlib, then what is already installed,
   then upstream.
-- Comments explain **why**, and carry the evidence for a non-obvious decision. Several comments in this
+- New or materially revised planning documents use OKF v0.2 Markdown + YAML frontmatter, sources, generation time, lifecycle status and a freshness deadline; reserved `index.md` files remain directory indexes. Put a short TL;DR near the top. Comments explain **why**, and carry the evidence for a non-obvious decision. Several comments in this
   repo are load-bearing; do not strip them as "noise".
 - Documentation must describe **reality**, not intent. If you change behaviour, change the doc that
   claims otherwise — `README.md`, `docs/ARCHITECTURE.md`, `docs/STATE-OF-PROJECT.md`, `docs/adr/`.
@@ -207,7 +215,7 @@ A change is done when **all** of these hold. Copy this into the PR description a
 
 ## Skills — load ONE, by name
 
-Start from `docs/skills-catalog.md` at the workspace root for the full index. The ones written for
+Use `docs/index.md` for the documentation map and `docs/todo/index.md` for the live work queue. The ones written for
 **this** repo:
 
 | Skill | Load when |
@@ -216,7 +224,7 @@ Start from `docs/skills-catalog.md` at the workspace root for the full index. Th
 | `simorgh-testing` | Writing or judging tests, or deciding which suite a change needs |
 | `simorgh-deploy-boundary` | Anything touching targets, deploy, doctor, preflight, or conformance |
 | `simorgh-go-workspace` | Touching `gateway/`, `packages/`, `bot/`, `tools/`, or a `go.work`/`GOFLAGS` issue |
-| `simorgh-lanes` | Dispatching parallel agent work through the mailbox |
+
 
 Relevant global skills already installed: `cloudflare`, `workers-best-practices`, `durable-objects`,
 `wrangler`, `diagnosing-bugs`, `code-review`, `tdd`, `resolving-merge-conflicts`.
