@@ -36,6 +36,7 @@ enabled = true
 
 [vars]
 ENVIRONMENT = "production"
+CORS_ORIGINS = "https://simorgh-edge-gateway.shahino3ozone1353.workers.dev"
 
 # Secrets must never be committed:
 # npx wrangler secret put SIMORGH_API_KEY
