@@ -27,6 +27,7 @@
 // reader to distrust it.
 
 import { connectorReadiness, toolSurface, type ConnectorReadiness } from "./platform";
+import { setupProviderRows } from "./setup";
 
 /** `</script>` inside a JSON island would close the tag early; `<` never needs to appear. */
 function jsonIsland(value: unknown): string {
@@ -133,6 +134,7 @@ export function renderDashboard(env: Env): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simorgh — Control Plane</title>
+ <script type="application/json" id="setup-providers">${jsonIsland(setupProviderRows())}</script>
 <style>
   :root {
     --bg:#070b14; --panel:rgba(17,26,45,.8); --raised:rgba(27,39,64,.72);
@@ -203,6 +205,13 @@ export function renderDashboard(env: Env): string {
   .pill.live { background:rgba(117,228,165,.16); color:var(--green); }
   .pill.needs-secret { background:rgba(255,200,112,.16); color:var(--amber); }
   .pill.not-wired { background:rgba(150,180,255,.14); color:var(--muted); }
+  .pill.ok { background:rgba(117,228,165,.16); color:var(--green); }
+  .pill.bad { background:rgba(255,107,107,.16); color:var(--red); }
+  /* The setup wizard's verdict. Coloured by outcome, because "rejected" and "could
+     not check it" are different failures and only one of them is the operator's. */
+  .setup-result.ok { color:var(--green); }
+  .setup-result.bad { color:var(--red); }
+  .setup-cmd code { font-size:.78rem; word-break:break-all; }
   .method { font-family:var(--mono); font-size:.68rem; padding:.08rem .35rem; border-radius:.3rem; background:rgba(122,167,255,.18); color:#cfe0ff; }
   .method.post { background:rgba(255,200,112,.18); color:var(--amber); }
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(19rem,1fr)); gap:1rem; }
@@ -246,7 +255,8 @@ export function renderDashboard(env: Env): string {
   <div id="signal-note"></div>
 
   <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button role="tab" data-tab="setup" aria-selected="true">Setup</button>
+    <button role="tab" data-tab="overview" aria-selected="false">Overview</button>
     <button role="tab" data-tab="flock" aria-selected="false">Flock</button>
     <button role="tab" data-tab="platforms" aria-selected="false">Platforms</button>
     <button role="tab" data-tab="schedule" aria-selected="false">Schedules</button>
@@ -255,7 +265,12 @@ export function renderDashboard(env: Env): string {
     <button role="tab" data-tab="chat" aria-selected="false">Direct chat</button>
   </nav>
 
-  <section id="tab-overview">
+  <section id="tab-setup">
+    <p class="micro"><strong>Start here.</strong> Paste a provider key and this page checks it against that provider's own API — then hands you the one command that makes it permanent. Nothing is stored on this server, and the key is never sent back.</p>
+    <div class="cards" id="setup-cards" style="margin-top:.9rem"></div>
+  </section>
+
+  <section id="tab-overview" hidden>
     <div class="kpis" id="kpis"><div class="kpi"><b>…</b><div class="micro">loading</div></div></div>
     <h4>Needs attention</h4>
     <div class="panel" id="attention"><p class="micro">Loading…</p></div>
@@ -338,6 +353,88 @@ export function renderDashboard(env: Env): string {
   var TOKEN_KEY = "simorgh_api_key";
   var state = { flock: null, quota: null, schedule: null, lastFetch: 0, busy: false };
   var $ = function (id) { return document.getElementById(id); };
+
+  // ── Setup: check a key, then hand over the command that makes it real ──────
+  //
+  // The card is built here rather than server-rendered so the input can hold the
+  // key without it ever travelling to the server as part of the page — the same
+  // reason the operator's bearer token is read from localStorage at call time.
+  function renderSetup() {
+    var rows;
+    try { rows = JSON.parse($("setup-providers").textContent); }
+    catch (e) { return; }
+    var host = $("setup-cards");
+    if (!host) return;
+
+    rows.forEach(function (row) {
+      var card = document.createElement("article");
+      card.className = "connector needs-secret";
+      card.innerHTML =
+        '<header><h3>' + row.label + '</h3>' +
+        '<span class="pill bad">no key</span></header>' +
+        '<p class="micro">Get one at <code>' + row.signup + '</code>.</p>' +
+        '<div class="row" style="margin-top:.7rem">' +
+        '<input class="grow setup-key" type="password" placeholder="' + row.label + ' key" autocomplete="off">' +
+        '<button class="setup-check">Check</button></div>' +
+        '<div class="setup-result micro" style="margin-top:.5rem"></div>' +
+        '<div class="setup-cmd" hidden style="margin-top:.5rem">' +
+        '<code>' + row.command + '</code> <button class="ghost setup-copy">Copy</button></div>';
+      host.appendChild(card);
+
+      var input = card.querySelector(".setup-key");
+      var result = card.querySelector(".setup-result");
+      var pill = card.querySelector(".pill");
+      var cmd = card.querySelector(".setup-cmd");
+      var check = card.querySelector(".setup-check");
+
+      check.addEventListener("click", function () { validate(row, input, result, pill, cmd); });
+      input.addEventListener("keydown", function (e) { if (e.key === "Enter") validate(row, input, result, pill, cmd); });
+      card.querySelector(".setup-copy").addEventListener("click", function () {
+        // navigator.clipboard needs a secure context; the fallback keeps the wizard
+        // usable over plain http on a LAN address, which is how most self-hosted
+        // operators will first see this page.
+        var text = row.command;
+        var done = function () { $("auth-note").innerHTML = '<div class="notice ok">Command copied to the clipboard.</div>'; };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () { prompt("Copy this command:", text); });
+        } else {
+          prompt("Copy this command:", text);
+        }
+      });
+    });
+  }
+
+  function validate(row, input, result, pill, cmd) {
+    var key = input.value.trim();
+    if (!key) { result.textContent = "Paste a key first."; return; }
+    result.textContent = "Checking with " + row.label + "…";
+    fetch("/api/v1/setup/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // No auth header on purpose: this route is checkable before any key exists,
+      // which is the only moment it is useful.
+      body: JSON.stringify({ provider: row.label, key: key })
+    }).then(function (r) { return r.json(); }).then(function (body) {
+      result.textContent = body.detail || "No answer.";
+      if (body.ok) {
+        pill.className = "pill ok"; pill.textContent = "valid";
+        result.className = "setup-result micro ok";
+        cmd.hidden = false;
+        // Clear the key as soon as it is known good: it has done its job, and a
+        // secret that sits in a DOM input is a secret one stray screenshot from
+        // leaving the building.
+        input.value = "";
+      } else {
+        pill.className = "pill bad"; pill.textContent = "not valid";
+        result.className = "setup-result micro bad";
+        cmd.hidden = true;
+      }
+    }).catch(function () {
+      result.textContent = "Could not reach this deployment to run the check.";
+    });
+  }
+
+  renderSetup();
 
   // localStorage can throw in a locked-down browser; the page must still render.
   function readToken() { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; } }

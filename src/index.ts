@@ -28,6 +28,7 @@ import {
 } from "./security";
 import { connectorReadiness, toolSurface } from "./platform";
 import { handleDiscordWebhook } from "./discord";
+import { validateProviderKey } from "./setup";
 import { handleTelegramWebhook } from "./telegram";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -554,6 +555,55 @@ app.post("/api/v1/telegram/webhook", (c) =>
 app.post("/api/v1/discord/webhook", (c) =>
   handleDiscordWebhook(c.req.raw, c.env, c.executionCtx)
 );
+
+// ── First-run setup: is this provider key real? ──────────────────────────────
+//
+// Unauthenticated on purpose, and the reason is the wizard itself: before an
+// operator has set a single secret there is no bearer token to present, so
+// requiring one would make first-run setup impossible — which is the only thing
+// this route is for.
+//
+// What keeps that safe, in order of importance:
+//   1. The URL comes from `PROVIDER_KEY_CHECKS`, never from the request. A
+//      caller cannot make this dial an arbitrary host, so it is not an SSRF
+//      primitive on top of SSRF-001.
+//   2. The key is never logged, never stored, and never returned — not even
+//      redacted, because a redacted echo confirms which characters matched.
+//   3. Rate-limited per caller like every other expensive path.
+app.post("/api/v1/setup/validate", async (c) => {
+  const raw = await c.req.text();
+  if (raw.length > 4_000) {
+    return c.json({ ok: false, detail: "Request too large." }, 413);
+  }
+
+  let body: { provider?: unknown; key?: unknown };
+  try {
+    body = JSON.parse(raw) as typeof body;
+  } catch {
+    return c.json({ ok: false, detail: "Send JSON." }, 400);
+  }
+
+  const provider = typeof body.provider === "string" ? body.provider : "";
+  const key = typeof body.key === "string" ? body.key : "";
+
+  const limiter = c.env.FLOCK_COORDINATOR.get(
+    c.env.FLOCK_COORDINATOR.idFromName("global")
+  );
+  const decision = await limiter.checkRateLimit("setup:" + provider, 10, 60_000);
+  if (!decision.allowed) {
+    return c.json(
+      { ok: false, detail: "Too many checks. Wait a minute and try again." },
+      429
+    );
+  }
+
+  const result = await validateProviderKey(
+    (url, init) => globalThis.fetch(url, init),
+    provider,
+    key
+  );
+  return c.json(result, result.ok ? 200 : 422);
+});
 
 app.notFound((c) =>
   c.json(
