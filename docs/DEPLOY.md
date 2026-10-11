@@ -248,7 +248,7 @@ upm run deploy           # = upm run typecheck && wrangler deploy
 
 ✅ `npm run typecheck` exit 0; ✅ `npx wrangler deploy --dry-run --outdir dist` bundles clean
 (165.10 KiB / 45.25 KiB gzip). ✅ A real `npx wrangler deploy` succeeds — verified live,
-deployed to `https://simorgh-edge-gateway.shahino3ozone1353.workers.dev`. No migration
+deployed to `https://simorgh.shahino3ozone1353.workers.dev`. No migration
 warnings, no errors.
 
 #### Migration note (v1 → v2)
