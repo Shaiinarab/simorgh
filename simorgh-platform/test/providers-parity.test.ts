@@ -43,11 +43,14 @@ const NOW = 1_700_000_000_000;
  * binding with no portable equivalent, and the absence is deliberate rather than a gap.
  */
 const WORKERS_ROSTER = [
-  { id: "shahin", name: "Shāhīn", provider: "Groq (OpenAI-compat)", model: "llama-3.3-70b-versatile", priority: 10 },
-  { id: "gemini", name: "Gemini", provider: "Google Generative Language", model: "gemini-2.5-flash", priority: 15 },
-  { id: "bulbul", name: "Bulbul", provider: "HuggingFace Router", model: "meta-llama/Llama-3.3-70B-Instruct", priority: 20 },
-  { id: "openrouter", name: "OpenRouter", provider: "OpenRouter (OpenAI-compat)", model: "openrouter/free", priority: 25 },
-  { id: "homa", name: "Homā", provider: "Cloudflare Workers AI", model: "@cf/meta/llama-3.2-3b-instruct", priority: 30 },
+  { id: "shahin", name: "Groq", provider: "OpenAI-compatible", model: "llama-3.3-70b-versatile", priority: 10 },
+  { id: "gemini", name: "Gemini", provider: "Google", model: "gemini-2.5-flash", priority: 15 },
+  { id: "bulbul", name: "HuggingFace", provider: "OpenAI-compatible", model: "meta-llama/Llama-3.3-70B-Instruct", priority: 20 },
+  { id: "openrouter", name: "OpenRouter", provider: "OpenAI-compatible", model: "openrouter/free", priority: 25 },
+  { id: "cerebras", name: "Cerebras", provider: "OpenAI-compatible", model: "llama-3.3-70b", priority: 26 },
+  { id: "nvidia", name: "NVIDIA NIM", provider: "OpenAI-compatible", model: "meta/llama-3.3-70b-instruct", priority: 27 },
+  { id: "aigateway", name: "Vercel AI Gateway", provider: "OpenAI-compatible", model: "meta/llama-3.3-70b-instruct", priority: 28 },
+  { id: "homa", name: "Workers AI", provider: "Cloudflare binding", model: "@cf/meta/llama-3.2-3b-instruct", priority: 30 },
 ];
 
 /** The keys that wake each keyed bird, as the edge declares them. */
@@ -56,14 +59,20 @@ const WORKERS_SECRET_OF: Record<string, string> = {
   gemini: "GEMINI_API_KEY",
   bulbul: "HF_TOKEN",
   openrouter: "OPENROUTER_API_KEY",
+  cerebras: "CEREBRAS_API_KEY",
+  nvidia: "NVIDIA_API_KEY",
+  aigateway: "VERCEL_AI_GATEWAY_API_KEY",
   homa: "",
 };
 
 const SECRET_VALUES: Record<string, string> = {
-  GROQ_API_KEY: "gsk-test",
-  GEMINI_API_KEY: "gemini-test",
+  GROQ_API_KEY: "groq-test",
   HF_TOKEN: "hf-test",
+  GEMINI_API_KEY: "gemini-test",
   OPENROUTER_API_KEY: "or-test",
+  CEREBRAS_API_KEY: "cerebras-test",
+  NVIDIA_API_KEY: "nvidia-test",
+  VERCEL_AI_GATEWAY_API_KEY: "vgw-test",
 };
 
 /** What the Node catalog must contain when nothing local is configured. */
@@ -225,7 +234,7 @@ describe("the Node provider catalog", () => {
     expect(ollama).toEqual({
       id: "ollama",
       name: "Ollama",
-      provider: "Ollama (local daemon)",
+      provider: "Local daemon",
       model: "llama3.2",
       priority: 30,
       requires: undefined,

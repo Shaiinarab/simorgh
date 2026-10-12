@@ -266,7 +266,7 @@ describe("flyFlock — routing policy", () => {
 });
 
 describe("flyFlock — the real flock", () => {
-  it("is ordered Shāhīn → Gemini → Bulbul → OpenRouter → Homā, with Homā key-free", () => {
+  it("is ordered Groq → Gemini → HuggingFace → OpenRouter → Cerebras → NVIDIA NIM → Vercel AI Gateway → Workers AI", () => {
     // A completeness pin: the roster and the order it is consulted in *are* the contract
     // here, so this stays `toEqual`. Gemini and OpenRouter were slotted between the
     // existing birds rather than appended — see the catalog comment in src/flock.ts.
@@ -276,6 +276,9 @@ describe("flyFlock — the real flock", () => {
       "gemini",
       "bulbul",
       "openrouter",
+      "cerebras",
+      "nvidia",
+      "aigateway",
       "homa",
     ]);
 
@@ -296,7 +299,7 @@ describe("flyFlock — the real flock", () => {
     // flock must still return an answer — via Homā, the only bird that needs nothing.
     const result = await flyFlock("what is the server time?", deps(FLOCK, { env: fakeEnv() }));
 
-    expect(result.meta.answered_by).toBe("Homā (Cloudflare Workers AI)");
+    expect(result.meta.answered_by).toBe("Workers AI (Cloudflare binding)");
     expect(result.answer).toBe("homa-answer");
     // Also a completeness pin, and the strongest one in the file: the attempt log is how
     // you see that the loop walked *past every* keyed bird before Homā answered. Dropping
@@ -308,6 +311,9 @@ describe("flyFlock — the real flock", () => {
       { birdId: "gemini", ok: false, error: "dormant" },
       { birdId: "bulbul", ok: false, error: "dormant" },
       { birdId: "openrouter", ok: false, error: "dormant" },
+      { birdId: "cerebras", ok: false, error: "dormant" },
+      { birdId: "nvidia", ok: false, error: "dormant" },
+      { birdId: "aigateway", ok: false, error: "dormant" },
       { birdId: "homa", ok: true },
     ]);
   });

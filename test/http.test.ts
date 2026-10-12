@@ -452,6 +452,9 @@ describe("GET /api/v1/capabilities", () => {
       "gemini",
       "bulbul",
       "openrouter",
+      "cerebras",
+      "nvidia",
+      "aigateway",
       "homa",
     ]);
     // The zero-KYC guarantee, as the endpoint states it: Homā answers on a deployment that

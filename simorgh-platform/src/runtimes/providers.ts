@@ -64,8 +64,8 @@ export function defaultProviders(options: ProviderCatalogOptions): Provider[] {
   const providers: Provider[] = [
     openAiCompatibleProvider({
       id: "shahin",
-      name: "Shāhīn",
-      provider: "Groq (OpenAI-compat)",
+      name: "Groq",
+      provider: "OpenAI-compatible",
       model: "llama-3.3-70b-versatile",
       priority: 10,
       endpoint: "https://api.groq.com/openai/v1/chat/completions",
@@ -80,15 +80,15 @@ export function defaultProviders(options: ProviderCatalogOptions): Provider[] {
     geminiProvider({
       id: "gemini",
       name: "Gemini",
-      provider: "Google Generative Language",
+      provider: "Google",
       model: GEMINI_MODEL,
       priority: 15,
       requires: "GEMINI_API_KEY",
     }),
     openAiCompatibleProvider({
       id: "bulbul",
-      name: "Bulbul",
-      provider: "HuggingFace Router",
+      name: "HuggingFace",
+      provider: "OpenAI-compatible",
       model: "meta-llama/Llama-3.3-70B-Instruct",
       priority: 20,
       endpoint: "https://router.huggingface.co/v1/chat/completions",
@@ -100,7 +100,7 @@ export function defaultProviders(options: ProviderCatalogOptions): Provider[] {
     openAiCompatibleProvider({
       id: "openrouter",
       name: "OpenRouter",
-      provider: "OpenRouter (OpenAI-compat)",
+      provider: "OpenAI-compatible",
       model: OPENROUTER_MODEL,
       priority: 25,
       endpoint: "https://openrouter.ai/api/v1/chat/completions",
@@ -110,6 +110,36 @@ export function defaultProviders(options: ProviderCatalogOptions): Provider[] {
         "X-Title": "Simorgh",
       },
     }),
+    // The api.env birds, mirroring the edge at 26–28. A self-hosted core is not a
+    // lesser flock: these three are plain OpenAI-compatible endpoints with no
+    // Cloudflare-specific binding, so they carry over whole.
+    openAiCompatibleProvider({
+      id: "cerebras",
+      name: "Cerebras",
+      provider: "OpenAI-compatible",
+      model: "llama-3.3-70b",
+      priority: 26,
+      endpoint: "https://api.cerebras.ai/v1/chat/completions",
+      requires: "CEREBRAS_API_KEY",
+    }),
+    openAiCompatibleProvider({
+      id: "nvidia",
+      name: "NVIDIA NIM",
+      provider: "OpenAI-compatible",
+      model: "meta/llama-3.3-70b-instruct",
+      priority: 27,
+      endpoint: "https://integrate.api.nvidia.com/v1/chat/completions",
+      requires: "NVIDIA_API_KEY",
+    }),
+    openAiCompatibleProvider({
+      id: "aigateway",
+      name: "Vercel AI Gateway",
+      provider: "OpenAI-compatible",
+      model: "meta/llama-3.3-70b-instruct",
+      priority: 28,
+      endpoint: "https://ai-gateway.vercel.sh/v1/chat/completions",
+      requires: "VERCEL_AI_GATEWAY_API_KEY",
+    }),
   ];
 
   const ollamaBase = env.OLLAMA_BASE_URL?.trim();
@@ -118,7 +148,7 @@ export function defaultProviders(options: ProviderCatalogOptions): Provider[] {
       openAiCompatibleProvider({
         id: "ollama",
         name: "Ollama",
-        provider: "Ollama (local daemon)",
+      provider: "Local daemon",
         model: env.OLLAMA_MODEL?.trim() || "llama3.2",
         // After every hosted bird, including the two keyed ones: a local daemon is free and
         // private but usually slower, so it is the fallback rather than the first choice.

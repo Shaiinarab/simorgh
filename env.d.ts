@@ -3,6 +3,10 @@ interface SimorghSecrets {
   HF_TOKEN?: string;
   GEMINI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  /* The api.env birds — three more OpenAI-compatible vendors, priority 26–28. */
+  CEREBRAS_API_KEY?: string;
+  NVIDIA_API_KEY?: string;
+  VERCEL_AI_GATEWAY_API_KEY?: string;
   SIMORGH_API_KEY?: string;
   /**
    * `{"<token>": "<userId>"}`. Present ⇒ callers are distinguishable, and the per-user

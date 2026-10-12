@@ -88,6 +88,33 @@ export const PROVIDER_KEY_CHECKS: readonly ProviderKeyCheck[] = [
     via: "bearer",
     note: "Read token is enough for inference on the free tier.",
   },
+  {
+    secret: "CEREBRAS_API_KEY",
+    label: "Cerebras",
+    signup: "cloud.cerebras.ai",
+    method: "GET",
+    url: "https://api.cerebras.ai/v1/models",
+    via: "bearer",
+    note: "The fastest free inference in the flock — good for the interactive path.",
+  },
+  {
+    secret: "NVIDIA_API_KEY",
+    label: "NVIDIA NIM",
+    signup: "build.nvidia.com",
+    method: "GET",
+    url: "https://integrate.api.nvidia.com/v1/models",
+    via: "bearer",
+    note: "Free credits on build.nvidia.com; many models behind one key.",
+  },
+  {
+    secret: "VERCEL_AI_GATEWAY_API_KEY",
+    label: "Vercel AI Gateway",
+    signup: "vercel.com/ai-gateway",
+    method: "GET",
+    url: "https://ai-gateway.vercel.sh/v1/models",
+    via: "bearer",
+    note: "One key, many vendors — the gateway routes, so a swap is a config change.",
+  },
 ];
 
 export interface ValidationResult {

@@ -8,7 +8,44 @@
 // tests catch the runtime half, and the distinct-name-per-test pattern keeps each case
 // on a fresh object rather than a recycled one.
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+// ── Hermeticity, restored ───────────────────────────────────────────────────
+//
+// The workerd test pool loads `.dev.vars`, so any provider key a developer keeps in
+// their local runtime is *also* the test environment. That silently breaks every
+// assertion about the zero-KYC guarantee: the tests below used to read an empty env
+// and now read whatever is on disk, so "exactly one bird answers with no key" became
+// false the moment real keys appeared locally.
+//
+// A test that changes its mind because of a file outside the repo is a test about
+// that file. So the keys are cleared for the whole file and restored afterwards —
+// the guarantee is asserted against the deployment it describes, not against this
+// machine's `.dev.vars`.
+const SECRET_KEYS = [
+  "GROQ_API_KEY",
+  "HF_TOKEN",
+  "GEMINI_API_KEY",
+  "OPENROUTER_API_KEY",
+  "CEREBRAS_API_KEY",
+  "NVIDIA_API_KEY",
+  "VERCEL_AI_GATEWAY_API_KEY",
+] as const;
+
+const saved = new Map<string, string | undefined>();
+
+beforeAll(() => {
+  for (const key of SECRET_KEYS) {
+    saved.set(key, (env as unknown as Record<string, unknown>)[key] as string | undefined);
+    delete (env as unknown as Record<string, unknown>)[key];
+  }
+});
+
+afterAll(() => {
+  for (const [key, value] of saved) {
+    if (value !== undefined) (env as unknown as Record<string, unknown>)[key] = value;
+  }
+});
 
 const freshName = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 
@@ -32,18 +69,22 @@ describe("FlockCoordinator", () => {
     // The one place the roster is pinned literally, and deliberately so. `/api/v1/flock/status`
     // is a published contract and `docs/ARCHITECTURE.md` invariant #9 makes the wire field
     // names one too, so *completeness* is the property here: `toEqual`, not `toContain`.
-    // Five birds since Gemini and OpenRouter joined — both keyed, both slotted ahead of Homā
-    // so the key-free bird stays reachable. The priority list is pinned exactly for the same
-    // reason: priorities must be unique and ascending, and only the whole list says that.
-    expect(status.birds).toHaveLength(5);
+    // Eight birds: the original five plus Cerebras, NVIDIA NIM and Vercel AI Gateway,
+    // each keyed and each slotted at 26–28 — *ahead* of the key-free bird, so the
+    // zero-KYC guarantee holds. The priority list is pinned exactly for the same reason:
+    // priorities must be unique and ascending, and only the whole list says that.
+    expect(status.birds).toHaveLength(8);
     expect(status.birds.map((b) => b.id)).toEqual([
       "shahin",
       "gemini",
       "bulbul",
       "openrouter",
+      "cerebras",
+      "nvidia",
+      "aigateway",
       "homa",
     ]);
-    expect(status.birds.map((b) => b.priority)).toEqual([10, 15, 20, 25, 30]);
+    expect(status.birds.map((b) => b.priority)).toEqual([10, 15, 20, 25, 26, 27, 28, 30]);
     expect(status.timestamp).toBeGreaterThan(0);
   });
 

@@ -248,8 +248,8 @@ const OPENROUTER_MODEL = "openrouter/free";
 export const PROVIDERS: readonly Provider[] = [
   openAiCompatibleProvider({
     id: "shahin",
-    name: "Shāhīn",
-    provider: "Groq (OpenAI-compat)",
+    name: "Groq",
+    provider: "OpenAI-compatible",
     model: "llama-3.3-70b-versatile",
     priority: 10,
     endpoint: "https://api.groq.com/openai/v1/chat/completions",
@@ -262,15 +262,15 @@ export const PROVIDERS: readonly Provider[] = [
   geminiProvider({
     id: "gemini",
     name: "Gemini",
-    provider: "Google Generative Language",
+    provider: "Google",
     model: GEMINI_MODEL,
     priority: 15,
     requires: "GEMINI_API_KEY",
   }),
   openAiCompatibleProvider({
     id: "bulbul",
-    name: "Bulbul",
-    provider: "HuggingFace Router",
+    name: "HuggingFace",
+    provider: "OpenAI-compatible",
     model: "meta-llama/Llama-3.3-70B-Instruct",
     priority: 20,
     endpoint: "https://router.huggingface.co/v1/chat/completions",
@@ -282,7 +282,7 @@ export const PROVIDERS: readonly Provider[] = [
   openAiCompatibleProvider({
     id: "openrouter",
     name: "OpenRouter",
-    provider: "OpenRouter (OpenAI-compat)",
+    provider: "OpenAI-compatible",
     model: OPENROUTER_MODEL,
     priority: 25,
     endpoint: "https://openrouter.ai/api/v1/chat/completions",
@@ -292,10 +292,50 @@ export const PROVIDERS: readonly Provider[] = [
       "X-Title": "Simorgh",
     },
   }),
+  // ── The api.env birds ──────────────────────────────────────────────────────
+  //
+  // Three more OpenAI-compatible vendors, and each one costs a single entry rather
+  // than a factory: that is what the shared spec already bought with the previous
+  // entry, and it is the difference between adding a provider and adding code.
+  //
+  // They sit at 26–28, *ahead* of Homā, for the reason the comment above names: Homā
+  // is the key-free bird that carries the zero-KYC guarantee, so a bird that needs a
+  // secret must outrank it or it is unreachable by construction.
+  //
+  // Model ids are cattle, not pets — the free tier on each vendor rotates them faster
+  // than a deploy cycle, so a wrong one degrades this bird to dormant-and-cooling-off
+  // rather than breaking the flock.
+  openAiCompatibleProvider({
+    id: "cerebras",
+    name: "Cerebras",
+    provider: "OpenAI-compatible",
+    model: "llama-3.3-70b",
+    priority: 26,
+    endpoint: "https://api.cerebras.ai/v1/chat/completions",
+    requires: "CEREBRAS_API_KEY",
+  }),
+  openAiCompatibleProvider({
+    id: "nvidia",
+    name: "NVIDIA NIM",
+    provider: "OpenAI-compatible",
+    model: "meta/llama-3.3-70b-instruct",
+    priority: 27,
+    endpoint: "https://integrate.api.nvidia.com/v1/chat/completions",
+    requires: "NVIDIA_API_KEY",
+  }),
+  openAiCompatibleProvider({
+    id: "aigateway",
+    name: "Vercel AI Gateway",
+    provider: "OpenAI-compatible",
+    model: "meta/llama-3.3-70b-instruct",
+    priority: 28,
+    endpoint: "https://ai-gateway.vercel.sh/v1/chat/completions",
+    requires: "VERCEL_AI_GATEWAY_API_KEY",
+  }),
   workersAiProvider({
     id: "homa",
-    name: "Homā",
-    provider: "Cloudflare Workers AI",
+    name: "Workers AI",
+    provider: "Cloudflare binding",
     model: HOMA_MODEL,
     priority: 30,
   }),
