@@ -28,6 +28,7 @@ import {
 } from "./security";
 import { connectorReadiness, toolSurface } from "./platform";
 import { handleDiscordWebhook } from "./discord";
+import { checkMcpAddress } from "./setup-mcp";
 import { validateProviderKey } from "./setup";
 import { handleTelegramWebhook } from "./telegram";
 
@@ -601,6 +602,45 @@ app.post("/api/v1/setup/validate", async (c) => {
     (url, init) => globalThis.fetch(url, init),
     provider,
     key
+  );
+  return c.json(result, result.ok ? 200 : 422);
+});
+
+// ── Checking an MCP server address ──────────────────────────────────────────
+//
+// Same posture as the key check above — unauthenticated, rate-limited, dials only
+// what the caller asked for — but the check is a real MCP `initialize` handshake
+// rather than a credential compare, because an MCP address is a URL and not a secret.
+// See `src/setup-mcp.ts` for why a reachability check would be the wrong answer.
+app.post("/api/v1/setup/check-mcp", async (c) => {
+  const raw = await c.req.text();
+  if (raw.length > 4_000) {
+    return c.json({ ok: false, detail: "Request too large." }, 413);
+  }
+
+  let body: { url?: unknown };
+  try {
+    body = JSON.parse(raw) as typeof body;
+  } catch {
+    return c.json({ ok: false, detail: "Send JSON." }, 400);
+  }
+
+  const url = typeof body.url === "string" ? body.url : "";
+
+  const limiter = c.env.FLOCK_COORDINATOR.get(
+    c.env.FLOCK_COORDINATOR.idFromName("global")
+  );
+  const decision = await limiter.checkRateLimit("setup-mcp", 10, 60_000);
+  if (!decision.allowed) {
+    return c.json(
+      { ok: false, detail: "Too many checks. Wait a minute and try again." },
+      429
+    );
+  }
+
+  const result = await checkMcpAddress(
+    (input, init) => globalThis.fetch(input, init),
+    url
   );
   return c.json(result, result.ok ? 200 : 422);
 });
