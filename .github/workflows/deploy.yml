@@ -1,0 +1,62 @@
+name: Deploy
+
+# Push-to-main is the deploy, so the live deployment never drifts from the repo.
+#
+# The token is a **repo secret**, not a repo variable: it is the one credential this
+# workflow needs, and it is what lets the whole thing stay on free tiers with no
+# Cloudflare account sharing. Add it once under
+# Settings → Secrets and variables → Actions → `CLOUDFLARE_API_TOKEN`.
+#
+# The token needs `Workers Scripts:Edit` on the account. Nothing else — no DNS, no
+# zone access — because this workflow only ever uploads a Worker.
+#
+# CI runs first and this waits for it: a deploy that ships a red suite is how a
+# broken build reaches production with a green checkmark next to it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to Cloudflare Workers
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # upm requires Node 22.3+ (docs/adr/ADR-0004-toolchain-upm.md).
+          node-version: 22
+      - run: npm i -g upm --min-release-age 0
+      - name: Cache the upm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.upm/store
+          key: upm-${{ runner.os }}-${{ hashFiles('upm.lock') }}
+      - run: upm install --frozen-lockfile
+      - name: Typecheck before shipping
+        run: npm run typecheck
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: upx wrangler deploy
+      - name: Probe the deployment that was just shipped
+        run: |
+          # A deploy that returns 200 is not a verified deploy: the route that matters
+          # has to answer, and the Discord gateway has to refuse an unsigned request
+          # rather than accept one. Both are checked here, and the job fails on either.
+          URL="https://simorgh.${{ vars.CLOUDFLARE_SUBDOMAIN }}.workers.dev"
+          echo "probing $URL"
+          curl -fsS --max-time 30 "$URL/health" | grep -q '"status":"ok"'
+          curl -fsS --max-time 30 -X POST "$URL/api/v1/discord/webhook" \
+            -H 'Content-Type: application/json' -d '{"type":1}' -o /dev/null -w '%{http_code}' \
+            | grep -qx 401
