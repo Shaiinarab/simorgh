@@ -1,3 +1,27 @@
+---
+type: "Values"
+title: "Simorgh Soul"
+description: "What the project is for: clarity before automation, honest uncertainty, and a human-controlled boundary before any external effect."
+tags:
+  - simorgh
+  - values
+  - soul
+  - safety
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-13T10:05:00Z"
+status: "stable"
+stale_after: "2027-01-13T00:00:00Z"
+sources:
+  - id: honest-degradation
+    resource: "phoenix-core/src/execute.ts"
+    title: "The ledger-before-flight ordering this rests on"
+  - id: security-audit
+    resource: "docs/SECURITY-AUDIT.md"
+    title: "The audit that records the same boundary"
+---
+
 # Simorgh Soul
 
 Simorgh exists to give an operator **clarity before automation**. Its first loyalty is to the person who owns the data, provider accounts, and deployment risk—not to throughput, novelty, or a provider's preferred workflow.

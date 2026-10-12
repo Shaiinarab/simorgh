@@ -1,3 +1,32 @@
+---
+type: "Operating Contract"
+title: "AGENTS.md — simorgh-platform"
+description: "The operating contract: the architecture rule, commands, environment traps, verification discipline and definition of done."
+tags:
+  - simorgh
+  - agents
+  - contract
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-13T10:05:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-13T10:05:00Z"
+stale_after: "2026-11-13T00:00:00Z"
+sources:
+  - id: boundary-test
+    resource: "phoenix-core/test/boundary.test.ts"
+    title: "The machine-enforced engine boundary"
+  - id: package-scripts
+    resource: "package.json"
+    title: "The commands this contract tells you to run"
+  - id: go-work
+    resource: "go.work"
+    title: "The eight-module Go workspace"
+---
+
 # AGENTS.md — simorgh-platform
 
 Operating contract for this repository. **Rules and commands live here; depth lives in skills** (index
@@ -78,7 +107,8 @@ upx vitest run --config vitest.node.config.ts <file>   # one file, scoped
 
 upm run e2e:ask                 # the CLI reaches a live core over REST *and* MCP
 upm run platform:smoke          # boots a real core on an ephemeral port, probes it, exits 0/1
-upm run simorgh -- <cmd>        # targets | plan | deploy | serve | connect | ask | status | doctor
+upm run simorgh -- <cmd>        # targets | plan | deploy | serve | connect | ask | status |
+                               # doctor | instances | disconnect | smoke   (eleven subcommands)
 upm run security:scan           # secrets scan + dependency audit (the CI security gate)
 upm run cf:dry-run              # wrangler bundle check
 

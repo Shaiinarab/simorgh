@@ -1,3 +1,32 @@
+---
+type: "Security Policy"
+title: "Security policy — simorgh-platform"
+description: "Threat model, the trusted and untrusted input table, reporting channel, and what the repository actually publishes."
+tags:
+  - simorgh
+  - security
+  - policy
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-13T10:05:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-13T10:05:00Z"
+stale_after: "2026-11-13T00:00:00Z"
+sources:
+  - id: engine-security
+    resource: "phoenix-core/src/security.ts"
+    title: "Fail-closed auth, constant-time compare, output cap"
+  - id: scan-gate
+    resource: "scripts/security-scan.sh"
+    title: "The secrets scan and dependency audit CI runs"
+  - id: workflows
+    resource: ".github/workflows/"
+    title: "ci.yml and deploy.yml, the two things that run"
+---
+
 # Security Policy
 
 Simorgh is a free-to-run, no-KYC agentic AI gateway: it federates free-tier model providers into

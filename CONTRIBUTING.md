@@ -1,3 +1,32 @@
+---
+type: "Contributing Guide"
+title: "Contributing to Simorgh"
+description: "Setup, toolchain, the two test suites, the roster pins a new provider breaks, and the commit and review rules."
+tags:
+  - simorgh
+  - contributing
+  - toolchain
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-13T10:05:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-13T10:05:00Z"
+stale_after: "2026-11-13T00:00:00Z"
+sources:
+  - id: roster-pin
+    resource: "test/durable-objects.test.ts"
+    title: "The literal roster pin (8 ids)"
+  - id: routing-pin
+    resource: "test/flock-routing.test.ts"
+    title: "The ordering pin via toEqual"
+  - id: lockfile
+    resource: "upm.lock"
+    title: "The single committed lockfile"
+---
+
 # Contributing to Simorgh
 
 Simorgh is a free-to-run, no-KYC agentic AI gateway: it federates fragmented free-tier model
