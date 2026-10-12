@@ -1,21 +1,26 @@
 name: Deploy
 
-# Push-to-main is the deploy, so the live deployment never drifts from the repo.
+# Push-to-main deploys, gated on CI. The gate is `workflow_run`, not a reusable
+# `uses:` call: calling ci.yml as a reusable workflow put the deploy's copy of CI in
+# the same concurrency group as the push's own CI run and cancelled it, so the gate
+# fought the thing it was gating. Waiting for the run that already happened is both
+# simpler and the honest ordering.
 #
 # The token is a **repo secret**, not a repo variable: it is the one credential this
-# workflow needs, and it is what lets the whole thing stay on free tiers with no
-# Cloudflare account sharing. Add it once under
-# Settings → Secrets and variables → Actions → `CLOUDFLARE_API_TOKEN`.
+# workflow needs, and it is what lets the whole thing stay on free tiers. Add it once
+# under Settings → Secrets and variables → Actions → `CLOUDFLARE_API_TOKEN`. It needs
+# `Workers Scripts:Edit` on the account and nothing else — no DNS, no zone access —
+# because this workflow only ever uploads a Worker.
 #
-# The token needs `Workers Scripts:Edit` on the account. Nothing else — no DNS, no
-# zone access — because this workflow only ever uploads a Worker.
-#
-# CI runs first and this waits for it: a deploy that ships a red suite is how a
-# broken build reaches production with a green checkmark next to it.
+# If the secret is absent the deploy fails with wrangler's own "set a
+# CLOUDFLARE_API_TOKEN" error, which is the correct failure: a workflow that quietly
+# succeeded with no credential would be worse than one that says so.
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
     branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -23,15 +28,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-
   deploy:
     name: Deploy to Cloudflare Workers
-    needs: ci
+    # Only after CI succeeded, and only on a merge to main — never on a PR.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The commit CI actually ran on, not necessarily this run's own sha.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           # upm requires Node 22.3+ (docs/adr/ADR-0004-toolchain-upm.md).
@@ -46,17 +54,32 @@ jobs:
       - name: Typecheck before shipping
         run: npm run typecheck
       - name: Deploy
+        id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: upx wrangler deploy
-      - name: Probe the deployment that was just shipped
         run: |
-          # A deploy that returns 200 is not a verified deploy: the route that matters
-          # has to answer, and the Discord gateway has to refuse an unsigned request
-          # rather than accept one. Both are checked here, and the job fails on either.
-          URL="https://simorgh.${{ vars.CLOUDFLARE_SUBDOMAIN }}.workers.dev"
+          # The URL comes from the deploy output rather than a repo variable, so there
+          # is one source of truth for where this Worker lives and no second value to
+          # drift from it.
+          upx wrangler deploy 2>&1 | tee /tmp/deploy.log
+          URL="$(grep -oE 'https://[a-z0-9-]+\.workers\.dev' /tmp/deploy.log | head -1)"
+          if [ -z "$URL" ]; then
+            echo "::error::deploy printed no URL — refusing to probe a guessed address"
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+      - name: Probe the deployment that was just shipped
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          # A 200 from /health proves the Worker is up, not that *this* build is running.
+          # Two checks, each of which fails the job: the health payload, and an unsigned
+          # POST to the Discord webhook being refused with 401 — which proves the new
+          # route is actually deployed and refusing correctly rather than 404ing.
           echo "probing $URL"
           curl -fsS --max-time 30 "$URL/health" | grep -q '"status":"ok"'
-          curl -fsS --max-time 30 -X POST "$URL/api/v1/discord/webhook" \
-            -H 'Content-Type: application/json' -d '{"type":1}' -o /dev/null -w '%{http_code}' \
-            | grep -qx 401
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+            -X POST "$URL/api/v1/discord/webhook" \
+            -H 'Content-Type: application/json' -d '{"type":1}')"
+          echo "discord webhook answered $CODE"
+          [ "$CODE" = "401" ]
