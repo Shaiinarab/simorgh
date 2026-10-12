@@ -553,9 +553,25 @@ app.post("/api/v1/telegram/webhook", (c) =>
 // Hono received from the runtime's `fetch(request, env, ctx)` signature, and its
 // `waitUntil` is what lets the gateway acknowledge inside Discord's 3-second deadline
 // and still write the flock's answer afterwards — see src/discord.ts §3.
-app.post("/api/v1/discord/webhook", (c) =>
-  handleDiscordWebhook(c.req.raw, c.env, c.executionCtx)
-);
+//
+// Read defensively, and that is not paranoia: `executionCtx` is a **getter that
+// throws** when the request arrived without one, which is exactly what Hono's own
+// `app.request()` test helper and any two-argument `fetch` embedder produce. Reading
+// it eagerly turned every such call into a 500 on this route — the "do not
+// discriminate on a field you have not seen a real host send" rule, applied to the
+// framework rather than to a provider.
+app.post("/api/v1/discord/webhook", (c) => {
+  // Typed as the *port* the gateway needs, not the whole ExecutionContext: the ambient
+  // `ExecutionContext` and the Cloudflare one disagree on members the gateway never
+  // touches, and naming only `waitUntil` says so.
+  let work: { waitUntil(promise: Promise<unknown>): void } | undefined;
+  try {
+    work = c.executionCtx;
+  } catch {
+    work = undefined;
+  }
+  return handleDiscordWebhook(c.req.raw, c.env, work);
+});
 
 // ── First-run setup: is this provider key real? ──────────────────────────────
 //

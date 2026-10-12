@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Called by deploy.yml as a reusable workflow, so a deploy can wait on the same
+  # suite a push already runs rather than a second copy of it that can drift.
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}

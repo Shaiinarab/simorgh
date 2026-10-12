@@ -520,10 +520,14 @@ describe("flock exhaustion (Story 5.5)", () => {
   });
 
   it("never emits Retry-After: 0, which would invite an immediate hot loop", async () => {
-    // A cooldown 100ms out rounds to 0 seconds. The header must be clamped to the floor.
+    // A cooldown that rounds to 0 seconds must still clamp to the floor. The window is
+    // deliberately sub-second so it *would* round to 0, but wide enough that it cannot
+    // expire between the fake being built and the handler reading it — the original
+    // 100ms was a race that passed locally and failed in CI, where the round-trip is
+    // slower, and a test that fails on a clock is a test about the clock.
     const res = await post(
       { prompt: "hello" },
-      fakeFlockNamespace({ exhausted: true, cooldownUntil: Date.now() + 100 })
+      fakeFlockNamespace({ exhausted: true, cooldownUntil: Date.now() + 900 })
     );
 
     expect(res.headers.get("Retry-After")).toBe("1");

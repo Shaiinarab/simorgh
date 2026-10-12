@@ -365,6 +365,35 @@ describe("discord interactions endpoint", () => {
     ).toBe(405);
   });
 
+  it("answers without a deferred context rather than crashing the route", async () => {
+    // Regression: the handler assumed `c.executionCtx` existed and threw
+    // "This context has no ExecutionContext" when reached through `app.request()`.
+    // CI caught it; the local suite never did, because every other caller passed one.
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(String(init?.method ?? "GET") + " " + String(input));
+      return new Response("{}", { status: 200 });
+    });
+
+    const body = interactionBody("cmd-no-ctx", 2);
+    const timestamp = "1700000099";
+    const response = await app.request(
+      "/api/v1/discord/webhook",
+      {
+        method: "POST",
+        headers: discordHeaders(timestamp, await sign(timestamp, body)),
+        body,
+      },
+      testEnv()
+    );
+
+    // Not a 500: the route ran. The inline path answers through Discord's webhook
+    // rather than acknowledging first, so there is still an outbound call — and it was
+    // made, which is what proves the flight actually executed instead of erroring.
+    expect(response.status).not.toBe(500);
+    expect(sent.some((s) => s.includes("/webhooks/app-1/"))).toBe(true);
+  });
+
   it("defers an application command, then edits the response with the answer", async () => {
     const sent: { method: string; url: string; body: string }[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -280,7 +280,7 @@ const USAGE =
 export async function handleDiscordWebhook(
   request: Request,
   env: Env,
-  work: WaitUntilPort
+  work?: WaitUntilPort
 ): Promise<Response> {
   const publicKey = env.DISCORD_PUBLIC_KEY?.trim();
   if (!publicKey) {
@@ -404,40 +404,58 @@ export async function handleDiscordWebhook(
   const applicationId = interaction.application_id ?? "";
   const requestId = "discord:" + interaction.id;
 
-  // Defer now, answer later. Returning `type 5` acknowledges inside the 3-second
-  // deadline and leaves the user a loading state; the flock's answer is written back
-  // over the same interaction when it exists.
-  work.waitUntil(
-    (async () => {
+  // Defer now, answer later. Returning `type 5` acknowledges inside Discord's
+  // 3-second deadline and leaves the user a loading state; the flock's answer is
+  // written back over the same interaction when it exists.
+  //
+  // `waitUntil` is a *port*, and it is optional on purpose. It is absent when the
+  // handler is reached through something that hands it no execution context — Hono's
+  // `app.request()` test helper is the case that bit us, and a local embedder could
+  // do the same. Assuming it exists crashed the whole route with "This context has no
+  // ExecutionContext", which is the "do not discriminate on a field you have not seen
+  // a real host send" rule this repo already documents. Without it the answer is
+  // slower but still delivered, inline.
+  const flight = async (): Promise<void> => {
+    try {
+      const result = await executeAgent(env, {
+        prompt,
+        tools,
+        userId,
+        tier: "Free-Volunteer",
+        requestId,
+      });
+      await sendDiscordReply(applicationId, interaction.token, result.agentResponse);
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          event: "discord_interaction_error",
+          error: String(error),
+          interactionId: interaction.id,
+        })
+      );
       try {
-        const result = await executeAgent(env, {
-          prompt,
-          tools,
-          userId,
-          tier: "Free-Volunteer",
-          requestId,
-        });
-        await sendDiscordReply(applicationId, interaction.token, result.agentResponse);
-      } catch (error) {
-        console.error(
-          JSON.stringify({
-            event: "discord_interaction_error",
-            error: String(error),
-            interactionId: interaction.id,
-          })
+        await sendDiscordReply(
+          applicationId,
+          interaction.token,
+          "The flock hit an internal error. Please try again."
         );
-        try {
-          await sendDiscordReply(
-            applicationId,
-            interaction.token,
-            "The flock hit an internal error. Please try again."
-          );
-        } catch {
-          // Keep a failed reply from becoming an error storm against Discord.
-        }
+      } catch {
+        // Keep a failed reply from becoming an error storm against Discord.
       }
-    })()
-  );
+    }
+  };
 
-  return Response.json({ type: CALLBACK_DEFERRED });
+  if (work) {
+    work.waitUntil(flight());
+    return Response.json({ type: CALLBACK_DEFERRED });
+  }
+
+  await flight();
+  return Response.json({
+    type: CALLBACK_MESSAGE,
+    data: replyBody(
+      "Answered, but this request arrived with no deferred context — the flock ran " +
+        "inline, so the answer is slower than Discord's 3-second window prefers."
+    ),
+  });
 }
