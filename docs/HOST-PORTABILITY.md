@@ -118,7 +118,10 @@ So the honest statement of the portability claim is narrower than the docs imply
 > `phoenix-core` is portable across runtimes **that can supply a synchronous SQL implementation** —
 > not across hosts in general.
 
-That is still a real achievement: it covers workerd, Node, and Deno 2
+That is still a real achievement **for the two hosts that have actually run it**: workerd and Node.
+Deno 2 is *untested* — the engine holds the line that makes it plausible, and nothing more. The honest
+claim is "portable across runtimes that can supply a synchronous SQL implementation", not "runs
+anywhere".
 (`node:sqlite`). It excludes every serverless host without durable local storage, which is most of them.
 **`SqlPort`'s shape, not a missing adapter, is what stands between the engine and a networked host.**
 

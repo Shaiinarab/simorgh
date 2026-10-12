@@ -22,6 +22,9 @@ sources:
 
 # Simorgh Skillstack — Top 20 per Category (Brainstorm Baseline, 2026-10)
 
+> This is a dated record of what was considered in October 2026, not current state. For the current
+> state see [`docs/STATE-OF-PROJECT.md`](../STATE-OF-PROJECT.md).
+
 Installed/verified in this workspace. Rule of thumb for every pick: **genuinely free tier, no-KYC where
 possible, edge-portable, and it must survive Simorgh's own invariants** (`SOUL.md`, `AGENT.md`, the
 boundary test in `phoenix-core/test/boundary.test.ts`).
@@ -154,7 +157,7 @@ matching module lands)
 | 17 | promptfoo | 🎯 | Routing-quality evals across birds |
 | 18 | DSPy | ✅ | Optimizer experiments for classifier prompts (complexity.ts) |
 | 19 | Instructor | ✅ | Structured-output evals via any free provider |
-| 20 | dspy-eval / golden sets in mailbox | 🎯 | Turn `mailbox/` receipts into regression corpus |
+| 20 | dspy-eval / golden sets ~~in mailbox~~ | ✗ retired | ~~Turn `mailbox/` receipts into regression corpus~~ — RETIRED 2026-10-10: the mailbox/fbmail workflow this row depended on no longer exists in this repo (there is no mailbox protocol here; see the workspace map and `docs/todo/index.md`'s working rules). Regression corpus work starts from the committed suite and `docs/todo/` instead. |
 
 ## Category F — Data, Storage & Compute (free-computing frontier)
 

@@ -35,9 +35,9 @@ sources:
 
 | Signal | Where | Notes |
 |---|---|---|
-| Request correlation | `src/index.ts:35-36`, `simorgh-platform/src/runtimes/node.ts` | `X-Request-Id` on every response, and used as the correlation field in every error payload |
-| Error logging | `src/index.ts:151`, node runtime `catch` | `console.error(JSON.stringify({ event, requestId, … }))` — structured, not prose |
-| Cron event | `src/index.ts:570` | `{ event: "flock_sweep", changed }` |
+| Request correlation | `src/index.ts:37-39`, `simorgh-platform/src/runtimes/node.ts:211-212` | `X-Request-Id` on every response, and used as the correlation field in every error payload |
+| Error logging | `src/index.ts:152-158`, node runtime `catch` | `console.error(JSON.stringify({ event, requestId, … }))` — structured, not prose |
+| Cron event | `src/index.ts:685` | `{ event: "flock_sweep", changed }` |
 | Provider health | `phoenix-core/src/health.ts` `bird_health` table | `status`, `consecutive_failures`, `cooldown_until`, `last_ok`, `total_calls`, `total_failures` |
 | Flock view | `GET /api/v1/flock/status` | The persisted health table, read back |
 | Transparency ledger | `phoenix-core/src/ledger.ts` | Append-only: user, tier, ref, timestamp, action, details — written **before** the flight |

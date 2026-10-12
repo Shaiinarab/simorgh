@@ -36,12 +36,17 @@ refused, deepwiki flaky, websearch 403) — GitHub API carried it, as it has all
 ## §1 The finding that matters: three protocols are the whole join surface
 
 Every discoverable client in this pass speaks at least one of three protocols natively:
-**OpenAI `/v1/chat/completions`**, **Anthropic `/v1/messages`**, **MCP**. Simorgh's engine
-already answers the first two shapes of request (REST + `/mcp` surface), which means
-**distribution is a config block, not an integration project** — one `provider` entry in
-opencode.json, one base-URL in open-webui, one "custom endpoint" in Cline. No client required
-Simorgh-specific code in this entire pass. That is the product's distribution story, and it is
-evidence-backed below, not asserted.
+**OpenAI `/v1/chat/completions`**, **Anthropic `/v1/messages`**, **MCP**.
+
+**Correction (verified 2026-10-12):** this dossier's original next sentence claimed Simorgh's engine
+"already answers the first two shapes of request," so distribution was a config block. That was
+false, and it is worth being exact about what is false. No TypeScript host serves either dialect:
+`/v1/chat/completions` appears in the tree only as each bird's **outbound** provider endpoint (the
+flock dials it), and `/v1/messages` appears nowhere. What the engine actually answers is `/api/v1/*`
+plus `/mcp` on the Node runtime — the surface [ADR-0008](../adr/ADR-0008-unified-surface-harness-api-gateways-wizards.md)
+Door 2 records. So for MCP-native clients (goose) Simorgh is already a drop-in target, while for
+OpenAI- and Anthropic-dialect clients distribution is a **small integration project — a compatibility
+door on the existing surface** — not a config block, and it should be planned as one.
 
 ## §2 Clients — the adoption surface (point them at Simorgh tomorrow)
 
@@ -166,8 +171,9 @@ failure; the *concept* Simorgh implements with DO SQLite + Workflows. Reference 
 ## §5 What Simorgh does with this (composed, not copied)
 
 1. **Ship the connect matrix** — one doc, ~12 config snippets: opencode.json, open-webui,
-   LibreChat, Cline, goose, Chatbox, Kilo. Distribution unlock with zero engine changes; the
-   protocols already exist.
+   LibreChat, Cline, goose, Chatbox, Kilo. MCP-native clients work against the existing surface
+   with zero engine changes; the OpenAI/Anthropic dialects need a compatibility door first (see the
+   §1 correction).
 2. **Dogfood on the daily driver** — Simorgh as a provider block in the user's own opencode
    config is the acceptance test this whole session has been building toward.
 3. **Memory/observability lanes are joins, not builds** — mem0/cognee/graphiti and

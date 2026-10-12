@@ -62,7 +62,12 @@ GOFLAGS=-mod=readonly go test   github.com/shaiinarab/simorgh/...      → 5 ok,
 
 Tests exist for `packages/providers` (incl. `selection_test.go`, 142 lines), `packages/crypto`,
 `packages/config`, `packages/ledger`, `packages/providers/groq`.
-**`gateway/internal/server` has no test file.** That is the surface that carries the product.
+**`gateway/internal/server` had no test file** at the time of this decision — and that is the surface
+that carries the product. **Closed since:** `gateway/internal/server/server_test.go` now covers it
+(809 lines, 20 tests), including the route table, failover (all-fail → 502, rate-limited → 429 +
+`Retry-After`), client-gone not counting as a provider error, headers-sent refusing to fail over
+mid-stream, SSE, ledger usage on success and error, and health degradation. So §6.1 is done, and §4.3
+is the remaining obligation rather than the next one after it.
 
 ## 2. The problem with the status quo
 
@@ -134,6 +139,9 @@ a *different artifact* from the transparency ledger and must not be conflated wi
 1. Add `gateway/internal/server` tests: the route table, the failover loop (all-fail → 502, rate-limited
    → 429 + `Retry-After`), client-gone not counting as a provider error, and headers-sent refusing to
    fail over mid-stream. **Do not touch routing until this exists.**
+   **DONE** (verified 2026-10-12): `gateway/internal/server/server_test.go`, 809 lines / 20 tests,
+   covers every case named above plus SSE, ledger usage on success and error, and health
+   degradation. The §4.2 prerequisite is satisfied.
 2. Add the core-contract routes; run the platform's conformance kit against a live Go gateway.
 3. Fold the latency EMA into the engine's ordering (or explicitly document why it stays local).
 4. Note the accepted divergence in `docs/ARCHITECTURE.md`.
@@ -146,7 +154,7 @@ Every claim above is reproducible from the repo root:
 GOFLAGS=-mod=readonly go build all
 GOFLAGS=-mod=readonly go vet  github.com/shaiinarab/simorgh/...
 GOFLAGS=-mod=readonly go test github.com/shaiinarab/simorgh/...
-find gateway -name '*_test.go'        # → no results (the §1 gap)
+find gateway -name '*_test.go'        # → server_test.go (the §1 gap, now closed)
 grep -n 'func (s \*Server) handle' gateway/internal/server/server.go
 grep -n 'func (r \*Registry)' packages/providers/adapter.go
 ```

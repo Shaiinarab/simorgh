@@ -116,6 +116,15 @@ one, and it deserves its own answer before the refactor.
    than a one-off — an untested runtime is not a portability guarantee.
 4. Revisit the async `SqlPort` only with a named serverless target and the above done.
 
+> **Status of §5.1–5.3 (checked 2026-10-12).** The Bun half is **closed by removal**: `ADR-0004`
+> deleted the Bun host along with the whole runtime, so there is no third-runtime host to add and no
+> standing runner to register — `ADR-0004` already corrects this ADR and
+> `docs/HOST-PORTABILITY.md` at the point where they used to make Bun a live recommendation. The
+> Deno 2 half is **not attempted**: no Deno host has ever been built or executed here. Neither row is
+> open work; the finding they existed to produce — `bun:sqlite` satisfies the synchronous `SqlPort`
+> with **no `phoenix-core` change** — is recorded in §2 and unaffected. §5.4 stands as written: the
+> decision itself is still in force.
+
 ## 6. Evidence
 
 Every claim is reproducible; see `docs/HOST-PORTABILITY.md` §7 for the exact commands and the two

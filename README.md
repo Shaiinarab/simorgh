@@ -28,8 +28,8 @@ plain Markdown, YAML frontmatter, provenance, lifecycle/freshness and cross-link
 
 **Roadmap & status:** the canonical forward plan is [`docs/ROADMAP-SPINE.md`](docs/ROADMAP-SPINE.md)
 (vertical execution spine, epics A–F, phase ledger: Foundation/Routing/Capability/Task-model **done**,
-Durable execution **active**, Retrieval/Memory/Autonomy **next**). Current verified baseline:
-**138 workerd + 504 node tests green**, typecheck exit 0 (upm 1.4.0; suites also green on Node 26.7 / Go 1.27).
+Durable execution **active**, Retrieval/Memory/Autonomy **next**). Current verified baseline: **178 workerd + 504 node tests green** (17 and 28 files), typecheck
+exit 0 (upm 1.4.0; suites also green on Node 26.11 / Go 1.25).
 The old PRD epic list (`docs/prd/`) is historical. `docs/todo/index.md` is the live ordered task queue;
 BMAD artifacts are optional derived scaffolding, not a second source of truth.
 
@@ -45,7 +45,8 @@ upm install
 upm run typecheck
 
 # local dev (miniflare) — Homā works with no secrets at all
-upm run dev              # wrangler dev (--local --port 8787)
+upm run dev              # wrangler dev --local --port 8787 (the Workers AI binding
+                         #   still dials Cloudflare, so "no secrets" ≠ "no network")
 #   → http://127.0.0.1:8787/dashboard
 #   → http://127.0.0.1:8787/api/v1/flock/status
 
@@ -53,14 +54,22 @@ upm run dev              # wrangler dev (--local --port 8787)
 export NO_PROXY=127.0.0.1,localhost
 upm run simorgh -- serve --port 8788   # keys come from process.env
 
-# deploy (typecheck-gated; needs your Cloudflare auth)
-upm run deploy           # tsgo --noEmit && wrangler deploy
+# deploy (typecheck-gated: three tsgo configs, then wrangler deploy; needs your Cloudflare auth)
+upm run deploy
 
-# add extra birds (optional — absent = dormant, safe-by-default)
-upx wrangler secret put GROQ_API_KEY
-upx wrangler secret put HF_TOKEN
-upx wrangler secret put GEMINI_API_KEY
-upx wrangler secret put OPENROUTER_API_KEY
+# extra birds (optional — absent = dormant, safe-by-default). The flock holds eight;
+# Homā (Workers AI) needs no key. Priorities decide the order, lowest first.
+upx wrangler secret put GROQ_API_KEY               # shahin     10  Groq
+upx wrangler secret put GEMINI_API_KEY             # gemini     15  Google
+upx wrangler secret put HF_TOKEN                   # bulbul     20  HuggingFace
+upx wrangler secret put OPENROUTER_API_KEY         # openrouter 25  OpenRouter
+upx wrangler secret put CEREBRAS_API_KEY           # cerebras   26  Cerebras
+upx wrangler secret put NVIDIA_API_KEY             # nvidia     27  NVIDIA NIM
+upx wrangler secret put VERCEL_AI_GATEWAY_API_KEY  # aigateway  28  Vercel AI Gateway
+
+# distinguish callers. A map token → userId, which is what makes the per-user
+# routes refuse data that is not the caller's. Unset ⇒ those routes fail closed.
+upx wrangler secret put SIMORGH_API_KEYS           # '{"<token>": "<userId>"}'
 ```
 
 **Three places, not one.** Cloudflare is the *optional* path. A local Node run is a first-class way to
@@ -69,7 +78,9 @@ self-hosted box is the third. All three, with the trap that will cost you an hou
 ceilings that will bite, and an honest account of which routes the Node host does *not* serve:
 **[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
 
-Then open `…workers.dev/dashboard`, exhaust Groq's quota, and **watch the flock reroute to Homā** in real time.
+Then open the deployed `/dashboard`, exhaust Groq's quota, and **watch the flock reroute to the next
+awake bird** in real time — with a `RouteReason` on every skip, so the choice is legible rather than
+lucky.
 
 ---
 ---
@@ -158,10 +169,16 @@ upm run simorgh -- plan node --origin 127.0.0.1:8788     # what deploying there 
 upm run simorgh -- deploy node --mode cli --yes          # deploy (preflight-gated)
 upm run simorgh -- serve                                # run a phoenix-core on this box
 upm run simorgh -- connect node http://127.0.0.1:8788 --api-key <token>
+upm run simorgh -- instances                            # which cores are recorded as mine
+upm run simorgh -- disconnect <id>                       # forget one
 upm run simorgh -- ask "who is simorgh" --prefer rest     # ask the fleet, with failover
 upm run simorgh -- status                                # what is up, and what it can answer with
 upm run simorgh -- doctor                                # why one of them is not answering
+upm run simorgh -- smoke                                 # boot a core, probe it, exit 0/1
 ```
+
+Eleven subcommands in total. The three not shown above — `instances`, `disconnect` and `smoke` — are
+the ones `e2e:ask` depends on, so a fleet is created and torn down between two CLI calls.
 
 Four things it is opinionated about:
 
@@ -175,8 +192,9 @@ Four things it is opinionated about:
 - **`ask` fails over and says what it skipped.** Every failure is reported, not just the last one — with
   three cores down for three different reasons, "connection refused" alone sends you to the wrong one.
 - **`doctor` never throws on an unhealthy fleet.** An unreachable core is a finding with a stable code
-  (`unreachable`, `auth-not-configured`, `no-providers`, `all-tired`, …) and a fix hint, not a stack
-  trace. Exit 0 healthy, 1 unhealthy.
+  (`unreachable`, `connection-refused`, `auth-not-configured`, `auth-unauthorized`, `no-instances`,
+  `all-providers-dormant`, `all-providers-tired`) and a fix hint, not a stack trace. Exit 0 healthy,
+  1 unhealthy.
 
 ---
 
@@ -188,13 +206,16 @@ them, are in **[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
 
 ```bash
 upx wrangler login
-upx wrangler kv namespace create CONTEXT_STORE   # paste the id into wrangler.toml
 upm run deploy                                   # typecheck-gated wrangler deploy
 ```
 
-The KV namespace id is the one placeholder this repo ships with. `wrangler dev` and
-`wrangler deploy --dry-run` are both happy with it; a real deploy is not, so the
-command above is not optional.
+`wrangler.toml` ships with a real `CONTEXT_STORE` id, so there is no placeholder to replace — that
+step used to be required and was removed. If `wrangler kv namespace create` prints a different id,
+that is a *second* namespace, not a missing one; the DO migration story is in
+[`docs/DEPLOY.md`](docs/DEPLOY.md#3-deploy).
+
+The deployed worker is named `simorgh` (renamed from `simorgh-edge-gateway`), so it answers at
+`https://simorgh.<your-subdomain>.workers.dev`.
 
 ---
 
@@ -205,11 +226,18 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 
 | id | Bird | Provider | Model | Key | Priority |
 |----|------|----------|-------|-----|----------|
-| `shahin` | 🦅 Shāhīn | Groq (OpenAI-compat) | `llama-3.3-70b-versatile` | `GROQ_API_KEY` | 10 (fastest, first) |
+| `shahin` | 🦅 Groq | Groq (OpenAI-compat) | `llama-3.3-70b-versatile` | `GROQ_API_KEY` | 10 (fastest, first) |
 | `gemini` | 🔮 Gemini | Google Generative Language | `gemini-2.5-flash` | `GEMINI_API_KEY` | 15 (the one bird that is *not* OpenAI-shaped — see [ARCHITECTURE.md](docs/ARCHITECTURE.md) §1.1) |
-| `bulbul` | 🐦 Bulbul | HuggingFace Router | `meta-llama/Llama-3.3-70B-Instruct` | `HF_TOKEN` | 20 |
+| `bulbul` | 🐦 HuggingFace | HuggingFace Router | `meta-llama/Llama-3.3-70B-Instruct` | `HF_TOKEN` | 20 |
 | `openrouter` | 🌐 OpenRouter | OpenRouter (OpenAI-compat) | `openrouter/free` — a router over the `:free` pool, so the weights behind an answer can differ between calls | `OPENROUTER_API_KEY` | 25 |
-| `homa` | 🕊️ Homā | Cloudflare Workers AI | `@cf/meta/llama-3.2-3b-instruct` | *none* | 30 (**always present → zero-KYC guarantee**) |
+| `cerebras` | ⚡ Cerebras | Cerebras (OpenAI-compat) | `llama-3.3-70b` | `CEREBRAS_API_KEY` | 26 — **unclassified**, so `FREE_ONLY` refuses it until a cost row exists |
+| `nvidia` | 🟢 NVIDIA NIM | NVIDIA NIM (OpenAI-compat) | `meta/llama-3.3-70b-instruct` | `NVIDIA_API_KEY` | 27 — **unclassified**, same |
+| `aigateway` | ▲ Vercel AI Gateway | Vercel AI Gateway (OpenAI-compat) | `meta/llama-3.3-70b-instruct` | `VERCEL_AI_GATEWAY_API_KEY` | 28 — **unclassified**, same |
+| `homa` | 🕊️ Workers AI | Cloudflare Workers AI | `@cf/meta/llama-3.2-3b-instruct` | *none* | 30 (**always present → zero-KYC guarantee**) |
+
+Three of those eight carry no cost classification (`phoenix-core/src/capability-probes.ts`), which
+means `FREE_ONLY` treats "unknown" as "not free" and refuses them. That is deliberate — and it is
+exactly what task E3 exists to fix; the commit that added the birds did not add their cost rows.
 
 ---
 
@@ -227,14 +255,38 @@ A bird stays **dormant** until its key is present, so the gateway runs with **ze
 | `POST` | `/api/v1/schedule` | Schedule a prompt to run through the flock at or after `resumeAt`. Bounds are the execute bounds plus a 30-day horizon. |
 | `POST` | `/api/v1/telegram/webhook` | The Telegram chat gateway — verified by the shared webhook secret *before* the body is parsed. |
 | `POST` | `/api/v1/discord/webhook` | The Discord chat gateway — verified by Discord's Ed25519 signature *before* the body is parsed, then acknowledged inside Discord's 3-second deadline. |
+| `POST` | `/api/v1/setup/validate` | First-run wizard: check a provider key and get back the command to run. **Deliberately unauthenticated** — it holds no user data and is rate-limited to a fixed upstream URL. |
+| `POST` | `/api/v1/setup/check-mcp` | First-run wizard: does a named MCP endpoint complete an `initialize` handshake. Same deliberate posture. |
 | `GET`  | `/api/v1/platform/connectors` | The connector matrix — Cloudflare, Telegram, Discord, GitHub — with readiness derived from the live environment, and the tool surface. |
-| `GET`  | `/dashboard` | The unified control plane: flock, scheduler, quota, connectors, tools and chat. Unauthenticated, ships no secret, and bearer-gates its own calls. |
+| `GET`  | `/dashboard` | The unified control plane: setup, overview, flock, platforms, schedules, quota, tools/MCP and direct chat, plus a connections manager for `secret`/`mcp`/`data` targets. Unauthenticated, ships no secret, and bearer-gates its own calls. |
+| `GET`  | `/health` | `{status, timestamp}`. |
 | `GET`  | `/` | Health text. |
 
-Everything under `/api/*` except `/api/v1/flock/status` is bearer-gated and **fails
-closed**: with no `SIMORGH_API_KEY` configured the answer is `503 AUTH_NOT_CONFIGURED`,
-never an open route. The dashboard asks the operator for the key and keeps it in
-`localStorage`; the server never embeds it in the page.
+Everything under `/api/*` that reads or changes **user** data is bearer-gated and **fails closed**:
+with no `SIMORGH_API_KEY` configured the answer is `503 AUTH_NOT_CONFIGURED`, never an open route.
+The two exceptions are the `/api/v1/setup/*` routes above, which exist so a first run can check a key
+it does not have yet; they are rate-limited and reach a fixed upstream. `POST /mcp` is registered by
+the **Node** runtime only — the deployed Worker mounts no `/mcp`.
+
+Two per-user routes (`/api/v1/user/:userId/logs`, `/api/v1/context/:refId`) additionally require
+`SIMORGH_API_KEYS` — a token→userId map — so a caller can only read their own data. Without it they
+fail closed rather than serving an unverified user.
+
+### MCP tools
+
+`simorgh_*` means one core; `platform_*` means the whole fleet. They are different namespaces and must
+never be aliased — that collision was found and removed once already.
+
+| Tool | Namespace | Meaning |
+|---|---|---|
+| `simorgh_status` | one core | Health and flock state of a single instance (served at `POST /mcp` by the Node runtime) |
+| `simorgh_ask` | one core | Ask one instance — treated as an *action*, so its content is parsed, not just displayed |
+| `platform_targets` | fleet | Where cores can be deployed |
+| `platform_fleet` | fleet | Which instances are recorded, health and recent answers |
+| `platform_ask` | fleet | Ask the fleet, with failover |
+
+The dashboard asks the operator for the key and keeps it in `localStorage`; the server never embeds it
+in the page.
 
 ---
 
@@ -251,34 +303,37 @@ simorgh-platform/
 │   ├── scripts/            #   e2e-ask.ts — the CLI reaching a live core over REST *and* MCP
 │   └── test/               #   10 files, 147 tests (vitest.node.config.ts)
 ├── src/                    # the Cloudflare host — the Worker itself
-│   ├── index.ts            #   Hono app: routes, Intent Shield, Data Trust, Context Offload, cron
-│   ├── flock.ts            #   host adapter → engine routing, plus the FlockCoordinator DO
+│   ├── index.ts            #   Hono app: 16 route registrations, Intent Shield, Data Trust, Context Offload, cron
+│   ├── flock.ts            #   host adapter → engine routing, the 8-bird PROVIDERS catalog + FLOCK, the FlockCoordinator DO
 │   ├── agent.ts            #   host adapter → engine agent loop (tool registry, synthesis prompt)
-│   ├── agent-service.ts    #   host adapter → engine execute pipeline
+│   ├── agent-service.ts    #   host adapter → engine execute pipeline; builds workerPorts()
 │   ├── data-trust.ts       #   DataTrustVault DO: the transparency ledger (delegates to the engine)
 │   ├── health.ts           #   bird_health storage statements (upsert, cooldown, sweep)
 │   ├── models.ts           #   Model Registry (Auto-Wrapper): catalog + findModelBird
 │   ├── rate-limit.ts       #   host adapter → engine rate limiter
 │   ├── security.ts         #   host adapter → engine security
+│   ├── platform.ts         #   the connector matrix registry (live / needs-secret / not-wired)
+│   ├── setup.ts            #   first-run wizard: validate a provider key, emit the command
+│   ├── setup-mcp.ts        #   first-run wizard: probe an MCP endpoint's initialize handshake
 │   ├── telegram.ts         #   Telegram client + webhook (secret-token verified)
 │   ├── discord.ts          #   Discord client + Interactions Endpoint (Ed25519 signature verified)
 │   ├── message-chunks.ts   #   the shared outbound splitter both gateways use
-│   └── dashboard.ts        #   Self-contained Mission Control HTML (inline CSS/JS, no build)
-├── test/                   # the workerd suite (vitest.config.ts) — see Testing section for current counts
+│   └── dashboard.ts        #   Self-contained Mission Control HTML: app shell + the universal connections manager
+├── test/                   # the workerd suite (vitest.config.ts) — 17 files; see Testing section for current counts
 ├── packages/               # Go workspace modules
 │   ├── config/             #   provider config load/validate
 │   ├── crypto/             #   AES-256-GCM sealing, argon2id key derivation
 │   ├── ledger/             #   usage ledger
-│   └── providers/          #   symmetric adapter interface + latency/health registry
+│   └── providers/          #   symmetric adapter interface + latency/health registry (+ providers/groq)
 ├── gateway/                # Go: the self-hosted gateway binary
 ├── bot/  tools/            # Go: companions
-├── docs/prd/               # PRD.md (17 epics / 78 stories) + EPICS_AND_STORIES.md
+├── docs/prd/               # PRD.md (historical planning, amended by ADR-0008) + EPICS_AND_STORIES.md
 ├── docs/todo/              # OKF v0.2 implementation tasks and acceptance criteria
 ├── worker-configuration.d.ts  # GENERATED by `wrangler types` — do not edit
 ├── env.d.ts                # Hand-written: the secrets `wrangler types` cannot see
 ├── go.work                 # Go workspace root (8 modules)
 ├── tsconfig.json           # TypeScript 7 (tsgo) — strict, noEmit
-└── wrangler.toml           # bindings: AI, KV(CONTEXT_STORE), DOs, cron trigger
+└── wrangler.toml           # bindings: AI, KV(CONTEXT_STORE), DOs, cron, CORS_ORIGINS
 ```
 
 ### Types

@@ -34,6 +34,12 @@ sources:
 A task must say whether it completed, failed, is delayed or exhausted the flock. A retry must not let
 an older claim overwrite a newer attempt, and uncertainty about external effects must be recorded.
 
+**Verified 2026-10-12.** EXISTS — compare-and-set claim, lease recovery, alarm re-arm, and terminal rows
+that are never re-claimed (`phoenix-core/src/scheduled.ts`, `phoenix-core/test/scheduled.test.ts`,
+`test/durable-scheduled.test.ts`). MISSING — `finishTask` does no attempt/fencing check, and a
+`flock_exhausted` flight is persisted as `state='done'` (`src/flock.ts`), so the truthful-outcome
+criterion is unmet.
+
 ## Work
 
 - Use the existing attempt count as a fencing token when finalizing or failing a claimed task.

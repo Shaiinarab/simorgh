@@ -36,6 +36,11 @@ This is the security gate. Resolve the principal from the credential, not from a
 the request. Do not enable multi-user autonomous execution until the acceptance checks pass on both
 Workers and Node.
 
+**Verified 2026-10-12.** EXISTS — credential→principal resolution in `phoenix-core/src/security.ts`,
+enforced by `requireIdentity` on `/api/v1/user/:userId/logs` and `/api/v1/context/:refId` on both hosts.
+MISSING — `/api/v1/agent/execute` still takes `X-Simorgh-User-Id` from the request, and the rate-limit
+key and ledger row inherit it.
+
 ## Work
 
 - Resolve the authenticated principal from the credential/key map.

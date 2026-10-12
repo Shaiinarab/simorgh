@@ -37,6 +37,11 @@ sources:
 A provider catalogue must describe verified options, not turn community claims into permanent facts.
 Use the existing capability probes and cost/quota model; discover options instead of chasing provider count.
 
+**Verified 2026-10-12.** EXISTS — capability probes and the FREE_ONLY cost gate on both hosts
+(`phoenix-core/src/capabilities.ts`, `phoenix-core/src/capability-probes.ts`). MISSING — no normalized
+catalogue: no quota windows/reset, rate-limit state, region, privacy/training terms, or
+source/last-verified fields.
+
 ## Work
 
 - Derive a normalized catalog from the existing provider and capability abstractions.

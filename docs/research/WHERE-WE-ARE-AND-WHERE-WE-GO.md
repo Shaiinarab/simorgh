@@ -25,6 +25,9 @@ sources:
 
 # Where Simorgh is, and where it can go — a decision-grade scan
 
+> This is a dated record (2026-10-08) whose numbers are superseded; current state lives in
+> [`docs/STATE-OF-PROJECT.md`](../STATE-OF-PROJECT.md).
+
 - **Written:** 2026-10-08 · **Author:** LongCat 2.5 Preview Free session (lead), with mcp-fleet / Firecrawl
 - **Scope:** "what is the app now", "what is deployable today", "what should it become given free-tier
   constraints", "does it need a Rust core"

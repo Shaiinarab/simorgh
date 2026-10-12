@@ -34,6 +34,10 @@ sources:
 Ship the smallest useful knowledge surface before connectors or a large UI: ingest, get, search, and
 delete a document with source/chunk provenance.
 
+**Verified 2026-10-12.** NOT STARTED — no RetrievalPort in `phoenix-core/src/ports.ts`, no `/knowledge`
+routes on either host, no namespace concept, no memory port; the tool list is still `search_web` +
+`get_server_time`.
+
 ## Work
 
 - Add POST /knowledge, GET /knowledge/:id and POST /knowledge/search, plus a delete operation needed

@@ -6,6 +6,10 @@
 through quota admission and usage reconciliation. Only after one durable task is correct should we build
 retrieval, knowledge, memory, the first swarm workflow, and current-revision MCP.
 
+A3 is not wholly unstarted: its credential→principal primitives are already wired on the read routes, and
+what is next is the gate — execute and schedule identity, which still take `X-Simorgh-User-Id` from the
+request.
+
 **Order:** A3 → B1 → B2 → B3 → B4 → C1 → C2 → C3 → C4 → D1 → E1 → E2 → E3.
 
 | Order | Task | Work status | Depends on |
@@ -21,7 +25,7 @@ retrieval, knowledge, memory, the first swarm workflow, and current-revision MCP
 | 9 | [C4 — Layered memory](C4-layered-memory.md) | queued | C3 |
 | 10 | [D1 — Research digest](D1-research-digest.md) | queued | B4, C2, C4 |
 | 11 | [E1 — Current-revision MCP](E1-mcp-current-revision.md) | queued | B1, D1 |
-| 12 | [E2 — Provider discovery](E2-provider-discovery.md) | queued | B2, capabilities |
+| 12 | [E2 — Provider discovery](E2-provider-discovery.md) | queued | B2, C1 |
 | 13 | [E3 — Evidence-gated validation birds](E3-validation-birds.md) | later | E2 |
 
 ## Working rules

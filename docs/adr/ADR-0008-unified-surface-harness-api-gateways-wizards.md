@@ -73,7 +73,7 @@ the October audit mandates for birds, applied to deploy targets.
 ## 2. The four doors — each an instance of a pattern that already exists
 
 The proof that this is a port problem, not a greenfield one, is in the tree: **Telegram is
-already a fully wired chat gateway** (`src/telegram.ts`, 263 lines: update parsing, 4096-char
+already a fully wired chat gateway** (`src/telegram.ts`: update parsing, 4096-char
 splitting, constant-time webhook-secret verification) declared as a connector in
 `src/platform.ts` and mounted at `POST /api/v1/telegram/webhook` in `src/index.ts`.
 

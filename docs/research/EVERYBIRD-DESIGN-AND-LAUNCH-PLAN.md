@@ -22,6 +22,9 @@ sources:
 
 # Simorgh — the "everybird" design and the 11 October launch
 
+> This is a dated record (2026-10-08); current state lives in
+> [`docs/STATE-OF-PROJECT.md`](../STATE-OF-PROJECT.md).
+
 - **Written:** 2026-10-08 · **Author:** LongCat 2.5 Preview Free session (lead)
 - **Trigger:** Shai set three constraints — (1) public launch **11 Oct**, his birthday; (2) 1M users is not
   the current goal, ship first then build the revolution; (3) Cloudflare is *optional*, everything must

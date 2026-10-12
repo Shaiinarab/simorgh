@@ -35,6 +35,10 @@ sources:
 The scheduler cannot plan accurately if it never learns what each call consumed. Record observed usage
 at the real provider boundary, preserving unknowns instead of fabricating zeros.
 
+**Verified 2026-10-12.** EXISTS — `recordUsage()` with reset-roll arithmetic. MISSING — no production
+caller; after a flight only `bird_health` is written back, not quota (`src/flock.ts`
+`recordObservation`).
+
 ## Work
 
 - After each provider response, reconcile request count, token usage and latency into the existing

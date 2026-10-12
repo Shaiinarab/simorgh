@@ -57,7 +57,7 @@ Every file below exists and is in the build. This is the map to reach for before
 | File | Owns |
 |------|------|
 | `ports.ts` | Every port the engine declares, and nowhere else: `SqlPort`, `FetchLike`, `HttpLike`, `PhoenixPorts`, `ContextStorePort`, `LedgerPort`, `WorkersAiPort`, plus their row/option types. |
-| `provider.ts` | The `Provider` contract plus factories (`openAiCompatibleProvider`, `geminiProvider`, `workersAiProvider`) — one per **wire shape**, not one per vendor |
+| `provider.ts` | The `Provider` contract plus factories (`openAiCompatibleProvider`, `geminiProvider`, `workersAiProvider`, `autoRouterProvider`) — one per **wire shape**, not one per vendor |
 | `flock.ts` | `flyFlock()`: priority routing, dormant skip, cooldowns, fail-through, exhaustion, and `describeFlock()` status assembly |
 | `agent.ts` | The agent loop: registry, argument extraction, per-tool failure capture, truncation, the synthesis prompt, the iteration budget |
 | `tools.ts` | `createToolExecutor()` — what each allow-listed tool *does* (the request, the parsing, the failure text) |
@@ -98,7 +98,7 @@ Every file below exists and is in the build. This is the map to reach for before
 | `doctor.ts` | `simorgh doctor`, 12 tests |
 | `index.ts` | The barrel |
 
-**Root `src/`** — the Cloudflare host: `index.ts` (Hono routes, 14 registrations), `flock.ts`, `data-trust.ts`, `agent-service.ts`, `telegram.ts`, `discord.ts`, `message-chunks.ts`, `platform.ts`, `dashboard.ts` (`GET /dashboard`), and the five host adapters (`health.ts`, `rate-limit.ts`, `models.ts`, `agent.ts`, `security.ts`).
+**Root `src/`** — the Cloudflare host: `index.ts` (Hono app, **16 route registrations**), `flock.ts`, `data-trust.ts`, `agent-service.ts`, `telegram.ts`, `discord.ts`, `message-chunks.ts`, `platform.ts`, `setup.ts`, `setup-mcp.ts`, `dashboard.ts` (`GET /dashboard` — an app shell plus the universal connections manager), and the five host adapters (`health.ts`, `rate-limit.ts`, `models.ts`, `agent.ts`, `security.ts`).
 
 ---
 
@@ -235,10 +235,10 @@ Two test suites, deliberately separate.
 
 | Command | Config | What runs | What it catches | What it cannot catch |
 |---------|--------|-----------|-----------------|----------------------|
-| `upm run test:workers` (canonical; legacy spelling `npm run test:workers`) | `vitest.config.ts` (via `upm test` → `test:workers` → `vitest run`) | `test/**/*.test.ts` — the Workers app suite, 14 files | Runtime behavior of the app in workerd: Durable Object RPC, KV reads/writes, cron handler shape, HTTP route contracts, the full request path through Hono. Uses real `cloudflare:workers` bindings from `wrangler.toml`. | Nothing about the engine in isolation — the Workers tests import the app, not the core directly. |
+| `upm run test:workers` (canonical; legacy spelling `npm run test:workers`) | `vitest.config.ts` (via `upm test` → `test:workers` → `vitest run`) | `test/**/*.test.ts` — the Workers app suite, 17 files | Runtime behavior of the app in workerd: Durable Object RPC, KV reads/writes, cron handler shape, HTTP route contracts, the full request path through Hono. Uses real `cloudflare:workers` bindings from `wrangler.toml`. | Nothing about the engine in isolation — the Workers tests import the app, not the core directly. |
 | `upm run test:node` (canonical; legacy spelling `npm run test:node`) | `vitest.node.config.ts` (via `upm test` → `test:node` → `vitest run --config vitest.node.config.ts`) | `phoenix-core/test/**/*.test.ts` + `simorgh-platform/test/**/*.test.ts` (engine + platform unit suites) | Engine correctness in isolation: `flyFlock` routing, agent tool loop, request validation, SQL via `SqlPort` (real SQLite in-memory), rate limiting, boundary invariants. No runtime, no network, no Cloudflare account. | Nothing about the Workers runtime — no `cloudflare:workers` resolution, no Durable Objects, no KV, no AI binding. |
 
-Why separate? `simorgh-platform/test/` imports `cloudflare:workers` (DurableObject) and uses `@cloudflare/vitest-pool-workers` with `remoteBindings: false`. The engine tests must run on plain Node to prove portability — if the engine ever picks up a `cloudflare:` import or a global binding, the Node suite stops resolving and goes red, while the workers suite keeps passing. That signal is the point. `upm test` runs both, in order; the workers suite runs first (it is listed first in `package.json`). As of 2026-10-10 the counts are **138 passed / 14 files** (workers) and **504 passed / 28 files** (node) on Node 26.7.0.
+Why separate? `simorgh-platform/test/` imports `cloudflare:workers` (DurableObject) and uses `@cloudflare/vitest-pool-workers` with `remoteBindings: false`. The engine tests must run on plain Node to prove portability — if the engine ever picks up a `cloudflare:` import or a global binding, the Node suite stops resolving and goes red, while the workers suite keeps passing. That signal is the point. `upm test` runs both, in order; the workers suite runs first (it is listed first in `package.json`). As of 2026-10-12 the counts are **178 passed / 17 files** (workers) and **504 passed / 28 files** (node), measured on Node 26.11.1 — 45 test files in total.
 
 Both suites share `phoenix-core/test/boundary.test.ts`, which runs under the Node config and asserts every portability invariant in section 5.
 

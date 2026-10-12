@@ -37,6 +37,11 @@ Connect the existing planner to production. No provider call should start until 
 A delayed task must make zero provider calls. Optimize legitimate documented free capacity; do not
 circumvent provider terms, hard limits or account enforcement.
 
+**Verified 2026-10-12.** EXISTS — `planQuotaRun`/`declareQuota` in `phoenix-core/src/quota.ts`, pure and
+well tested. MISSING — zero production callers: no host declares a quota row, and four of the eight
+roster birds are unclassified so FREE_ONLY would refuse them
+(`phoenix-core/src/capability-probes.ts`).
+
 ## Work
 
 - Before immediate, scheduled, and each admitted swarm execution: load current quota states and call

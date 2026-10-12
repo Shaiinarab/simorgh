@@ -102,9 +102,17 @@ cases are pinned in `phoenix-core/test/quota.test.ts`.
 - The capacity state is only as good as the declared limits. Free tiers publish them unevenly and
   change them without notice, so this needs a discovery story (§ next slice) rather than a
   hand-maintained table forever.
-- Nothing is scheduled *yet*. `planQuotaRun` returns a decision; the caller that turns
+- ~~Nothing is scheduled *yet*. `planQuotaRun` returns a decision; the caller that turns
   `action: "delay"` into a Durable Object alarm is the next slice, and it is deliberately not in this
-  one.
+  one.~~ **Corrected 2026-10-12 — scheduling now exists.** `phoenix-core/src/scheduled.ts` owns the
+  durable primitives (`scheduleTask`, `claimTask`, `nextWakeAt`, `finishTask`/`failTask`) and
+  `src/flock.ts` carries the Durable Object binding: `scheduleDelayed` writes the row and re-arms,
+  `setAlarm(next)` (or `deleteAlarm()` when nothing is outstanding) points the alarm at whatever the
+  table needs next, and `alarm()` claims everything due and flies each prompt through the flock once.
+  `POST /api/v1/schedule` (`src/index.ts`) is the host entry point. The `action: "delay"` verdict has
+  a consumer too: `phoenix-core/src/swarm.ts` folds it into a placement `resumeAt`. What the alarm
+  does not do is *decide* to wait — the resume time is still supplied by a caller or by the swarm
+  placement, never inferred — and the limit-discovery story above remains the next slice.
 
 **What it prevents**
 
@@ -117,12 +125,12 @@ cases are pinned in `phoenix-core/test/quota.test.ts`.
 
 The pure functions take plain values and return plain values. Swapping the *storage* means
 reimplementing four statements against a different `SqlPort`; swaping the *policy* means editing
-`planQuotaRun` alone, with 27 tests that pin the behaviour and no host to touch. The table can also
+`planQuotaRun` alone, with 38 tests that pin the behaviour and no host to touch. The table can also
 be dropped in favour of OmniRoute's without touching the policy, because the policy never sees SQL.
 
 ## Verification
 
-`phoenix-core/test/quota.test.ts` — 27 tests, all on the Node suite, no runtime bindings:
+`phoenix-core/test/quota.test.ts` — 38 tests, all on the Node suite, no runtime bindings:
 
 - the §11 worked example, verbatim, as an executable specification (delay 4 minutes onto B, then run
   on B after its reset);

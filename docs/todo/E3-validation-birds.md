@@ -32,6 +32,11 @@ sources:
 Do not add birds for a round number. Add at most Gemini and OpenRouter free models to prove that the
 discovery/cost/quota contract works end-to-end.
 
+**Verified 2026-10-12.** The three birds added 2026-10-12 (cerebras, nvidia, aigateway in `src/flock.ts`)
+carry NO cost classification, so FREE_ONLY refuses them although the commit calls them "three free
+birds"; `docs/research/Simorgh Deep Research Audit (October 2026).md` records that Cerebras' free trial
+now requires a verified payment method.
+
 ## Acceptance
 
 - Each candidate has a dated official source for cost, allowed use, limits and privacy/training terms.

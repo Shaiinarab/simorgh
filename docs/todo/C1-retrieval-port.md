@@ -32,6 +32,10 @@ sources:
 Retrieval is the largest product gap. Add one runtime-agnostic port and two adapters: a real local
 lexical implementation and a conditional Cloudflare AI Search adapter. Do not make the core Cloudflare-only.
 
+**Verified 2026-10-12.** NOT STARTED — no RetrievalPort in `phoenix-core/src/ports.ts`, no `/knowledge`
+routes on either host, no namespace concept, no memory port; the tool list is still `search_web` +
+`get_server_time`.
+
 ## Work
 
 - Declare RetrievalPort in phoenix-core's existing ports module. The core must not import a Cloudflare

@@ -38,6 +38,10 @@ The server declares revision 2026-07-28 but still requires the older initialize 
 Mcp-Session-Id. Support the current stateless path, and preserve older-client behavior only if explicitly
 tested. Do not claim conformance without a real client check.
 
+**Verified 2026-10-12.** EXISTS — two MCP servers, both declaring revision 2026-07-28
+(`simorgh-platform/src/connectors/mcp.ts`; the core MCP is served at POST /mcp on the Node host only).
+MISSING — no stateless path, no task-shaped tools, and no /mcp route on the Workers host.
+
 ## Work
 
 - Inspect the exact protocol shape from the official 2026-07-28 changelog before editing.

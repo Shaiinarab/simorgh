@@ -32,6 +32,12 @@ sources:
 Unify the existing Task, scheduled-task row and execution attempt without creating a second database or
 scheduler. A scheduled task must run the agent tool loop again; it must not replay only a raw flock call.
 
+**Verified 2026-10-12.** EXISTS — the engine `task` graph (`phoenix-core/src/tasks.ts`) and the
+`scheduled_task` state machine (`phoenix-core/src/scheduled.ts`), both tested. MISSING — no host creates
+the `task` table; the DO alarm (`src/flock.ts` `alarm()`) calls `runFlock(prompt, _tools)`, which
+accepts the tools argument and discards it;
+the Node host has no scheduled path.
+
 ## Work
 
 - Preserve the distinction: Task means what should happen; Execution means one attempt; Schedule means

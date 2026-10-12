@@ -54,7 +54,7 @@ rediscovered.
 | Wizard as a **target-matrix front-end**: validate tokens live against the provider, write secrets to a generated repo, dispatch the deploy, probe the live result | the deploy wizard | `simorgh-platform/src/deploy/wizard/*` — CLI and GitHub-Pages twins over the same planner (Epic 16) | **M** |
 | **Self-healing supervisor**: exponential backoff on restart, never a crash-loop hammer | the supervisor process | `phoenix-core/src/scheduled.ts` | **S** |
 | **Hourly state backup** to a private remote store, restore on boot | the hourly backup job | `MemoryStore` snapshot transports — Telegram `sendDocument`, Google Drive (Epic 15); snapshots stay off the answer path | **M** |
-| One OpenAI-compatible door among several | its API layer | ADR-0008 Door 2 — already the shape of `/api/v1/*`; no port needed | — |
+| One OpenAI-compatible door among several | its API layer | ADR-0008 Door 2 — but the door is not yet OpenAI-shaped: `/api/v1/*` is a Simorgh-specific REST shape (`/api/v1/agent/execute` is not OpenAI-compatible), and the only surface in the repo that speaks `/v1/chat/completions` is the Go gateway. An OpenAI-dialect door is a host adapter on Door 2, not the "no port needed" this row first claimed. | — |
 
 ## 4. What Simorgh refuses
 

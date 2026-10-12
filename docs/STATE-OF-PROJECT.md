@@ -8,10 +8,10 @@ tags:
   - architecture
   - okf
 generated:
-  by: "openai/gpt-6"
-  at: "2026-10-10T15:05:00Z"
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
 status: "stable"
-stale_after: "2026-10-12T00:00:00Z"
+stale_after: "2026-11-12T00:00:00Z"
 sources:
   - id: roadmap-spine
     resource: "ROADMAP-SPINE.md"
@@ -22,18 +22,39 @@ sources:
   - id: continuation-review
     resource: "research/CONTINUATION-REVIEW-2026-10-10.md"
     title: "Continuation review, October 10 2026"
+  - id: worker-entry
+    resource: "../src/index.ts"
+    title: "Workers host route table"
+  - id: node-host
+    resource: "../simorgh-platform/src/runtimes/node.ts"
+    title: "Node host route table"
+  - id: flock-catalog
+    resource: "../src/flock.ts"
+    title: "The bird catalog and the FlockCoordinator DO"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-12T15:20:00Z"
 ---
 # Simorgh — project scope and current state
 
-> **TL;DR:** latest pinned repository snapshot is `main` at `9687eb3`. The committed baseline reports
-> 138 workerd and 504 Node tests; this docs pass did not rerun them. The remaining execution blockers are
-> AUTH-004 principal ownership, quota admission/usage integration, then retrieval and memory. Follow
+> **TL;DR:** repository snapshot is `main` at `8e3bfcc` (2026-10-12), verified by running both suites in
+> that session: **178 workerd (17 files) and 504 Node (28 files) green**, typecheck exit 0 on Node
+> 26.11.1, Go tests pass across all 8 modules. The remaining execution blockers are AUTH-004 principal
+> ownership, quota admission/usage integration, then retrieval and memory. Follow
 > [the OKF TODO queue](todo/index.md); this file's older sections are historical evidence where marked.
 
-**Written:** 2026-09-22 · **Updated:** 2026-10-10 · **Canonical plan:** [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md).
-**Status:** repository-reported baseline at `9687eb3` is 138 Workers tests + 504 Node tests, with typecheck
-exit 0; this docs migration did not rerun the suites. The Go baseline is repository-reported as 6 modules
-with tests and 3 without tests. Earlier sections preserve dated context, not current instructions.
+**Written:** 2026-09-22 · **Updated:** 2026-10-12 · **Canonical plan:** [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md).
+**Status:** baseline at `8e3bfcc`, suites **measured** in the 2026-10-12 documentation pass (not
+repository-reported): workers 178 passed / 17 files, Node 504 passed / 28 files, 45 test files in
+total, typecheck exit 0. Go: 8 modules, 17 files, build/vet/test green. Earlier sections preserve
+dated context, not current instructions.
+
+> **What landed since this file was last updated (2026-10-10 → 2026-10-12, 9 commits):** the Discord
+> chat gateway, the first-run setup wizard (`POST /api/v1/setup/validate`, `.../check-mcp`), the
+> dashboard's app shell and universal connections manager, the worker rename to `simorgh`, the
+> deploy-on-push workflow, and three more free birds (the flock went 5 → 8; one is a Node-host Ollama
+> option). Where a later section of this file still describes the five-bird flock or the single-CI-workflow
+> world, it is marked stale and left for context — the numbers above are the current ones.
 
 > **Read this as a claim set, not a fact set.** Every number and path below was true when written and
 > every one is re-derivable with the commands given. If this file and the code disagree, **the code
@@ -51,8 +72,8 @@ with tests and 3 without tests. Earlier sections preserve dated context, not cur
 
 | Fact | Value |
 |---|---|
-| Public repository branch | `main` — HEAD `9687eb3` (2026-10-10) |
-| Local worktree / remote divergence | Not inspected in this hosted documentation update |
+| Public repository branch | `main` — HEAD `8e3bfcc` (2026-10-12), level with `origin/main` |
+| Local worktree / remote divergence | Inspected 2026-10-12: no commits either side of `origin/main` |
 | Historical branch details | Retained below only as dated context; not an active task |
 
 > The prose below was written when the branch was much younger. Some of it still describes reality
@@ -126,9 +147,9 @@ not `simorgh-platform/test/**` — the latter is part of the Node suite.
 | # | Claim | Command | Result |
 |---|---|---|---|
 | 1 | Types pass across all three configs | `npm run typecheck` | clean (0 errors) |
-| 2 | The Workers app works in workerd | `npm run test:workers` | **138 passed** (14 files) — current as of HEAD |
-| 3 | The engine + platform pass on plain Node | `npm run test:node` | **504 passed** (28 files) — current as of HEAD |
-| 4 | The platform reaches a live core **over REST and MCP**, and the answers match | `npm run e2e:ask` | **10/10 checks** |
+| 2 | The Workers app works in workerd | `npm run test:workers` | **178 passed** (17 files) — measured 2026-10-12 |
+| 3 | The engine + platform pass on plain Node | `npm run test:node` | **504 passed** (28 files) — measured 2026-10-12 |
+| 4 | The platform reaches a live core **over REST and MCP**, and the answers match | `npm run e2e:ask` | **10/10 checks** (steps 1–9; step 8 records `status` and `doctor` separately) |
 | 5 | A real core boots **unbuilt** and answers | `npm run simorgh -- smoke` | 5/5 checks (health, flock status, auth-fails-closed, execute-degrades-honestly, mcp-initialize) |
 | 6 | The engine runs on a different runtime | `freebuff2 bash -lc 'cd … && npx vitest run --config vitest.node.config.ts'` | **202 passed on Node 22.23** (host is Node 26.7) |
 | 7 | No build step is needed to run the thing | `node simorgh-platform/src/cli.ts targets` | works |
@@ -151,9 +172,9 @@ not `simorgh-platform/test/**` — the latter is part of the Node suite.
 Platform (9 files, 113): `targets` 17 · `preflight` 16 · `connectors` 15 · `integration` 13 ·
 `mcp-server` 13 · `doctor` 12 · `deploy` 11 · `fleet` 10 · `conformance` 6.
 
-> **Why keep the stale numbers?** They let you spot the delta (`93 → 138`, `261 → 473`) in one glance,
-> which is exactly what the stale marker is for. Current counts are at the bottom of §11.5 and were
-> re-verified this session: workers **138**, node **473**.
+> **Why keep the stale numbers?** They let you see growth (`93 → 138 → 178`, `261 → 473 → 504`) in
+> one glance, which is what the stale marker is for. Current counts are at the bottom of §11.5 and were
+> measured again on 2026-10-12: workers **178 / 17 files**, node **504 / 28 files**, 45 test files total.
 
 A collection-time failure is *not* a normal failure: treat it as a hard stop. `phoenix-core/test/boundary.test.ts`
 (5 tests) is the guard that keeps the engine portable, and it fails on a *collection* error, which is why the
@@ -172,16 +193,18 @@ totals above are asserted per file rather than by intent.
 | Rate limiting | ✅ | ✅ | ✅ | Per-user SQL counter in a Durable Object |
 | Persistence | ✅ | ✅ | ✅ | SQLite both sides: DO `SqlStorage` on the edge, `node:sqlite` self-hosted |
 | Transparency ledger | ✅ | ✅ | ✅ | Append-only, written *before* the flight. One implementation, two hosts |
-| Telegram | ✅ | ✅ | ✅ | Client + webhook; `src/telegram.ts:116` reads `X-Telegram-Bot-Api-Secret-Token`, and `test/telegram.test.ts` covers it (4 tests) |
-| Discord | ✅ | ✅ | ✅ | The second chat gateway (ADR-0008 door 3). Verifies Ed25519 over `timestamp + raw body` before parsing, defers inside Discord's 3-second deadline and edits the response afterwards; `test/discord.test.ts` (20 tests) includes a real keypair generated in workerd and three negative controls |
-| Dashboard | ✅ | ✅ | ✅ | `src/dashboard.ts` rendered by `GET /dashboard` (`src/index.ts:195`), asserted by `test/http.test.ts` (25 tests) |
+| Telegram | ✅ | ✅ | ✅ | Client + webhook; `src/telegram.ts:107` reads `X-Telegram-Bot-Api-Secret-Token` **before parsing the body**. `test/telegram.test.ts` (4 tests) covers only `parseTelegramUpdate`/`splitTelegramMessage` — the webhook path itself is still uncovered (see [QUALITY.md](QUALITY.md)) |
+| Discord | ✅ | ✅ | ✅ | The second chat gateway (ADR-0008 door 3). Verifies Ed25519 over `timestamp + raw body` before parsing, defers inside Discord's 3-second deadline and edits the response afterwards; `test/discord.test.ts` (21 tests) includes a real keypair generated in workerd and three negative controls |
+| Dashboard | ✅ | ✅ | ✅ | `src/dashboard.ts` rendered by `GET /dashboard`, asserted by `test/http.test.ts` (25 tests). Now an app shell (setup · overview · flock · platforms · schedules · quota · tools/MCP · chat) with a universal connections manager for `secret` / `mcp` / `data` targets |
+| First-run setup wizard | ✅ | ✅ | ✅ | `POST /api/v1/setup/validate` + `POST /api/v1/setup/check-mcp` (src/setup.ts, src/setup-mcp.ts) — deliberately unauthenticated, rate-limited, fixed upstream |
 | Cron | ✅ | ✅ | ✅ | Stale-health sweep |
 | Multi-target deploy | ✅ | ✅ | ✅ | 3 real targets (`cloudflare-workers`, `node`, `byo-endpoint`), manual mode for all three; `cli` for `cloudflare-workers` and `node` only |
 | Deploy preflight gate | ✅ | ✅ | ✅ | 33 tests; verified live against a real core *and* an impostor on a port |
 | Platform MCP server | ✅ | ✅ | ✅ | 13 tests; session-enforced, MCP-spec-correct tool errors |
-| Connector conformance kit | ✅ | ✅ | ✅ | 7 conformance checks (`conformance.test.ts`: 13 tests); runs both connectors against one double and fails a deliberately broken one |
+| Connector conformance kit | ✅ | ✅ | ✅ | 7 conformance checks (`conformance.test.ts`: **6** tests); runs both connectors against one double and fails a deliberately broken one |
 | Fleet + failover across cores | ✅ | ✅ | ✅ | `Fleet.ask` reports *every* failure, not just the last |
 | `doctor` (diagnose a broken fleet) | ✅ | ✅ | ✅ | 12 tests; stable codes, never throws on an unhealthy fleet |
+| Deploy on push to main | ✅ | ✅ | ⚠️ | `.github/workflows/deploy.yml` runs `wrangler deploy` gated on the CI run, then probes the deployed URL. No test asserts the workflow's gate |
 | Observability | ⚠️ | partial | partial | Request IDs + structured errors. No metrics/tracing. |
 | GitHub integration | ❌ | ❌ | ❌ | Not started |
 | Vercel adapter | ❌ | ❌ | ❌ | Not started |
@@ -249,11 +272,12 @@ Decision recorded in [`adr/ADR-0001-go-workspace-role.md`](adr/ADR-0001-go-works
 ## 5. What is not done
 
 Product: no Vercel adapter, no GitHub capability, no Pages UI.
-Hardening: no metrics/tracing, no dependency-vulnerability gate in CI (`npm audit` exists as the
-`security:check` script but **is not called by CI**), no secrets-scanner.
-Process: PR #1 (`production-readiness-v0-3`, the ChatGPT push) is still **open** against `main` — and
-this branch's base commit `e0053fc` **is** that PR's head, so this branch is stacked directly on top of
-it. A local `main` exists at `2dca0dd`, one commit ahead of `origin/main`.
+Hardening: **no metrics/tracing** — the only signals are request IDs, structured error logs, rate-limit
+headers and the append-only ledger. (A CI security gate *does* exist now: `.github/workflows/ci.yml`
+runs a dedicated Security job calling `scripts/security-scan.sh`, which is both a secrets scanner and a
+dependency audit, and fails closed. An earlier version of this section said neither existed.)
+Process: `production-readiness-v0-3` (PR #1) was merged and `origin/main` is now the default; the
+stacked-branch risk this section was written to warn about is gone.
 
 ### 5.1 A real defect found and fixed during this pass, as an example of what to look for
 
@@ -483,16 +507,17 @@ paths now agree. Worth noting as a pattern: the test that caught this was not wr
 | Check | Result |
 |---|---|
 | `npm run typecheck` | clean, 3 configs |
-| `npm run test:workers` | **138 passed**, 14 files |
+| `npm run test:workers` | **178 passed**, 17 files |
 | `npm run test:node` | **504 passed**, 28 files |
 | `npm run platform:smoke` | **5/5** |
 | `npm run e2e:ask` | **10/10** |
 | `go build` / `go vet` / `go test` | green, 6 packages |
 | `npm run security:scan` | PASS — `.dev.vars` present but never tracked |
 
-The per-file composition in §3.1 is **stale** and is left as written 2026-09-22 rather than
-re-derived: it described a tree three commits old, and the totals above are the ones a regression
-should be measured against. Re-derive the per-file numbers if a specific file's count is what you need.
+§11.5 was measured again on **2026-10-12** (both suites actually run). The per-file composition in §3.1
+is **stale** and is left as written 2026-09-22 rather than re-derived: it described a tree several
+commits old, and the totals above are the ones a regression should be measured against. Re-derive the
+per-file numbers if a specific file's count is what you need.
 
 ### 11.6 The capability matrix is wired, so the pattern is now broken once in each direction
 
@@ -504,11 +529,17 @@ which providers the deployment holds keys for.
 A live core, on a **host difference four documents describe and no command previously showed**:
 
 ```
-GET /api/v1/capabilities  (node host, real defaultProviders, 3 keys set)
+GET /api/v1/capabilities  (node host, real defaultProviders, keys set)
   inference   ok       3/4 available: shahin, gemini, bulbul
   embeddings  DEGRADED 0/1 available: (none)  [no_adapter_registered]
   ... 4 of 5 capabilities degraded
 ```
+
+That payload is the **2026-10-09** capture, kept for the shape it demonstrates. What has changed since:
+the roster is 8 named birds plus Homā on the Workers host (5 → 8 on 2026-10-12), so the denominator in
+a live dump is larger — and three of the eight (`cerebras`, `nvidia`, `aigateway`) carry no cost
+classification, so `FREE_ONLY` refuses them and they show as `cost_unknown_in_free_only` rather than as
+available. Take the current payload with `curl` against a real host rather than trusting this block.
 
 **Four adapters, not five, and that is correct** — the Node roster is the Workers catalog *minus Homā*,
 because Homā is a Cloudflare binding with no Node equivalent. With no keys at all but `OLLAMA_BASE_URL`
@@ -526,8 +557,8 @@ Track the resolution in [provider discovery](todo/E2-provider-discovery.md) and 
 ## 12. Truth reconciliation — 2026-10-09 (§0 of `ROADMAP-SPINE.md` is the canonical ledger)
 
 Everything in §1–§11 above was written against older branch states; per this file's own policy the
-prose is kept, and this section records what changed and where truth now lives. **§1's branch table is
-stale**: the public repository snapshot used for this update is `main` at `9687eb3`.
+prose is kept, and this section records what changed and where truth now lives. **§1's branch table was
+stale when this section was written** (`9687eb3`); it now reads `8e3bfcc`, level with `origin/main`.
 
 ### 12.1 The roadmap changed shape: from feature list to vertical spine
 
@@ -546,7 +577,7 @@ Retrieval / Memory / Autonomous loop **next**; Connectors / UI **later**.
 | `fnm`-managed Node | **v22.23.3 default** (`.nvmrc`=22), **v26.11.1** available for eval slices |
 | `upm install --frozen-lockfile` | ✅ 93 pkgs |
 | `upm run typecheck` (tsgo ×3 projects) | ✅ exit 0 |
-| `upm run test:workers` | ✅ 14 files / **138 passed** |
+| `upm run test:workers` | ✅ 17 files / **178 passed** |
 | `upm run test:node` | ✅ 28 files / **504 passed** (was 473 — swarm/session/capability suites grew) |
 | Go workspace on **go1.26.0** | ✅ all modules build/vet/test clean (`./...` must be run per-module or from a module dir; root repo dir is not itself a Go module) |
 | npm/Bun/pnpm remnants in docs & scripts | ✅ swept — instructions now say `upm run …` / `upx …`; historical evidence lines keep their original commands, labelled |

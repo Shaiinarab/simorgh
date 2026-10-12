@@ -38,6 +38,9 @@ sources:
 Prove the whole architecture on one useful task: research a question from supplied URLs, reuse past
 knowledge, compare sources, verify claims, persist evidence and resume after a quota delay.
 
+**Verified 2026-10-12.** NOT DONE — `swarm.ts` has decompose/allocate but no host calls them, and there
+is no multi-URL fetch tool.
+
 ## Work
 
 - Begin with URLs supplied by the caller. Do not build a general web-discovery subsystem first.

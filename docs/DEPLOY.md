@@ -110,15 +110,15 @@ upm install
 export NO_PROXY=127.0.0.1,localhost
 
 upm run typecheck        # ✅ exit 0 — three configs: root, phoenix-core, simorgh-platform
-upm test                 # ✅ exit 0 — BOTH suites, workers first (138 + 504 as of 2026-10-10)
+upm test                 # ✅ exit 0 — BOTH suites, workers first (178 + 504 as of 2026-10-12)
 upm run platform:smoke   # ✅ 5/5, exit 0
 upm run e2e:ask          # ✅ 10/10, exit 0
 upm run security:scan    # ⚠️ needs network for the throwaway audit tree (ADR-0004 §4)
 ```
 
 Observed suite composition on 2026-10-08: **workers 14 files / 129 tests, node 22 files / 368 tests**
-(re-run 2026-10-10: **138 workers + 504 node**, both green — the current canonical baseline lives in
-`ROADMAP-SPINE.md` §0). The old
+(re-run 2026-10-12: **workers 17 files / 178 tests, node 28 files / 504 tests**, both green — the
+current canonical baseline lives in `ROADMAP-SPINE.md` §0 and `STATE-OF-PROJECT.md` §11.5). The old
 [`STATE-OF-PROJECT.md`](STATE-OF-PROJECT.md) §3.1 numbers (11/93 and 19/261) are stale; see **Provenance**, at the end of this file.
 
 Three of those deserve a note:
@@ -158,8 +158,16 @@ Nothing here is read from a config file. The Node host reads `process.env` and n
 ```bash
 export SIMORGH_API_KEY="..."           # REQUIRED for the authed routes. Unset ⇒ every one of them
                                        # returns 503 AUTH_NOT_CONFIGURED. It fails closed, not open.
-export GROQ_API_KEY="..."              # optional — unlocks Shāhīn (priority 10)
-export HF_TOKEN="..."                  # optional — unlocks Bulbul (priority 20)
+export SIMORGH_API_KEYS='{"tok":"me"}' # optional — a token→userId map; without it the two per-user
+                                       # routes (/api/v1/user/:userId/logs, /api/v1/context/:refId)
+                                       # fail closed rather than serving an unverified user
+export GROQ_API_KEY="..."              # optional — unlocks Groq (priority 10)
+export GEMINI_API_KEY="..."            # optional — unlocks Gemini (priority 15)
+export HF_TOKEN="..."                  # optional — unlocks HuggingFace (priority 20)
+export OPENROUTER_API_KEY="..."        # optional — unlocks OpenRouter (priority 25)
+export CEREBRAS_API_KEY="..."          # optional — Cerebras (26), unclassified ⇒ FREE_ONLY refuses
+export NVIDIA_API_KEY="..."            # optional — NVIDIA NIM (27), unclassified ⇒ FREE_ONLY refuses
+export VERCEL_AI_GATEWAY_API_KEY="..." # optional — Vercel AI Gateway (28), unclassified ⇒ same
 export OLLAMA_BASE_URL="http://127.0.0.1:11434"   # optional — a local daemon; see below
 export OLLAMA_MODEL="llama3.2"                    # optional — defaults to llama3.2
 export CORS_ORIGINS="https://your.app"            # optional — unset allows NO browser origin, not all
@@ -169,7 +177,9 @@ A missing key means **dormant, not broken**. The bird shows as `dormant` in
 `/api/v1/flock/status`, is skipped without a cooldown, and is not an error. That is the whole reason a
 core can run with zero secrets and still answer honestly.
 
-**There is no Homā on Node.** Homā is Cloudflare Workers AI; a Node process has no such binding. The
+**There is no Homā on Node.** Homā is Cloudflare Workers AI; a Node process has no such binding (the
+bird names are now provider names — Groq, Gemini, HuggingFace, OpenRouter, Cerebras, NVIDIA NIM, Vercel
+AI Gateway — so "Homā" is read "Workers AI" from 2026-10-12). The
 Node catalog (`simorgh-platform/src/runtimes/providers.ts`) simply omits it rather than shipping a
 pretend provider, and the one keyless option that *does* exist locally — an Ollama daemon — is opt-in
 via `OLLAMA_BASE_URL`, because a permanently unreachable provider costs a failed dial plus a cooldown
@@ -220,8 +230,8 @@ npx wrangler login
 npx wrangler kv namespace create CONTEXT_STORE   # paste the returned id into wrangler.toml
 ```
 
-**This is the most likely first-deploy failure in the repository, and nothing warns you about it.**
-`wrangler.toml` ships:
+**This used to be the most likely first-deploy failure in the repository, and nothing warns you about
+it. Kept as a historical note because the trap is instructive:** `wrangler.toml` shipped
 
 ```toml
 [[kv_namespaces]]
@@ -229,11 +239,13 @@ binding = "CONTEXT_STORE"
 id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 ```
 
-`wrangler dev` is perfectly happy with the placeholder. ✅ `npx wrangler deploy --dry-run` is *also*
-happy with it — verified here, exit 0, and it cheerfully prints
-`env.CONTEXT_STORE (REPLACE_WITH_YOUR_KV_NAMESPACE_ID)` in the binding table. Only a real
-`wrangler deploy` fails, at the least convenient moment, with an error that does not say which
-placeholder it choked on. Edit the `id`, then deploy.
+`wrangler dev` is happy with a placeholder. So is `wrangler deploy --dry-run`, which prints the
+placeholder back in its binding table. Only a real `wrangler deploy` fails, at the least convenient
+moment, with an error that does not say which placeholder it choked on.
+
+**That is no longer this repo's state:** `wrangler.toml` carries a real namespace id (verified with
+`upm run cf:dry-run`). Deploying onto your *own* account still needs one `wrangler kv namespace create`
+and an edit, because that is the only place the mismatch ever surfaces.
 
 The subcommand name is verified against the installed wrangler (4.146.0): `wrangler kv namespace
 create <namespace>` — the older `wrangler kv:namespace create` spelling is gone.
@@ -276,7 +288,7 @@ upm run deploy           # = upm run typecheck && wrangler deploy
 ```
 
 ✅ `npm run typecheck` exit 0; ✅ `npx wrangler deploy --dry-run --outdir dist` bundles clean
-(165.10 KiB / 45.25 KiB gzip). ✅ A real `npx wrangler deploy` succeeds — verified live,
+(205.33 KiB / 55.84 KiB gzip, measured 2026-10-12). ✅ A real `npx wrangler deploy` succeeds — verified live,
 deployed to `https://simorgh.shahino3ozone1353.workers.dev`. No migration
 warnings, no errors.
 
@@ -312,12 +324,17 @@ deployed — its comment block is the canonical record, and there is no ADR abou
 | Name | How to set it | Consequence if absent |
 |---|---|---|
 | `SIMORGH_API_KEY` | `npx wrangler secret put SIMORGH_API_KEY` | Every bearer-gated route returns **503 `AUTH_NOT_CONFIGURED`**. Fails closed. |
-| `GROQ_API_KEY` | `npx wrangler secret put GROQ_API_KEY` | Shāhīn dormant. |
-| `HF_TOKEN` | `npx wrangler secret put HF_TOKEN` | Bulbul dormant. |
-| `GEMINI_API_KEY` | `npx wrangler secret put GEMINI_API_KEY` | Gemini dormant. |
-| `OPENROUTER_API_KEY` | `npx wrangler secret put OPENROUTER_API_KEY` | OpenRouter dormant. |
+| `SIMORGH_API_KEYS` | `npx wrangler secret put SIMORGH_API_KEYS` | The two per-user routes fail closed instead of serving an unverified user. Not required if you never expose them. |
+| `GROQ_API_KEY` | `npx wrangler secret put GROQ_API_KEY` | Groq (10) dormant. |
+| `GEMINI_API_KEY` | `npx wrangler secret put GEMINI_API_KEY` | Gemini (15) dormant. |
+| `HF_TOKEN` | `npx wrangler secret put HF_TOKEN` | HuggingFace (20) dormant. |
+| `OPENROUTER_API_KEY` | `npx wrangler secret put OPENROUTER_API_KEY` | OpenRouter (25) dormant. |
+| `CEREBRAS_API_KEY` | `npx wrangler secret put CEREBRAS_API_KEY` | Cerebras (26) dormant — and even with the key, **unclassified**, so `FREE_ONLY` refuses it until a cost row exists |
+| `NVIDIA_API_KEY` | `npx wrangler secret put NVIDIA_API_KEY` | NVIDIA NIM (27) dormant, same classification gap |
+| `VERCEL_AI_GATEWAY_API_KEY` | `npx wrangler secret put VERCEL_AI_GATEWAY_API_KEY` | Vercel AI Gateway (28) dormant, same |
 | `TELEGRAM_BOT_TOKEN` | `npx wrangler secret put TELEGRAM_BOT_TOKEN` | The Telegram webhook route never answers. |
 | `TELEGRAM_WEBHOOK_SECRET` | `npx wrangler secret put TELEGRAM_WEBHOOK_SECRET` | The webhook rejects every delivery. |
+| `DISCORD_PUBLIC_KEY` | `npx wrangler secret put DISCORD_PUBLIC_KEY` | The Discord gateway fails closed: an unverifiable webhook is an open one. (Not a secret — it is what the endpoint verifies against.) |
 | `CORS_ORIGINS` | a `[vars]` entry, **or** a secret | The one name here the repo documents as **non-secret**. Unset allows **no** browser origin — a secure default, not a gap. |
 
 The credential the *platform CLI* expects, which is different and never reaches the Worker:
@@ -555,13 +572,17 @@ registries:
 | `GET /api/v1/platform/connectors` | ✅ | ❌ |
 | `POST /api/v1/telegram/webhook` | ✅ | ❌ |
 
-✅ Verified by grepping `src/*.ts` for every `.get(`/`.post(` registration — 13 routes on the Workers
-side, 8 on the Node side — and by reading the Node runtime's handler. **The Workers host serves no `/mcp` at all** — `mcp` appears in
-`src/` only inside dashboard prose. That has a direct consequence for a deployer:
+✅ Verified by grepping `src/*.ts` for every `.get(`/`.post(` registration — **16 routes on the
+Workers side, 8 on the Node side** (measured 2026-10-12; both counts grew by the two `/api/v1/setup/*`
+routes and the Discord webhook) — and by reading the Node runtime's handler. **The Workers host serves
+no `/mcp` at all** — `mcp` appears in `src/` only as the setup probe route
+(`POST /api/v1/setup/check-mcp`, `src/setup-mcp.ts`). That has a direct consequence for a deployer:
 `simorgh connect <core> --connector mcp` works against a Node core and will fail against a deployed
-Worker. Prefer `--connector rest` for anything on the edge. It also means `AGENTS.md`'s "a core
-answers … `/health`, `/api/v1/flock/status`, `/api/v1/agent/execute`, `/api/v1/user/{id}/logs`,
-`/mcp`" describes the Node host's surface, not the edge's.
+Worker — even though `simorgh-platform/src/targets.ts` still advertises `mcp` for the
+`cloudflare-workers` target, so the CLI accepts the flag before it fails. Prefer `--connector rest`
+for anything on the edge. It also means `AGENTS.md`'s "a core answers … `/health`,
+`/api/v1/flock/status`, `/api/v1/agent/execute`, `/api/v1/user/{id}/logs`, `/mcp`" describes the Node
+host's surface, not the edge's.
 
 Other host-owned differences, all deliberate and all documented in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) §2:
@@ -575,7 +596,7 @@ Other host-owned differences, all deliberate and all documented in
   context reference does not survive a restart, so `GET /api/v1/context/:refId` can 404 a ref the
   same client was handed seconds earlier. A wrong answer is worse than a slow one; the engine's own
   comment says a host wanting durability should pass its own port.
-- **Flock membership** — Homā exists only on Workers. Node's catalog omits it rather than faking it.
+- **Flock membership** — Workers AI exists only on Workers. Node's catalog omits it rather than faking it.
 - **The staleness sweep** — a cron trigger on Workers, an hourly `setInterval` on Node.
 
 ### What I could not verify about portability
@@ -660,13 +681,14 @@ are recorded rather than edited, because those files are outside this pass's all
 3. **`targets.ts`' `supervise` step says the Node process "holds no durable state beyond its SQLite
    file"**, which implies a file exists. With both shipped entrypoints it does not — `sqlPath` defaults
    to `:memory:` and no flag exposes it. The transparency ledger is per-process on the Node host.
-4. **The Workers host serves no `/mcp` route**, while `AGENTS.md` lists `/mcp` in the core contract and
-   the dashboard itself (`src/dashboard.ts:316`) says *"a core speaks MCP at `/mcp`"*. True of the Node
-   host; false of the
-   edge. `simorgh connect … --connector mcp` against a deployed Worker will fail.
+4. **The Workers host serves no `/mcp` route**, while `AGENTS.md` lists `/mcp` in the core contract.
+   The dashboard *used* to say *"a core speaks MCP at `/mcp`"* (`src/dashboard.ts:316`); it now says the
+   opposite at `src/dashboard.ts:655` — `/mcp` is the Node runtime's. `simorgh connect … --connector
+   mcp` against a deployed Worker still fails, because neither the host nor the CLI knows that yet.
 5. **`CONTRIBUTING.md`'s Prerequisite table says `engines.node` is `">=20"`.** `package.json` says
    `">=22.3"`. The document itself flags it as a proposed change it did not make — and by now the
    manifest has moved, so the note is doubly stale.
-6. ~~**`README.md`'s Flock table lists three birds**~~ — **RESOLVED.** The table now lists all five
-   (`src/flock.ts`: Shāhīn 10, Gemini 15, Bulbul 20, OpenRouter 25, Homā 30), and Quick Start names
-   `GEMINI_API_KEY` and `OPENROUTER_API_KEY` beside the two it already listed.
+6. ~~**`README.md`'s Flock table lists three birds**~~ — **RESOLVED twice.** The table now lists all
+   eight (`src/flock.ts`: Groq 10, Gemini 15, HuggingFace 20, OpenRouter 25, Cerebras 26, NVIDIA NIM 27,
+   Vercel AI Gateway 28, Workers AI 30), and Quick Start names every key. Note the unresolved wrinkle
+   this created: the three newest birds have no cost row, so `FREE_ONLY` still refuses them.

@@ -16,10 +16,13 @@ disclosure policy and a map; the audit is the evidence.
 ## Supported versions
 
 **There is no release-support policy in this repository, because there is no release process.** This
-clone contains **no git tags and no `CHANGELOG`**, and `.github/` holds a single workflow
-(`workflows/ci.yml`) which builds and tests — it does not publish. `package.json` carries
-`version: 2.0.0`, but nothing in the repository publishes it. The only supported configuration is
-therefore:
+clone contains **no git tags and no `CHANGELOG`**. `package.json` carries `version: 2.0.0`, but nothing
+publishes it. `.github/` holds **two** workflows: `ci.yml` (builds and tests, plus a security gate) and
+`deploy.yml`, which does publish — on push to `main`, gated on that CI run, it runs `wrangler deploy`
+and then probes the deployed `https://simorgh.<subdomain>.workers.dev/health` and asserts an unsigned
+Discord webhook answers 401. So "nothing here publishes" is **no longer true**; what is true is that
+publishing is a worker deploy, not a package release, and it requires the `CLOUDFLARE_API_TOKEN` repo
+secret. The only supported configuration is therefore:
 
 > **The current tip of the repository, as CI runs it.**
 

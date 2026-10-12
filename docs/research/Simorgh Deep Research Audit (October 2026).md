@@ -25,6 +25,9 @@ sources:
 
 # Simorgh Deep Research Audit — October 9, 2026
 
+> This is a dated record (2026-10-09); current state lives in
+> [`docs/STATE-OF-PROJECT.md`](../STATE-OF-PROJECT.md).
+
 An ecosystem audit for a free-to-run, no-KYC, self-evolving agentic AI gateway on Cloudflare's edge. Confidence markers: 🟢 well-sourced (official docs fetched this session) · 🟡 mixed/single-source (community directories or unfetched claims) · 🔴 couldn't verify. Citations are inline links to the source that states each claim; claims resting on community directories rather than fetched official pages are marked 🟡 inline.
 
 ## Executive Summary (10 bullets, brutally honest)
@@ -327,7 +330,7 @@ Legend: **[O]** = official docs fetched; **[C]** = community directory, needs li
 
 ## Appendix — Source ledger (provenance-corrected)
 
-Citation format note: inline citations in this document use descriptive anchors linked to the source URL (e.g. [Groq docs](...)); each maps to an entry below. Claims resting on search excerpts rather than direct fetches are labeled as such.
+Citation format note: inline citations in this document use descriptive anchors linked to the source URL (e.g. [Groq docs](https://console.groq.com/docs/rate-limits)); each maps to an entry below. Claims resting on search excerpts rather than direct fetches are labeled as such.
 
 ### Fetched directly during this audit (October 9, 2026)
 

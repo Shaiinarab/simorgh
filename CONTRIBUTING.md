@@ -114,8 +114,8 @@ disabled.
 
 **Per-file test counts are part of the guard.** A suite that silently *shrinks* is the easiest failure
 mode to miss, and a total can stay green while a file disappears. The counts live in
-[`docs/STATE-OF-PROJECT.md`](docs/STATE-OF-PROJECT.md) §11.5 (which says 473/25 — itself stale; the
-suite prints the truth) and in [the testing skill](.agents/skills/simorgh-testing/SKILL.md) —
+[`docs/STATE-OF-PROJECT.md`](docs/STATE-OF-PROJECT.md) §11.5 (which as of 2026-10-12 says 178/17
+workers and 504/28 node, measured) and in [the testing skill](.agents/skills/simorgh-testing/SKILL.md) —
 **update them when you add or remove tests**, and if a number you find there disagrees with what
 the suite actually prints, the suite is right and the doc is stale.
 
@@ -172,7 +172,8 @@ The short form ([`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §6; longer form 
 2. **Declare capabilities explicitly.** Do not pretend providers are interchangeable — that is a
    stated non-goal of the product.
 3. **Add it to the host's provider list, not to the engine.** Node:
-   `simorgh-platform/src/runtimes/providers.ts`. Workers: the host entry `src/index.ts`.
+   `simorgh-platform/src/runtimes/providers.ts`. Workers: the `PROVIDERS` catalog in `src/flock.ts`
+   (`src/index.ts` only imports it).
 4. **A missing key means dormant, not broken.** Never fail a request because a provider is
    unconfigured — that is why the gateway runs with zero secrets, and a dormant bird appearing in
    "errors" is a bug.
@@ -185,12 +186,13 @@ The short form ([`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §6; longer form 
 Three assertions pin the *complete* shipped flock by id, so adding a bird turns all three red — update
 them deliberately rather than loosening them:
 
-- `test/durable-objects.test.ts:26` — the only literal roster pin: 5 ids, `toHaveLength(5)` and the
-  `[10, 15, 20, 25, 30]` priorities
-- `test/flock-routing.test.ts:269` — the same five ids in the same order, via `toEqual`
-- `test/http.test.ts:164` is deliberately **not** a pin — it asserts only that Homā is present and
-  non-dormant (its comment says why: two literals to keep in step would say nothing about the HTTP
-  layer)
+- `test/durable-objects.test.ts:76-87` — the literal roster pin: 8 ids, `toHaveLength(8)` and the
+  `[10, 15, 20, 25, 26, 27, 28, 30]` priorities
+- `test/flock-routing.test.ts:274-283` — the same eight ids in the same order, via `toEqual`, on
+  purpose: the roster *and* its order are the contract there
+- `test/http.test.ts:164` is deliberately **not** a pin — it asserts only that Workers AI is present
+  and non-dormant (its comment says why: two literals to keep in step would say nothing about the
+  HTTP layer)
 
 And **conditionally** `phoenix-core/test/boundary.test.ts`: not because adding a provider breaks it,
 but because it is the guard you will trip *if* you implement the provider inside `phoenix-core/src/`
@@ -273,7 +275,10 @@ after: a cross-language contract has no compiler. Read
   `go.sum` SECURITY ERROR). Use `proxy.golang.org` or vendored deps.
 - **Health payload shapes differ by host** (a TS core sends `{status, timestamp}`; the Go gateway sends
   `{status, uptime, providers[]}`). Do not discriminate on a field you have not seen a real host send.
-- **A collection error is a hard stop.**
+- **A collection error is a hard stop.** Report the file and the error; never re-run hoping. (Note
+  that `phoenix-core/test/boundary.test.ts` catches a *violation* as an ordinary failing assertion —
+  it scans engine sources and compares against `[]`. A collection error is a different, rarer event:
+  an engine file that stops resolving at all, which the Node suite surfaces as a red import.)
 
 ---
 
@@ -343,6 +348,11 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs three jobs: Typ
 (typecheck + tests + `wrangler deploy --dry-run`), Go (build, vet, test), and Security
 (`bash scripts/security-scan.sh`). The security job deliberately needs **no install step**: there is
 no `package-lock.json` to install from, and the gate resolves its own throwaway dependency tree.
+
+A second workflow, [`deploy.yml`](.github/workflows/deploy.yml), runs on push to `main`: it is gated
+on that CI run via `workflow_run`, then runs `wrangler deploy` and probes the deployed URL (a `/health`
+payload plus an unsigned Discord webhook that must answer 401). It needs the `CLOUDFLARE_API_TOKEN`
+repo secret, and it is the only thing in this repo that publishes.
 
 ---
 

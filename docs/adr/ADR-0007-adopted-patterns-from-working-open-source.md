@@ -96,6 +96,13 @@ first. Anchors are in the research specs under `docs/research/adoption/`.
 | 10 | `agent-stream-doctor` as a pip dependency of the probe tooling (MIT) | probe requirements | first stream-level misbehavior report |
 | 11 | **One-click "your own AI server" deploy**: free-Space bootstrap, hourly state backups to a private dataset, keep-alive ping, self-healing supervisor (hermes-stack, MIT) | `simorgh-platform/src/deploy/*` | the platform's deploy story is specced — this is the proven shape of it, and it is the row closest to the operator's stated product vision |
 
+> **Row 11 is superseded by [ADR-0008](ADR-0008-unified-surface-harness-api-gateways-wizards.md).**
+> hermes-stack moved there from *strategic reference* (the §1 verdict) to **adopted with changes**:
+> the deploy pattern is kept, but the target matrix is Cloudflare-first and Hugging Face appears
+> **Static-Spaces-only**, because free `cpu-basic` Docker/Gradio Spaces have returned `402 Payment
+> Required` since 2026-07-08. The row stays on this cross-walk as the pattern's provenance; ADR-0008
+> is the operative decision.
+
 ## 5. Attribution and license posture
 
 Every deferred row that copies *code* (not ideas) carries its MIT notice in the derived file and a

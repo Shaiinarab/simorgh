@@ -33,6 +33,10 @@ sources:
 A retrieval provider's namespace is storage isolation, not Simorgh authorization. Simorgh decides who
 can query each principal and agent namespace.
 
+**Verified 2026-10-12.** NOT STARTED — no RetrievalPort in `phoenix-core/src/ports.ts`, no `/knowledge`
+routes on either host, no namespace concept, no memory port; the tool list is still `search_web` +
+`get_server_time`.
+
 ## Work
 
 - Define principal-personal and per-agent namespaces as data derived from the authenticated principal.

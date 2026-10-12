@@ -26,10 +26,16 @@ sources:
 > **TL;DR:** no Rust/Wasm core now. The measured scheduler is negligible and quota planning is not
 > wired into production. First fix the execution path and the uncapped-input risk; re-measure only
 > after retrieval/reranking creates a real CPU hotspot.
+>
+> **Correction (verified 2026-10-12):** the uncapped-input risk named above is closed. The answer is
+> now bounded by `MAX_MODEL_OUTPUT_CHARS = 32_000` in `phoenix-core/src/security.ts`, applied inside
+> `sanitizeModelOutput` and reached on both hosts via `phoenix-core/src/execute.ts` (commit `3a5cd16`).
+> The Output-shield DEFER below is superseded on that input point; its speed verdict is not.
 
 **Question:** does Simorgh need a Rust/Wasm core?
 **Answer:** no. Six candidates measured; five REJECT, one DEFER with a named trigger.
-The DEFER is not about Rust — it is about an uncapped input.
+The DEFER is not about Rust — it is about an uncapped input (that input is now capped — see the
+correction note above and the Output-shield row below).
 
 ---
 
@@ -248,9 +254,12 @@ MEASURED COST:           clean 1KB: 3.076 / 3.169 µs, N=381,600.
                          In situ: 25.9-66.5 µs = 39-61% of one request's measured CPU.
                          Same machine as above.
 REAL INPUT SIZE:          Prose answers, normally 1-16 KB. Tool results are already capped at
-                         2,000 chars x 4 iterations, so that part is bounded. THE ANSWER ITSELF IS
-                         NOT CAPPED — provider.ts:122 returns data.choices[0].message.content
-                         verbatim.
+                         2,000 chars x 4 iterations, so that part is bounded. At audit time THE
+                         ANSWER ITSELF WAS NOT CAPPED — provider.ts:122 returned
+                         data.choices[0].message.content verbatim. RESOLVED 2026-10-12:
+                         sanitizeModelOutput now bounds it at MAX_MODEL_OUTPUT_CHARS = 32_000
+                         (phoenix-core/src/security.ts, commit 3a5cd16), applied before any
+                         pattern runs and reached on both hosts via phoenix-core/src/execute.ts.
 EXPECTED BENEFIT AT BEST: At a realistic 16 KB answer the shield is 66.5 µs of a 109.1 µs request,
                          but that request is 1.09% of the Free CPU limit, so the entire shield is
                          ~0.66% and Rust would buy at most that much. A 2.73 µs/KB linear scan is
@@ -272,15 +281,20 @@ OSS CORE AVAILABLE:       YES, and mature. `ammonia` v4.2.1, Apache-2.0, release
                           ammonia is a whitelist HTML sanitizer whose policy differs from this
                           shield's tag-token removal, and lol_html is a streaming rewriter, not a
                           neutraliser. Adopting either would be a POLICY change, not a speed change.
-VERDICT:                  DEFER
+VERDICT:                  DEFER — input finding RESOLVED 2026-10-12 (see REASON)
 REASON:                  At every realistic input size the whole shield is under 1% of the Workers
                          Free CPU limit, but at 128 KB of planted payload one request costs 4.71 ms
                          (p95 6.96 ms, p99 11.72 ms) = 47%/70%/117% of that limit, and provider.ts:122
-                         does not cap the answer that feeds it.
-TRIGGER:                 Cap the answer length before sanitizing, or observe any provider returning
-                         over 64 KB. Revisit only if BOTH are true: a real answer above 64 KB AND
-                         the shield above 1 ms measured in situ. The fix for the finding is a
-                         length cap, not a faster inner loop.
+                         did not cap the answer that feeds it. That premise is now closed: commit
+                         3a5cd16 shipped the length cap as MAX_MODEL_OUTPUT_CHARS = 32_000 in
+                         phoenix-core/src/security.ts, applied inside sanitizeModelOutput and
+                         reached on both hosts via phoenix-core/src/execute.ts. What remains of the
+                         DEFER is the speed question only, and its own verdict there is REJECT: the
+                         fix was a length cap, not a faster inner loop.
+TRIGGER:                 The "cap the answer length" branch FIRED on 2026-10-12 — see REASON for the
+                         fix (MAX_MODEL_OUTPUT_CHARS = 32_000, phoenix-core/src/security.ts).
+                         Revisit only if a real answer above 64 KB is observed despite the cap, or
+                         the shield measures above 1 ms in situ.
 ```
 
 ```
@@ -432,9 +446,12 @@ second scheduler, a per-isolate startup cost, and an FFI seam across a boundary 
    "Wasm Workers are larger" statement from Cloudflare's docs; I did **not** get a first-party
    number for the per-module cap. *How to verify:* `wrangler deploy --dry-run` with a stub `.wasm`,
    or the limits page directly.
-3. **Real answer-size distribution.** I established that `provider.ts:122` does not cap the answer,
+3. **Real answer-size distribution.** I established that `provider.ts:122` did not cap the answer,
    and measured the sanitizer across 1 KB–128 KB. I did **not** observe what real providers actually
    return. *How to verify:* sample the ledger's stored answers, or log `result.answer.length`.
+   *(Input half resolved 2026-10-12: the answer is now capped at `MAX_MODEL_OUTPUT_CHARS = 32_000` in
+   `phoenix-core/src/security.ts`, applied in `sanitizeModelOutput` and reached on both hosts via
+   `phoenix-core/src/execute.ts` — commit `3a5cd16`.)*
 4. **Any per-isolate startup measurement.** I reasoned from the documented "larger = slower start"
    and per-isolate instantiation. I did not measure Simorgh's own cold start, so no
    before/after bundle or cold-start figure is claimed.
@@ -445,13 +462,17 @@ second scheduler, a per-isolate startup cost, and an FFI seam across a boundary 
 
 ## 8. What I found but did NOT fix (outside my allowlist)
 
-1. **`provider.ts:122` returns an uncapped answer.** `data.choices?.[0]?.message?.content ?? ""`
-   with no length bound, and that string goes straight to `sanitizeModelOutput` (execute.ts:166)
+1. **`provider.ts:122` returned an uncapped answer.** `data.choices?.[0]?.message?.content ?? ""`
+   with no length bound, and that string went straight to `sanitizeModelOutput` (execute.ts:166)
    and to the per-observation re-sanitize (execute.ts:210-213). Measured: a 128 KB answer carrying
    every planted rule costs **4.71 ms** (p95 6.96, p99 11.72) — 47%/70%/**117%** of the Workers
-   Free per-request CPU limit. Tool results are already capped at 2,000 chars; the answer is not.
-   This is the single highest-value finding in the audit and it is a one-line guard. I did not add
-   it: `phoenix-core/**` is read-only for this task.
+   Free per-request CPU limit. Tool results were already capped at 2,000 chars; the answer was not.
+   This was the single highest-value finding in the audit and it is a one-line guard. It was not
+   added here: `phoenix-core/**` is read-only for this task. **FIXED 2026-10-12** — the guard landed
+   as `MAX_MODEL_OUTPUT_CHARS = 32_000` in `phoenix-core/src/security.ts`, applied inside
+   `sanitizeModelOutput` (bounded first, before any pattern runs) and reached on both hosts via
+   `phoenix-core/src/execute.ts` (commit `3a5cd16`); a truncation is recorded as the
+   `output_truncated` finding rather than applied silently.
 2. **`planQuotaRun` is dead code on the deployed app.** Exported from the core's public API, tested,
    reachable only from `planTaskRun` (`tasks.ts:431`), which nothing calls. Either wire it or stop
    exporting it — an untested-in-production scheduler that looks load-bearing is worse than no
@@ -483,7 +504,8 @@ or rebase.
 **One-line summary:** six candidates measured; the entire synchronous CPU of one request is 66–109 µs
 at realistic sizes — **0.66–1.09% of the Workers Free per-request CPU limit** — while
 `planQuotaRun`, the brief's primary candidate, is 0.701 µs of code nothing calls. REJECT the Rust/Wasm
-core; DEFER the shield behind a named trigger that is really an uncapped-input bug, not a
-speed problem.
+core; the shield's DEFER was really an uncapped-input bug, not a speed problem — and that bug was
+closed on 2026-10-12 by `MAX_MODEL_OUTPUT_CHARS = 32_000` (`phoenix-core/src/security.ts`, commit
+`3a5cd16`).
 
 TASK-012-END

@@ -29,12 +29,13 @@ sources:
 
 # Quality Audit — TASK-008
 
-> **Snapshot notice (2026-10-09):** the numbers in this audit (82 + 202 tests, 10 + 17 files) were true
-> when written and are kept unedited as historical evidence — original command spellings included.
-> Current verified baseline: **138 workerd + 504 node tests (28 files)**, typecheck exit 0, on Node 26.7.0 /
-> upm 1.4.0 / tsgo (see `docs/STATE-OF-PROJECT.md` §12.2 and `docs/ROADMAP-SPINE.md` §0). Canonical
-> commands today are `upm run typecheck`, `upm test`. The §7 "ten things to fix first" list still
-> stands as open quality debt; it is folded into EPIC-A/B acceptance criteria in the spine.
+> **Snapshot notice (2026-10-09, re-baselined 2026-10-12):** the numbers in this audit (82 + 202 tests,
+> 10 + 17 files) were true when written and are kept unedited as historical evidence — original command
+> spellings included. Current verified baseline, **measured on 2026-10-12**: **178 workerd tests /
+> 17 files + 504 node tests / 28 files — 45 test files in total**, 18 of them `phoenix-core`, 17 root,
+> 10 `simorgh-platform`; typecheck exit 0 (see `docs/STATE-OF-PROJECT.md` §11.5 and `ROADMAP-SPINE.md`
+> §0). Canonical commands today are `upm run typecheck`, `upm test`. The §7 "ten things to fix first"
+> list still stands as open quality debt; it is folded into EPIC-A/B acceptance criteria in the spine.
 
 ## 1. Method — what was run
 
@@ -71,7 +72,7 @@ Would error: Coverage provider @vitest/coverage-v8 is not installed (provider mi
 
 **Test files:** 42 as of the 2026-10-10 re-audit — 18 `phoenix-core/test/`, 10 `simorgh-platform/test/`, 14 root `test/` (9 + 17 + 10 = 24 when written).
 
-**Source reading:** All files in `phoenix-core/src/`, `simorgh-platform/src/`, `src/` (root Workers host) were read in full. All 24 test files were read in full. Dynamic-reference patterns checked: string-keyed dispatch (case statements in `mcp/server.ts`, `cli.ts`, `tools.ts`), `Object.entries()` (1 use in `runtimes/node.ts`, for headers not dispatch), MCP tool-name dispatch, CLI subcommand table, import * as (none found), .ts extension imports (only in `simorgh-platform/src/runtimes/`, intentional for unbuilt Node).
+**Source reading:** All files in `phoenix-core/src/`, `simorgh-platform/src/`, `src/` (root Workers host) were read in full. All 45 test files (18 phoenix-core / 17 root / 10 simorgh-platform) were read in full as of the 2026-10-12 re-baseline; this section's own prose still refers to the 24 that existed when it was written. Dynamic-reference patterns checked: string-keyed dispatch (case statements in `mcp/server.ts`, `cli.ts`, `tools.ts`), `Object.entries()` (1 use in `runtimes/node.ts`, for headers not dispatch), MCP tool-name dispatch, CLI subcommand table, import * as (none found), .ts extension imports (only in `simorgh-platform/src/runtimes/`, intentional for unbuilt Node).
 
 **Proposed devDependencies line (coverage provider, NOT installed by this audit):**
 ```json
@@ -83,7 +84,7 @@ Plus in package.json scripts: `"test:coverage": "vitest run --coverage"`
 
 | symbol | defined at | referenced from | verdict |
 |--------|-----------|----------------|---------|
-| `findModelBird` | `src/models.ts:19` | `src/models.ts:14,18` (self + comment only) | dead — no code imports this alias; referenced only by `README.md:249` and the retention note at `src/models.ts:8-10`. Confirmed: `grep -rn findModelBird` across all .ts files shows only definition at line 19 and declaration at line 14. |
+| `findModelBird` | `src/models.ts:19` | `src/models.ts:14,18` (self + comment only) | `src/models.ts:8` is a documented retention alias kept for callers outside this repo — dead *within* it, not dead by intent. Confirmed: `grep -rn findModelBird` across all .ts files shows only the definition at line 19 and the declaration at line 14. |
 
 Dynamic-reference checks performed (all symbols checked, none falsely flagged):
 - **String-keyed dispatch**: `mcp/server.ts:178,207,265` (case "initialize", "tools/call", "platform_targets"/"platform_fleet"/"platform_ask") — all strings correspond to real handlers. `tools.ts:65,68` (case "get_server_time", "search_web") — both in AGENT_TOOLS. CLI `cli.ts:113-137` — all 11 commands reachable.
@@ -111,15 +112,18 @@ Dynamic-reference checks performed (all symbols checked, none falsely flagged):
 
 | test name | file:line | specific wrong implementation that would still pass |
 |-----------|-----------|---------------------------------------------------|
-| tools/list advertises all three platform tools with schemas | `simorgh-platform/test/mcp-server.test.ts:201-207` | An extra tool could be added without failing — toContain checks membership not exact set. No `expect(names.length).toBe(3)` assertion exists. A 4th tool with inputSchema would pass silently. |
+| ~~tools/list advertises all three platform tools~~ | `simorgh-platform/test/mcp-server.test.ts:213` | **FIXED 2026-10-12:** the assertion is now `toHaveLength(3)`, so a fourth tool is a failure rather than a silent pass. The row is kept, struck, because the shape it wanted was added later. |
 | unknown tool reports a tool failure without throwing | `simorgh-platform/test/mcp-server.test.ts:300` | expect(json.error).toBeDefined() would pass if server returned { error: null } or { error: "garbage" }. No check on error.code or error.message. |
 | platform_ask against a dead fleet reports a tool failure | `simorgh-platform/test/mcp-server.test.ts:311` | expect(json.result).toBeDefined() would pass if result were any non-null value (empty object, wrong shape). No shape assertion. |
 | unknown tool reports a tool failure without throwing | `simorgh-platform/test/mcp-server.test.ts:319` | Same as above — expect(json.error).toBeDefined() without content check. |
 | sends a bearer token and the request body the core expects | `simorgh-platform/test/connectors.test.ts:119` | expect(result).toMatchObject({ success: true, answer: "thirty birds" }) — toMatchObject passes with extra fields. Does not assert answeredBy, so a connector mapping answeredBy incorrectly would pass. |
-| returns the same answer as REST | `simorgh-platform/test/integration.test.ts:155` | Expects overMcp.answer === overRest.answer but does not also assert answeredBy parity. A regression in answeredBy mapping would not be caught. |
+| returns the same answer as REST | `simorgh-platform/test/integration.test.ts:236` | **FIXED 2026-10-12:** parity now asserts `answeredBy` on both connectors, not just `answer`. |
 | restConnector ask sends correct payload | `simorgh-platform/test/connectors.test.ts:119` | toMatchObject omits answeredBy assertion. A connector dropping provenance would pass. |
 
-**Fixed since this audit:** items 1 and 5 gained shape assertions; `connectors.test.ts:120` still omits `answeredBy`.
+**Fixed since this audit:** items 1 and 5 gained shape assertions (the `tools/list` count, and the
+REST/MCP `answeredBy` parity). Still open: `simorgh-platform/test/connectors.test.ts:119` discards
+the provenance field entirely — a connector that dropped `answeredBy` would pass, which is the same
+mapper disagreement that produced a real bug before. Worth the same fix.
 
 ## 5. Duplication still present
 

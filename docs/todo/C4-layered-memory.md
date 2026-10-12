@@ -32,6 +32,10 @@ sources:
 Memory is not session state, context offload or the transparency ledger. Start with a small editable
 in-context layer and a searchable archival layer. Make every memory inspectable and deletable.
 
+**Verified 2026-10-12.** NOT STARTED — no RetrievalPort in `phoenix-core/src/ports.ts`, no `/knowledge`
+routes on either host, no namespace concept, no memory port; the tool list is still `search_web` +
+`get_server_time`.
+
 ## Work
 
 - Add memory behind a port and reuse the existing persistence layer.
