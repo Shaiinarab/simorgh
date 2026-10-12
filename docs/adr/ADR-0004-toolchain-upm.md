@@ -1,3 +1,26 @@
+---
+type: "Architecture Decision Record"
+title: "ADR-0004 — upm is the package manager; Node is the only runtime; Bun is gone"
+description: "Why upm.lock is the single lockfile and why there is exactly one JavaScript runtime."
+tags:
+  - simorgh
+  - adr
+  - toolchain
+  - upm
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-10-12T00:00:00Z"
+sources:
+  - id: lock
+    resource: "../../upm.lock"
+    title: "The committed lockfile"
+  - id: ci
+    resource: "../../.github/workflows/ci.yml"
+    title: "CI install and gate"
+---
+
 # ADR-0004 — upm is the package manager; Node is the only runtime; Bun is gone
 
 - **Status:** accepted (2026-10-03). **Supersedes:** the 2026-10-02 draft of this ADR, which decided

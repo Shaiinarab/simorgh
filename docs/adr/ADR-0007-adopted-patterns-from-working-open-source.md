@@ -1,3 +1,26 @@
+---
+type: "Architecture Decision Record"
+title: "ADR-0007 — What Simorgh adopts from working open source, and what it refuses"
+description: "The adoption cross-walk, the refusal list, and the attribution rule for every ported pattern."
+tags:
+  - simorgh
+  - adr
+  - adoption
+  - open-source
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-10-12T00:00:00Z"
+sources:
+  - id: reference-arch
+    resource: "../REFERENCE-ARCHITECTURE.md"
+    title: "The reference cross-walk"
+  - id: adr-0008
+    resource: "ADR-0008-unified-surface-harness-api-gateways-wizards.md"
+    title: "The amendment that adopts row 11"
+---
+
 # ADR-0007 — What Simorgh adopts from working open source, and what it refuses
 
 - **Status:** accepted

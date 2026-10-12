@@ -1,3 +1,32 @@
+---
+type: "Runbook"
+title: "Deploying Simorgh — three paths, one of which must always work"
+description: "How the three deploy targets are planned, what preflight blocks, and the CI deploy gate."
+tags:
+  - simorgh
+  - deploy
+  - runbook
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2026-11-12T00:00:00Z"
+sources:
+  - id: targets
+    resource: "../simorgh-platform/src/targets.ts"
+    title: "Target registry and deploy plans"
+  - id: preflight
+    resource: "../simorgh-platform/src/deploy/preflight.ts"
+    title: "Preflight checks"
+  - id: ci-deploy
+    resource: "../.github/workflows/deploy.yml"
+    title: "Deploy-on-push workflow"
+---
+
 # Deploying Simorgh — three paths, one of which must always work
 
 **Verified:** 2026-10-08, on Node v26.7.0, wrangler 4.146.0, from the working tree at
@@ -269,8 +298,9 @@ tag = "v2"
 ```
 
 This matches the remote tag without re-declaring classes the `v1` migration already created.
-See [docs/ADR-0006-do-migrations.md](adr/ADR-0006-do-migrations.md) if it exists, otherwise
-the `wrangler.toml` comment block is the canonical record.
+See the migration block in [`wrangler.toml`](../wrangler.toml) for the tags that are actually
+deployed — its comment block is the canonical record, and there is no ADR about migrations
+(there never was).
 
 ### Secrets vs vars
 

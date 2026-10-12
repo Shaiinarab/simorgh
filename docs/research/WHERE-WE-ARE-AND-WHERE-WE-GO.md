@@ -1,3 +1,28 @@
+---
+type: "Research"
+title: "Where Simorgh is, and where it can go — a decision-grade scan"
+description: "Dated scan whose current-state numbers are superseded; read for its decision options, not its counts."
+tags:
+  - simorgh
+  - research
+  - scan
+  - historical
+  - 2026-10
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "deprecated"
+stale_after: "2027-04-12T00:00:00Z"
+sources:
+  - id: state
+    resource: "../STATE-OF-PROJECT.md"
+    title: "Current state, which supersedes the numbers here"
+  - id: roadmap
+    resource: "../ROADMAP-SPINE.md"
+    title: "The plan this scan feeds"
+---
+
 # Where Simorgh is, and where it can go — a decision-grade scan
 
 - **Written:** 2026-10-08 · **Author:** LongCat 2.5 Preview Free session (lead), with mcp-fleet / Firecrawl

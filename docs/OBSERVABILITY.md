@@ -1,3 +1,32 @@
+---
+type: "Reference"
+title: "Observability — what exists, what is derivable, and the minimum viable signal"
+description: "Current logging, ledger, rate-limit headers and health surfaces, and the gaps that remain."
+tags:
+  - simorgh
+  - observability
+  - ledger
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2026-11-12T00:00:00Z"
+sources:
+  - id: health
+    resource: "../phoenix-core/src/health.ts"
+    title: "bird_health columns"
+  - id: quota-latency
+    resource: "../phoenix-core/src/quota.ts"
+    title: "Latency EMA storage"
+  - id: execute
+    resource: "../phoenix-core/src/execute.ts"
+    title: "Ledger write before the flight"
+---
+
 # Observability — what exists, what is derivable, and the minimum viable layer
 
 **Written:** 2026-09-22 · **Status:** assessment. Nothing implemented; §4 is a proposal.

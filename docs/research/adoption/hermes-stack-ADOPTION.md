@@ -1,3 +1,25 @@
+---
+type: "Adoption Spec"
+title: "Hermes-stack → Simorgh adoption spec"
+description: "Row 11 of the reference cross-walk: adopted-with-changes by ADR-0008."
+tags:
+  - simorgh
+  - adoption
+  - surface
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: adr-0008
+    resource: "../../adr/ADR-0008-unified-surface-harness-api-gateways-wizards.md"
+    title: "The decision that adopted it"
+  - id: adr-0007
+    resource: "../../adr/ADR-0007-adopted-patterns-from-working-open-source.md"
+    title: "The cross-walk row it amends"
+---
+
 # Hermes-stack → Simorgh adoption spec
 
 Source: `github.com/Godde3s/hermes-stack` (Python, ~32★). MIT — the attribution line to record in

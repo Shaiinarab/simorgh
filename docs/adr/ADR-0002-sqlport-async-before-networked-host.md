@@ -1,3 +1,25 @@
+---
+type: "Architecture Decision Record"
+title: "ADR-0002 — Prove portability on a local-storage runtime before adding a networked host"
+description: "SqlPort stays synchronous because no host wants async, and the Bun experiment proved the port shape rather than the runtime."
+tags:
+  - simorgh
+  - adr
+  - portability
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-10-12T00:00:00Z"
+sources:
+  - id: ports
+    resource: "../../phoenix-core/src/ports.ts"
+    title: "The port definitions"
+  - id: node-adapter
+    resource: "../../phoenix-core/src/node/index.ts"
+    title: "The single declared adapter"
+---
+
 # ADR-0002 — Prove portability on a local-storage runtime before making `SqlPort` async
 
 **Status:** Accepted · **Date:** 2026-09-22 · **Supersedes:** nothing

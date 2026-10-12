@@ -1,3 +1,29 @@
+---
+type: "Architecture Decision Record"
+title: "Host portability — evaluating Vercel, and the SqlPort finding behind ADR-0002"
+description: "What the runtime-agnostic engine buys, which hosts were evaluated, and what remains untested."
+tags:
+  - simorgh
+  - portability
+  - hosts
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2026-12-12T00:00:00Z"
+sources:
+  - id: adr-0002
+    resource: "adr/ADR-0002-sqlport-async-before-networked-host.md"
+    title: "The decision this record supports"
+  - id: node-host
+    resource: "../simorgh-platform/src/runtimes/node.ts"
+    title: "Node host adapter"
+---
+
 # Host portability — evaluating Vercel, and the `SqlPort` finding behind it
 
 **Written:** 2026-09-22 · **Updated:** 2026-10-03 (Bun host removed) · **Status:** evaluation complete for Vercel; implementation deliberately not started

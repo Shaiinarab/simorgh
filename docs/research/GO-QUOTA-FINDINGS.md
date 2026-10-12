@@ -1,3 +1,28 @@
+---
+type: "Research"
+title: "Go quota findings — ADR-0003 fact check and unfixed defects"
+description: "Dated 2026-10-09 Go-side quota audit: what ledger.Remaining reports and what it cannot."
+tags:
+  - simorgh
+  - research
+  - go
+  - quota
+  - 2026-10
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: adr-0003
+    resource: "../adr/ADR-0003-free-compute-capacity.md"
+    title: "The decision audited"
+  - id: packages-ledger
+    resource: "../../packages/ledger/ledger.go"
+    title: "The Go quota ledger"
+---
+
 # Go quota findings — ADR-0003 fact check and unfixed defects
 
 TASK-013 deliverable. Read-only; evidence with `file:line` and quoted code. Worktree at

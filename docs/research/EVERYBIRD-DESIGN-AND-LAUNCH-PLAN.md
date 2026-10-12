@@ -1,3 +1,25 @@
+---
+type: "Research"
+title: "Simorgh — the everybird design and the 11 October launch"
+description: "Dated 2026-10-08 launch plan: the cut list, status estimates and explicit non-goals."
+tags:
+  - simorgh
+  - research
+  - launch
+  - historical
+  - 2026-10
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "deprecated"
+stale_after: "2027-04-12T00:00:00Z"
+sources:
+  - id: state
+    resource: "../STATE-OF-PROJECT.md"
+    title: "Current state, which supersedes the estimates"
+---
+
 # Simorgh — the "everybird" design and the 11 October launch
 
 - **Written:** 2026-10-08 · **Author:** LongCat 2.5 Preview Free session (lead)

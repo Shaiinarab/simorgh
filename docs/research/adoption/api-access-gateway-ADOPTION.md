@@ -1,3 +1,26 @@
+---
+type: "Adoption Spec"
+title: "Port spec — api-access-gateway → Simorgh"
+description: "What to take from api-access-gateway's key-handling model and where it duplicates our probes."
+tags:
+  - simorgh
+  - adoption
+  - security
+  - quota
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: adr-0005
+    resource: "../../adr/ADR-0005-free-only-mode.md"
+    title: "The cost gate this port must satisfy"
+  - id: capability-probes
+    resource: "../../../phoenix-core/src/capability-probes.ts"
+    title: "The duplicate surface"
+---
+
 # Port spec — `api-access-gateway` → Simorgh
 
 Source: https://github.com/jaavid/api-access-gateway @ `a4cc71c` (v2.0.0), one file,

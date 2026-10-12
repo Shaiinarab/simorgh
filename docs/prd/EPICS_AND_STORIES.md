@@ -1,3 +1,28 @@
+---
+type: "Product Requirements"
+title: "Simorgh — Epics & Stories"
+description: "The August epic-to-story breakdown, superseded as the queue by docs/todo/."
+tags:
+  - simorgh
+  - prd
+  - epics
+  - stories
+  - historical
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "deprecated"
+stale_after: "2027-04-12T00:00:00Z"
+sources:
+  - id: todo-index
+    resource: "../todo/index.md"
+    title: "The live queue that replaced it"
+  - id: prd
+    resource: "PRD.md"
+    title: "The PRD these epics belong to"
+---
+
 # Simorgh — Epics & Stories
 
 > Extracted from [PRD.md](./PRD.md) for sprint planning reference.

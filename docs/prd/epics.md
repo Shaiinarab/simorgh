@@ -1,3 +1,27 @@
+---
+type: "Product Requirements"
+title: "Simorgh — Epics (historical, sprint-planning format)"
+description: "The August sprint-format epic list, superseded as the queue by docs/todo/."
+tags:
+  - simorgh
+  - prd
+  - epics
+  - historical
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "deprecated"
+stale_after: "2027-04-12T00:00:00Z"
+sources:
+  - id: todo-index
+    resource: "../todo/index.md"
+    title: "The live queue that replaced it"
+  - id: prd
+    resource: "PRD.md"
+    title: "The PRD these epics belong to"
+---
+
 # Simorgh — Epics (historical, sprint-planning format)
 
 > ⚠️ **HISTORICAL as of 2026-10-09.** Epics 1–13 / the first 63 stories are the original breakdown

@@ -1,3 +1,26 @@
+---
+type: "Architecture Decision Record"
+title: "ADR-0005 — FREE_ONLY is the default, and unknown cost is not free"
+description: "A three-state cost model where an unclassified provider is refused rather than optimistically used."
+tags:
+  - simorgh
+  - adr
+  - free-only
+  - cost
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-10-12T00:00:00Z"
+sources:
+  - id: cost-table
+    resource: "../../phoenix-core/src/capability-probes.ts"
+    title: "Provider cost classification"
+  - id: quota
+    resource: "../../phoenix-core/src/quota.ts"
+    title: "The FREE_ONLY gate"
+---
+
 # ADR-0005 — `FREE_ONLY` is the default, and unknown cost is not free
 
 - **Status:** accepted

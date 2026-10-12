@@ -1,3 +1,25 @@
+---
+type: "Research"
+title: "Simorgh Skillstack — top 20 per category (brainstorm baseline, 2026-10)"
+description: "Dated 2026-10 brainstorm baseline of skills and ecosystem tools to mine; a record of what was considered."
+tags:
+  - simorgh
+  - research
+  - skillstack
+  - historical
+  - 2026-10
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "deprecated"
+stale_after: "2027-04-12T00:00:00Z"
+sources:
+  - id: inspiration
+    resource: "GITHUB-INSPIRATION-2026-10-10.md"
+    title: "The survey this baseline drew on"
+---
+
 # Simorgh Skillstack — Top 20 per Category (Brainstorm Baseline, 2026-10)
 
 Installed/verified in this workspace. Rule of thumb for every pick: **genuinely free tier, no-KYC where

@@ -1,3 +1,28 @@
+---
+type: "Research"
+title: "Routing convergence — TypeScript engine vs Go gateway"
+description: "Dated 2026-10-09 comparison of the two routing implementations and where they diverge."
+tags:
+  - simorgh
+  - research
+  - routing
+  - go
+  - 2026-10
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: health
+    resource: "../../phoenix-core/src/health.ts"
+    title: "Cooldown logic audited here"
+  - id: adapter
+    resource: "../../packages/providers/adapter.go"
+    title: "The Go health selector"
+---
+
 # Routing convergence — TypeScript engine vs Go gateway
 
 TASK-013 deliverable. Read-only comparison; evidence, not patches. All line numbers verified

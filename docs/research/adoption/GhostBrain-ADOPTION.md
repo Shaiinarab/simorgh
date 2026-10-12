@@ -1,3 +1,25 @@
+---
+type: "Adoption Spec"
+title: "GhostBrain → Simorgh adoption spec"
+description: "What to take from GhostBrain's memory model and what to refuse."
+tags:
+  - simorgh
+  - adoption
+  - memory
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: adr-0007
+    resource: "../../adr/ADR-0007-adopted-patterns-from-working-open-source.md"
+    title: "The adoption cross-walk"
+  - id: c4
+    resource: "../../todo/C4-layered-memory.md"
+    title: "The task that would implement it"
+---
+
 # GhostBrain → Simorgh Adoption Spec
 
 Source: `github.com/Godde3s/GhostBrain` (MIT, v1.0.0) — one file `GhostBrain.py` (3268 lines) + `docs/AMOOZESH-KAMEL.md` (211 lines, Persian walkthrough). **Test inventory: zero automated tests** — no `test_*`/`pytest`; the README's only "tests" are its live-agent matrix (OpenCode, OpenClaw, Hermes, Cline, LangChain, Aider). Adopt the patterns, not that posture (`phoenix-core` has 18 vitest suites); the changelog header (`:7-102`) is portable: bug *and* fix.

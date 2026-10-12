@@ -1,3 +1,26 @@
+---
+type: "Architecture Decision Record"
+title: "ADR-0006 — Auto-Router compatibility: a routing vocabulary and a complexity model"
+description: "Why compatibility means speaking a routing vocabulary, and why the auto-router factory stays unwired."
+tags:
+  - simorgh
+  - adr
+  - routing
+  - compatibility
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-10-12T00:00:00Z"
+sources:
+  - id: provider
+    resource: "../../phoenix-core/src/provider.ts"
+    title: "autoRouterProvider factory"
+  - id: complexity
+    resource: "../../phoenix-core/src/complexity.ts"
+    title: "Tier ordering"
+---
+
 # ADR-0006 — Auto-Router compatibility: a routing vocabulary, a complexity signal, session affinity, and `cloudflare/auto`
 
 **Status:** Accepted · **Date:** 2026-10-08 · **Supersedes:** nothing · **Amends:** ADR-0003 (capacity), ADR-0005 (free-only)

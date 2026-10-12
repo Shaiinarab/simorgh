@@ -1,3 +1,28 @@
+---
+type: "Research"
+title: "Simorgh Deep Research Audit — October 9, 2026"
+description: "External deep-research audit with confidence markers; strategic recommendations rather than code-state claims."
+tags:
+  - simorgh
+  - research
+  - audit
+  - external
+  - 2026-10
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "deprecated"
+stale_after: "2027-04-12T00:00:00Z"
+sources:
+  - id: state
+    resource: "../STATE-OF-PROJECT.md"
+    title: "Current state against which to re-read this"
+  - id: roadmap
+    resource: "../ROADMAP-SPINE.md"
+    title: "The plan this audit feeds"
+---
+
 # Simorgh Deep Research Audit — October 9, 2026
 
 An ecosystem audit for a free-to-run, no-KYC, self-evolving agentic AI gateway on Cloudflare's edge. Confidence markers: 🟢 well-sourced (official docs fetched this session) · 🟡 mixed/single-source (community directories or unfetched claims) · 🔴 couldn't verify. Citations are inline links to the source that states each claim; claims resting on community directories rather than fetched official pages are marked 🟡 inline.

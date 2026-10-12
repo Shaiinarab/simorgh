@@ -1,3 +1,33 @@
+---
+type: "Architecture"
+title: "Architecture — phoenix-core / simorgh-platform"
+description: "The one architectural rule, the port surface and the file-by-file ownership of both TypeScript packages."
+tags:
+  - simorgh
+  - architecture
+  - phoenix-core
+  - simorgh-platform
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2026-11-12T00:00:00Z"
+sources:
+  - id: boundary-test
+    resource: "../phoenix-core/test/boundary.test.ts"
+    title: "Machine-enforced engine boundary"
+  - id: ports
+    resource: "../phoenix-core/src/ports.ts"
+    title: "Port declarations"
+  - id: workers-routes
+    resource: "../src/index.ts"
+    title: "Workers host route table"
+---
+
 # Architecture — phoenix-core / simorgh-platform
 
 > **Planning status (2026-10-09):** the module map below is current for what *exists*; what comes next

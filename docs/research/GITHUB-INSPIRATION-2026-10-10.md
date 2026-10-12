@@ -1,3 +1,28 @@
+---
+type: "Research"
+title: "GitHub Inspiration Dossier — 2026-10-10"
+description: "External repository survey behind REFERENCE-ARCHITECTURE.md."
+tags:
+  - simorgh
+  - research
+  - ecosystem
+  - survey
+  - 2026-10
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: reference-arch
+    resource: "../REFERENCE-ARCHITECTURE.md"
+    title: "The cross-walk this dossier feeds"
+  - id: adr-0007
+    resource: "../adr/ADR-0007-adopted-patterns-from-working-open-source.md"
+    title: "The adoption decision"
+---
+
 # GitHub Inspiration Dossier — 2026-10-10
 
 Found with the **`github-gold-finder`** skill (sweep → dual-score → triage → extract → register).

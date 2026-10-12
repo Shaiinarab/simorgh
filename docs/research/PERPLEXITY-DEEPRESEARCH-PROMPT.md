@@ -1,3 +1,24 @@
+---
+type: "Prompt"
+title: "Perplexity deep-research prompt — Simorgh (2026-10)"
+description: "The outbound prompt used to gather external ecosystem evidence; a record, not a claim."
+tags:
+  - simorgh
+  - research
+  - prompt
+  - historical
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "deprecated"
+stale_after: "2027-04-12T00:00:00Z"
+sources:
+  - id: continuation
+    resource: "CONTINUATION-REVIEW-2026-10-10.md"
+    title: "The review that consumed this output"
+---
+
 # Perplexity Deep Research Prompt — Simorgh (2026-10)
 
 > **How to use:** open Perplexity → choose **Deep Research** mode → paste everything between the

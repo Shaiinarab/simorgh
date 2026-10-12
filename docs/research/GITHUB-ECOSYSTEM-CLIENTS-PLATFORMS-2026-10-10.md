@@ -1,3 +1,28 @@
+---
+type: "Research"
+title: "GitHub Ecosystem Map II — clients and platforms (2026-10-10)"
+description: "Distribution surfaces for the answer: clients, platforms and gateway software."
+tags:
+  - simorgh
+  - research
+  - ecosystem
+  - distribution
+  - 2026-10
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: inspiration
+    resource: "GITHUB-INSPIRATION-2026-10-10.md"
+    title: "The companion dossier"
+  - id: adr-0008
+    resource: "../adr/ADR-0008-unified-surface-harness-api-gateways-wizards.md"
+    title: "The surface decision"
+---
+
 # GitHub Ecosystem Map II — Clients & Platforms (2026-10-10)
 
 Second dossier from the **`github-gold-finder`** skill, framed for the composition thesis:

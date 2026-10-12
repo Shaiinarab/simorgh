@@ -18,7 +18,7 @@ sources:
     resource: "https://github.com/Shaiinarab/simorgh/blob/9687eb30a35d9e3ef403333c1ca82b4de9fae68a/bench/native-audit/run.mjs"
     title: "Benchmark harness"
   - id: roadmap-spine
-    resource: "ROADMAP-SPINE.md"
+    resource: "../ROADMAP-SPINE.md"
     title: "Current freeze list"
 ---
 # Native Compute Audit

@@ -1,3 +1,26 @@
+---
+type: "Architecture Decision Record"
+title: "ADR-0003 — Free-compute capacity lives in the engine, not in a scheduler"
+description: "Capacity planning is a pure engine function over quota_state, not a scheduler-specific service."
+tags:
+  - simorgh
+  - adr
+  - quota
+  - free-only
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-10-12T00:00:00Z"
+sources:
+  - id: quota
+    resource: "../../phoenix-core/src/quota.ts"
+    title: "The capacity planner"
+  - id: scheduled
+    resource: "../../phoenix-core/src/scheduled.ts"
+    title: "Durable scheduling primitives"
+---
+
 # ADR-0003 — Free-compute capacity lives in the engine, not in a scheduler service
 
 - **Status:** accepted

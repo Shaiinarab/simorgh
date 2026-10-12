@@ -1,3 +1,29 @@
+---
+type: "Architecture Decision Record"
+title: "ADR-0008 — The unified surface: harness, API gateways and a first-run wizard"
+description: "The three-door model, the chat gateways that reached it, and the amendments to ADR-0007."
+tags:
+  - simorgh
+  - adr
+  - surface
+  - chat-gateways
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-10-12T00:00:00Z"
+sources:
+  - id: telegram
+    resource: "../../src/telegram.ts"
+    title: "Chat gateway 1"
+  - id: discord
+    resource: "../../src/discord.ts"
+    title: "Chat gateway 2"
+  - id: setup
+    resource: "../../src/setup.ts"
+    title: "First-run wizard"
+---
+
 # ADR-0008 — The unified surface: harness + API + chat gateways + free-only wizards
 
 - **Status:** accepted

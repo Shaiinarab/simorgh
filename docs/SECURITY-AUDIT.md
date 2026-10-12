@@ -1,3 +1,32 @@
+---
+type: "Security Audit"
+title: "Security Audit — simorgh-platform (TASK-009)"
+description: "Findings with stable IDs, severity, disposition and the threat model they were judged against."
+tags:
+  - simorgh
+  - security
+  - audit
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2026-11-12T00:00:00Z"
+sources:
+  - id: fail-closed
+    resource: "../phoenix-core/src/security.ts"
+    title: "Auth, sanitisation and rate limiting"
+  - id: allow-list
+    resource: "../phoenix-core/src/tools.ts"
+    title: "Tool allow-list"
+  - id: ledger
+    resource: "../phoenix-core/src/ledger.ts"
+    title: "Append-only transparency ledger"
+---
+
 # Security Audit — simorgh-platform / TASK-009
 
 > **What can an attacker make a Simorgh agent, connector, or deployer do that the user did not explicitly authorize?**

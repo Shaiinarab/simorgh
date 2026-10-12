@@ -1,3 +1,32 @@
+---
+type: "Quality Audit"
+title: "Quality Audit — TASK-008"
+description: "Test-baseline counts, uncovered paths, and the assertions that cannot fail."
+tags:
+  - simorgh
+  - quality
+  - tests
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2026-11-12T00:00:00Z"
+sources:
+  - id: vitest-workers
+    resource: "../vitest.config.ts"
+    title: "Workers suite configuration"
+  - id: vitest-node
+    resource: "../vitest.node.config.ts"
+    title: "Node suite configuration"
+  - id: security-scan
+    resource: "../scripts/security-scan.sh"
+    title: "The secrets and audit gate"
+---
+
 # Quality Audit — TASK-008
 
 > **Snapshot notice (2026-10-09):** the numbers in this audit (82 + 202 tests, 10 + 17 files) were true

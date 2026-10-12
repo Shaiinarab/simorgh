@@ -1,3 +1,29 @@
+---
+type: "Design"
+title: "The unified control plane"
+description: "Design for one control plane over targets, connectors, deploy and fleet — the surface the platform tools expose."
+tags:
+  - simorgh
+  - design
+  - platform
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "draft"
+verified:
+  by: "process:okf-fact-check-2026-10-12"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2026-11-12T00:00:00Z"
+sources:
+  - id: adr-0008
+    resource: "../adr/ADR-0008-unified-surface-harness-api-gateways-wizards.md"
+    title: "The unified-surface decision"
+  - id: connectors
+    resource: "../../simorgh-platform/src/connectors/"
+    title: "Connector implementations"
+---
+
 # The unified control plane
 
 One page over every platform this deployment touches, served at `GET /dashboard`.

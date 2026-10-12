@@ -1,3 +1,26 @@
+---
+type: "Product Requirements"
+title: "Simorgh — Product Requirements Document"
+description: "The August PRD: scope, epics and stories. Historical planning material amended by ADR-0008."
+tags:
+  - simorgh
+  - prd
+  - historical
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+status: "stable"
+stale_after: "2027-04-12T00:00:00Z"
+sources:
+  - id: adr-0008
+    resource: "../adr/ADR-0008-unified-surface-harness-api-gateways-wizards.md"
+    title: "Epics 14–17 amendment"
+  - id: roadmap
+    resource: "../ROADMAP-SPINE.md"
+    title: "The plan of record"
+---
+
 # 🦅 Project Simorgh — Product Requirements Document (PRD)
 
 > *"Thirty birds set out to find the Simorgh. After a long journey, the thirty survivors (si morgh) discover that they themselves — united — **are** the Simorgh."*

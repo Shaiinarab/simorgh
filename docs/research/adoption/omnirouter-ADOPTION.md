@@ -1,3 +1,25 @@
+---
+type: "Adoption Spec"
+title: "OmniRouter → Simorgh adoption spec"
+description: "What to take from OmniRouter's provider catalogue shape and what stays refused."
+tags:
+  - simorgh
+  - adoption
+  - providers
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: e2
+    resource: "../../todo/E2-provider-discovery.md"
+    title: "The task that would implement it"
+  - id: adr-0005
+    resource: "../../adr/ADR-0005-free-only-mode.md"
+    title: "The cost classification requirement"
+---
+
 # OmniRouter → Simorgh adoption spec
 
 Source: `github.com/Godde3s/omnirouter` (Go 1.25, ~36.7k LOC, v1.4.0). MIT — `LICENSE` reads "Copyright (c) 2026 Lelouch": **any ported file must carry that attribution line**.

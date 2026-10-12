@@ -1,3 +1,25 @@
+---
+type: "Architecture Decision Record"
+title: "ADR-0001 — The role of the Go workspace"
+description: "Why gateway/, packages/, bot/ and tools/ exist beside the TypeScript app, and what the Go side may never become."
+tags:
+  - simorgh
+  - adr
+  - go
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-10-12T00:00:00Z"
+sources:
+  - id: go-work
+    resource: "../../go.work"
+    title: "The Go workspace"
+  - id: gateway
+    resource: "../../gateway/internal/server/server.go"
+    title: "Go gateway surface"
+---
+
 # ADR-0001 — The role of the Go workspace (`gateway/`, `packages/`, `bot/`, `tools/`)
 
 **Status:** Accepted · **Date:** 2026-09-22 · **Supersedes:** nothing

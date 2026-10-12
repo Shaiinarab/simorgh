@@ -1,3 +1,25 @@
+---
+type: "Adoption Spec"
+title: "REA MCP contract-generation — adoption for Simorgh"
+description: "What to take from generated MCP contracts, and the open question about platformMcpHandler auth."
+tags:
+  - simorgh
+  - adoption
+  - mcp
+  - okf
+generated:
+  by: "opencode/space-bunny-free"
+  at: "2026-10-12T15:20:00Z"
+stale_after: "2027-01-12T00:00:00Z"
+sources:
+  - id: e1
+    resource: "../../todo/E1-mcp-current-revision.md"
+    title: "The task that would implement it"
+  - id: mcp-auth
+    resource: "../../../simorgh-platform/src/mcp/server.ts"
+    title: "The unauthenticated MCP surface"
+---
+
 # REA MCP contract-generation — adoption for Simorgh
 
 Evidence: morluto/rea `docs/mcp-contracts.md`, `docs/tool-design.md`,
