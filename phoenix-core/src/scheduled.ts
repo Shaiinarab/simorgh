@@ -36,6 +36,13 @@ export type TaskState = "pending" | "running" | "done" | "failed";
 export interface ScheduledTaskInput {
   /** Stable id chosen by the caller. Re-using an id never duplicates the row. */
   id: string;
+  /**
+   * The resolved principal that owns this row — never a client-chosen value. Hosts pass
+   * the subject from `authenticateExecuteIdentity` (A3): the credential decides ownership,
+   * so one token cannot queue work in another principal's name or overwrite a pending row
+   * it does not own.
+   */
+  principal: string;
   /** The prompt to fly through the flock when the time comes. */
   prompt: string;
   /**
@@ -58,6 +65,7 @@ export interface ScheduledTaskInput {
 /** A row of `scheduled_task`. */
 export type ScheduledTaskRow = {
   id: string;
+  principal: string;
   prompt: string;
   tools: string;
   state: TaskState;
@@ -72,6 +80,7 @@ export type ScheduledTaskRow = {
 export const SCHEDULED_SCHEMA = `
   CREATE TABLE IF NOT EXISTS scheduled_task (
     id          TEXT    NOT NULL PRIMARY KEY,
+    principal   TEXT    NOT NULL DEFAULT '',
     prompt      TEXT    NOT NULL,
     tools       TEXT    NOT NULL DEFAULT '[]',
     state       TEXT    NOT NULL DEFAULT 'pending',
@@ -84,6 +93,29 @@ export const SCHEDULED_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_scheduled_state ON scheduled_task(state, resume_at);
 `;
+
+/**
+ * Add the `principal` column to a table created before A3.
+ *
+ * `CREATE TABLE IF NOT EXISTS` does not retrofit a column onto a table that already
+ * exists, and a live Durable Object's SQLite is exactly that: its rows persist across
+ * deploys. So hosts run this immediately after the schema — a `PRAGMA table_info`
+ * probe, then one `ALTER TABLE` if the column is missing.
+ *
+ * Pre-A3 rows keep the default `''`, which is *nobody*: ownership checks and the
+ * per-principal listing never match it, so legacy rows stop being visible or editable
+ * while the alarm still runs them — a pending row that someone scheduled must not
+ * silently stop firing when this ships. `''` fails closed on reads and writes and
+ * stays inert on the clock, and that asymmetry is deliberate.
+ */
+export function migrateScheduledSchema(sql: SqlPort): void {
+  const columns = sql
+    .exec<{ name: string } & SqlRow>("PRAGMA table_info(scheduled_task)")
+    .toArray();
+  if (!columns.some((column) => column.name === "principal")) {
+    sql.exec("ALTER TABLE scheduled_task ADD COLUMN principal TEXT NOT NULL DEFAULT ''");
+  }
+}
 
 /**
  * How long a claimed (`running`) row may go unfinished before it is assumed the host
@@ -106,26 +138,45 @@ export const SCHEDULED_LEASE_MS = 300_000;
  *     already dialling another — so `running` is left alone too, exactly like `done`.
  *
  * To change a task that has already started, schedule a **new** id.
+ *
+ * A3 adds the ownership half: a row belongs to the principal that created it, and an
+ * insert of a taken id under a *different* principal is refused (`"conflict"`) rather
+ * than silently rewinding someone else's schedule. The read-before-write is safe because
+ * this SQL is synchronous on the host that owns the database — a Durable Object never
+ * interleaves two handlers mid-function, and Node has one event loop per server.
  */
+export type ScheduleOutcome = "scheduled" | "updated" | "conflict";
+
 export function scheduleTask(
   sql: SqlPort,
   input: ScheduledTaskInput,
   now: number
-): void {
+): ScheduleOutcome {
+  const existing = sql
+    .exec<{ state: string; principal: string } & SqlRow>(
+      "SELECT state, principal FROM scheduled_task WHERE id = ?",
+      input.id
+    )
+    .toArray()[0];
+
+  if (existing && existing.principal !== input.principal) return "conflict";
+
   sql.exec(
-    `INSERT INTO scheduled_task (id, prompt, tools, state, resume_at, created_at)
-     VALUES (?, ?, ?, 'pending', ?, ?)
+    `INSERT INTO scheduled_task (id, principal, prompt, tools, state, resume_at, created_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        prompt    = excluded.prompt,
        tools     = excluded.tools,
        resume_at = excluded.resume_at
      WHERE scheduled_task.state = 'pending'`,
     input.id,
+    input.principal,
     input.prompt,
     JSON.stringify(input.tools ?? []),
     input.resumeAt,
     now
   );
+  return existing ? "updated" : "scheduled";
 }
 
 /**
@@ -241,7 +292,24 @@ export function failTask(sql: SqlPort, id: string, error: string): void {
   );
 }
 
-/** Read every row. */
-export function listTasks(sql: SqlPort): ScheduledTaskRow[] {
-  return [...sql.exec<ScheduledTaskRow & SqlRow>("SELECT * FROM scheduled_task ORDER BY created_at").toArray()];
+/**
+ * Read every row, optionally only the rows a single principal owns.
+ *
+ * The `principal` filter is not a convenience: hosts list schedules to callers who hold a
+ * valid token, and a valid token is not a licence to read every prompt ever queued
+ * (`prompt` and `result` are user content). Omitting the filter means "the host itself"
+ * — alarm bookkeeping and tests — never an HTTP caller.
+ */
+export function listTasks(sql: SqlPort, principal?: string): ScheduledTaskRow[] {
+  if (principal === undefined) {
+    return [...sql.exec<ScheduledTaskRow & SqlRow>("SELECT * FROM scheduled_task ORDER BY created_at").toArray()];
+  }
+  return [
+    ...sql
+      .exec<ScheduledTaskRow & SqlRow>(
+        "SELECT * FROM scheduled_task WHERE principal = ? ORDER BY created_at",
+        principal
+      )
+      .toArray(),
+  ];
 }

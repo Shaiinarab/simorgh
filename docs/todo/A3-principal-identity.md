@@ -11,12 +11,12 @@ tags:
 generated:
   by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
-status: "draft"
-work_status: "next"
+status: "stable"
+work_status: "done"
 priority: "P0"
 depends_on:
   []
-stale_after: "2026-10-17T00:00:00Z"
+stale_after: "2027-05-16T00:00:00Z"
 sources:
   - id: roadmap-spine
     resource: "../ROADMAP-SPINE.md"
@@ -32,14 +32,19 @@ sources:
 
 ## TL;DR
 
-This is the security gate. Resolve the principal from the credential, not from a user ID supplied in
-the request. Do not enable multi-user autonomous execution until the acceptance checks pass on both
-Workers and Node.
+**Shipped 2026-11-16.** The credential is now the only authority for the executing principal.
+`/api/v1/agent/execute`, the MCP `ask` tool, and schedule create/list resolve the subject from the
+bearer token; `X-Simorgh-User-Id` and body `userId` are claims that must match or the call is refused
+(403). Rate-limit keys and ledger rows are written under the resolved subject. A service-only
+deployment executes as the named `service` principal and has no per-user read surface.
 
-**Verified 2026-10-12.** EXISTS — credential→principal resolution in `phoenix-core/src/security.ts`,
-enforced by `requireIdentity` on `/api/v1/user/:userId/logs` and `/api/v1/context/:refId` on both hosts.
-MISSING — `/api/v1/agent/execute` still takes `X-Simorgh-User-Id` from the request, and the rate-limit
-key and ledger row inherit it.
+**Verified 2026-11-16** after merging Qwen's `qwenone/` work into `main`: `upm run typecheck` exit 0
+(3 configs), `upm test` green on **both** suites (188 workers / 18 files, 522 Node / 28 files),
+`upm run security:scan` PASS. Cross-principal negative tests run against a real core on the Node host
+(`simorgh-platform/test/integration.test.ts`) and on Workers (`test/identity.test.ts`), including a
+header and body spoof, rate-budget isolation, an unknown token, and the matching-claim positive control.
+The `principal` column migration (`migrateScheduledSchema`) keeps pre-A3 rows firing while making them
+invisible to every principal — fail closed on reads and writes, inert on the clock.
 
 ## Work
 

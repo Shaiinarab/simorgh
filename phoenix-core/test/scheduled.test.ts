@@ -18,6 +18,7 @@ import {
   failTask,
   finishTask,
   listTasks,
+  migrateScheduledSchema,
   nextDueTasks,
   nextWakeAt,
   scheduleTask,
@@ -39,8 +40,13 @@ beforeEach(() => {
   sql.exec(SCHEDULED_SCHEMA);
 });
 
-function task(id: string, resumeAt: number, prompt = `prompt:${id}`): ScheduledTaskInput {
-  return { id, prompt, tools: ["search"], resumeAt };
+function task(
+  id: string,
+  resumeAt: number,
+  prompt = `prompt:${id}`,
+  principal = "alice"
+): ScheduledTaskInput {
+  return { id, principal, prompt, tools: ["search"], resumeAt };
 }
 
 function rowOf(id: string) {
@@ -124,6 +130,97 @@ describe("scheduleTask", () => {
     scheduleTask(sql, task("t1", NOW + MINUTE), NOW);
 
     expect(listTasks(sql)).toHaveLength(1);
+  });
+});
+
+// ── Ownership of a schedule (A3 / AUTH-004) ────────────────────────────────────
+//
+// A schedule row is user content and user-side work: `prompt`, `result`, and whatever
+// the future quota ledger (B2) keys off `resume_at`. So an id belongs to the principal
+// the *credential* resolved to, and a second principal cannot take it — neither by
+// overwriting a pending row nor by reading it in a listing.
+
+describe("schedule ownership", () => {
+  it("refuses to re-take a live id under a different principal", () => {
+    scheduleTask(sql, task("t1", NOW + MINUTE, "alice's prompt"), NOW);
+
+    const outcome = scheduleTask(sql, task("t1", NOW + MINUTE, "bob's prompt", "bob"), NOW);
+
+    expect(outcome).toBe("conflict");
+    // The negative control that makes the refusal real: had the write gone through,
+    // the row would read "bob's prompt".
+    expect(rowOf("t1")).toMatchObject({ prompt: "alice's prompt", principal: "alice" });
+  });
+
+  it("reports conflict even when the row is terminal — an id never changes hands", () => {
+    scheduleTask(sql, task("t1", NOW, "alice's prompt"), NOW);
+    claimTask(sql, "t1", NOW);
+    finishTask(sql, "t1", "answered");
+
+    expect(scheduleTask(sql, task("t1", NOW + MINUTE, "bob again", "bob"), NOW)).toBe(
+      "conflict"
+    );
+    expect(rowOf("t1")).toMatchObject({ state: "done", principal: "alice" });
+  });
+
+  it("lets the same principal rewrite its own pending row and says so", () => {
+    expect(scheduleTask(sql, task("t1", NOW + MINUTE, "first"), NOW)).toBe("scheduled");
+    expect(scheduleTask(sql, task("t1", NOW + 2 * MINUTE, "second"), NOW)).toBe("updated");
+    expect(rowOf("t1")).toMatchObject({ prompt: "second", resume_at: NOW + 2 * MINUTE });
+  });
+
+  it("lists per principal, so a token never reads another user's prompts", () => {
+    scheduleTask(sql, task("a1", NOW + MINUTE, "alice one", "alice"), NOW);
+    scheduleTask(sql, task("b1", NOW + MINUTE, "bob one", "bob"), NOW);
+
+    expect(listTasks(sql, "alice").map((t) => t.id)).toEqual(["a1"]);
+    expect(listTasks(sql, "bob").map((t) => t.id)).toEqual(["b1"]);
+    // No filter remains the host's own view (alarm bookkeeping), unscoped on purpose.
+    expect(listTasks(sql).map((t) => t.id)).toEqual(["a1", "b1"]);
+  });
+
+  it("migrates a pre-A3 table: legacy rows exist, are owned by nobody, and still fire", () => {
+    // The *old* schema, verbatim — the negative control for the migration. A `''`
+    // legacy row must be invisible to every principal (fail closed on reads and edits)
+    // while the alarm machinery keeps running it (a scheduled task must not silently
+    // stop firing because ownership landed after it was written).
+    sql.exec("DROP TABLE scheduled_task");
+    sql.exec(`
+      CREATE TABLE scheduled_task (
+        id          TEXT    NOT NULL PRIMARY KEY,
+        prompt      TEXT    NOT NULL,
+        tools       TEXT    NOT NULL DEFAULT '[]',
+        state       TEXT    NOT NULL DEFAULT 'pending',
+        resume_at   INTEGER NOT NULL,
+        claimed_at  INTEGER NOT NULL DEFAULT 0,
+        created_at  INTEGER NOT NULL,
+        attempts    INTEGER NOT NULL DEFAULT 0,
+        result      TEXT,
+        error       TEXT
+      );
+    `);
+    sql.exec(
+      `INSERT INTO scheduled_task (id, prompt, tools, state, resume_at, created_at)
+       VALUES ('legacy', 'fire me', '[]', 'pending', ?, ?)`,
+      NOW + MINUTE,
+      NOW
+    );
+
+    migrateScheduledSchema(sql);
+
+    // A second migration run must be a no-op, not a duplicate-column failure.
+    migrateScheduledSchema(sql);
+
+    const legacy = listTasks(sql).find((t) => t.id === "legacy");
+    expect(legacy).toMatchObject({ principal: "", state: "pending" });
+    expect(listTasks(sql, "alice").map((t) => t.id)).toEqual([]);
+    expect(listTasks(sql, "bob").map((t) => t.id)).toEqual([]);
+    // And nobody may claim the legacy id under a real principal:
+    expect(scheduleTask(sql, task("legacy", NOW + MINUTE, "mine now", "alice"), NOW)).toBe(
+      "conflict"
+    );
+    // The clock still sees it: due at the resume time, and claimable by the alarm.
+    expect(nextDueTasks(sql, NOW + MINUTE, LEASE).map((t) => t.id)).toEqual(["legacy"]);
   });
 });
 

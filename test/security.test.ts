@@ -70,7 +70,7 @@ describe("validation", () => {
       prompt: "hello",
       tools: ["search_web", "get_server_time"],
       blockedTools: ["bad"],
-      userId: "telegram:123",
+      claimedUserId: "telegram:123",
       tier: "Free-Volunteer",
     }));
 

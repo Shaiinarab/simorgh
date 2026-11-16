@@ -16,6 +16,7 @@
 
 import {
   allowedOrigins as coreAllowedOrigins,
+  authenticateExecuteIdentity as coreAuthenticateExecuteIdentity,
   authenticateServiceIdentity as coreAuthenticateServiceIdentity,
   authenticateServiceRequest as coreAuthenticateServiceRequest,
   constantTimeEqual as coreConstantTimeEqual,
@@ -23,6 +24,7 @@ import {
   parseTokenSubjects,
   subjectMatches,
   type AuthResult,
+  type ExecuteAuthResult,
   type IdentityAuthResult,
   type Sha256,
 } from "@simorgh/phoenix-core";
@@ -30,13 +32,16 @@ import {
 export { parseTokenSubjects, subjectMatches };
 
 export {
+  assertPrincipalClaim,
   MAX_EXECUTE_BODY_CHARS,
   MAX_PROMPT_CHARS,
   MAX_TOOLS,
   MAX_USER_ID_CHARS,
   parseExecuteBody,
   RequestValidationError,
+  SERVICE_PRINCIPAL,
   type AuthResult,
+  type ExecuteAuthResult,
   type HeaderLike,
   type ParsedExecuteRequest,
   type Tier,
@@ -82,6 +87,25 @@ export function authenticateServiceIdentity(
   env: Env
 ): Promise<IdentityAuthResult> {
   return coreAuthenticateServiceIdentity(request.headers, {
+    apiKey: env.SIMORGH_API_KEY,
+    tokenSubjects: parseTokenSubjects(env.SIMORGH_API_KEYS),
+    sha256,
+  });
+}
+
+/**
+ * Auth *and* the executing principal, for routes that do work (A3 / AUTH-004).
+ *
+ * A token in `SIMORGH_API_KEYS` executes as its mapped subject; the deployment's single
+ * `SIMORGH_API_KEY` token executes as the explicit `service` principal; an unknown token
+ * gets `401` with no fallback identity to inherit. The *why* of that middle case lives on
+ * the engine function; this half only knows where the values sit on `Env`.
+ */
+export function authenticateExecuteIdentity(
+  request: Request,
+  env: Env
+): Promise<ExecuteAuthResult> {
+  return coreAuthenticateExecuteIdentity(request.headers, {
     apiKey: env.SIMORGH_API_KEY,
     tokenSubjects: parseTokenSubjects(env.SIMORGH_API_KEYS),
     sha256,

@@ -27,6 +27,11 @@ export interface CoreHealth {
 export interface AskRequest {
   prompt: string;
   tools?: readonly AgentTool[];
+  /**
+   * An identity *claim*, validated by the core against this connector's credential —
+   * not an identity input (A3). Omit it and the execution is attributed to the principal
+   * the bearer token names; set it to another principal's id and the core refuses.
+   */
   userId?: string;
   tier?: string;
 }

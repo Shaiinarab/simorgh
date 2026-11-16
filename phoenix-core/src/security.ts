@@ -33,7 +33,20 @@ export interface ParsedExecuteRequest {
   prompt: string;
   tools: AgentTool[];
   blockedTools: string[];
-  userId: string;
+  /**
+   * The identity the caller *claimed* — from `X-Simorgh-User-Id` or `body.userId`, after
+   * normalization and the header/body agreement check. A claim, never authority: the host
+   * must check it against the resolved principal with `assertPrincipalClaim` before using
+   * either. `undefined` means the caller claimed nothing, which is the normal case for a
+   * principal-authenticated client.
+   *
+   * This field used to be a trusted `userId` defaulting to `"anonymous"`, which is the
+   * whole of AUTH-004: the rate-limit key and the ledger row inherited a caller-chosen
+   * value, so one valid token could spend another user's budget and write rows in their
+   * name. An anonymous *fallback* is now impossible by construction — nothing here assigns
+   * an identity; only the credential resolver does.
+   */
+  claimedUserId?: string;
   tier: Tier;
 }
 
@@ -211,6 +224,104 @@ export function subjectMatches(subject: string, claimed: string): boolean {
   return subject === claimed;
 }
 
+// ── The executing principal (A3 / AUTH-004) ───────────────────────────────────
+//
+// `authenticateServiceIdentity` answers "which user is *reading*"; execute and schedule
+// needed the same answer and did not ask it — they took the identity from the request.
+// That is AUTH-004: any holder of a valid bearer token could name whichever user the
+// rate-limit key and the ledger row would be written under. The resolver below makes the
+// credential the only source of the executing principal, and the request's `userId` a
+// claim that must agree or the request is refused.
+//
+// Two kinds of principal resolve here, and the distinction is explicit rather than
+// incidental:
+//
+//   * **User principals** — tokens present in `SIMORGH_API_KEYS`. Each execution is
+//     attributed to, rate-limited for, and ledgered under that token's subject.
+//   * **The service principal** — the `SIMORGH_API_KEY` token, when the deployment has no
+//     map (or the token is simply the service one). It executes as the literal subject
+//     `service`, because "a solo deployment must still be able to execute" and "an
+//     unattributable caller gets a fake user" are different propositions. `service` is a
+//     *named, singular* identity that a dashboard operator can see in the ledger and a
+//     quota column can hold; `anonymous` was whichever identity each request chose for
+//     itself, which is the bug. A service principal is never silently treated as a user:
+//     per-user *reads* stay on `authenticateServiceIdentity`, where the service token is
+//     still `IDENTITY_UNRESOLVED` (see the asymmetry note on the executor result).
+
+/** The distinguished subject a deployment's single service token executes as. */
+export const SERVICE_PRINCIPAL = "service";
+
+export type ExecuteAuthResult =
+  | { ok: true; subject: string }
+  | { ok: false; status: 401 | 503; code: "UNAUTHORIZED" | "AUTH_NOT_CONFIGURED" };
+
+/**
+ * Authenticate a caller for *execution* and resolve the principal it acts as.
+ *
+ * Same posture as `authenticateServiceIdentity`: configuration is checked before the
+ * token (an unconfigured deployment says `503 AUTH_NOT_CONFIGURED` whether or not a token
+ * was supplied), comparison walks the whole map so the timing does not name the matching
+ * token, and an unknown token is a plain `401` — never a fallback identity.
+ *
+ * The asymmetry with the read routes is deliberate: a service token may *execute* (as
+ * `service`) but may not *read* `/api/v1/user/:userId/logs`, which stays
+ * `IDENTITY_UNRESOLVED` without a map. Execution writes under an explicit principal;
+ * reading other people's history needs a subject that is a real configured user.
+ */
+export async function authenticateExecuteIdentity(
+  headers: HeaderLike,
+  options: { apiKey?: string; tokenSubjects?: TokenSubjects; sha256: Sha256 }
+): Promise<ExecuteAuthResult> {
+  const subjects = options.tokenSubjects;
+  const hasMap = subjects !== undefined && Object.keys(subjects).length > 0;
+  const configured = options.apiKey?.trim();
+
+  if (!hasMap && !configured) return { ok: false, status: 503, code: "AUTH_NOT_CONFIGURED" };
+
+  const supplied = extractBearerToken(headers);
+  if (!supplied) return { ok: false, status: 401, code: "UNAUTHORIZED" };
+
+  let matched: string | undefined;
+  // No early `break`: the comparison count must not depend on which token matched.
+  if (hasMap) {
+    for (const [token, subject] of Object.entries(subjects)) {
+      if (await constantTimeEqual(supplied, token, options.sha256)) matched ??= subject;
+    }
+  }
+  if (matched) return { ok: true, subject: matched };
+
+  if (configured && (await constantTimeEqual(supplied, configured, options.sha256))) {
+    return { ok: true, subject: SERVICE_PRINCIPAL };
+  }
+  return { ok: false, status: 401, code: "UNAUTHORIZED" };
+}
+
+/**
+ * Check a caller-supplied identity claim against the resolved principal.
+ *
+ * Throws a `403 FORBIDDEN` when the claim is present and does not match, and returns
+ * `subject` otherwise. One message for every mismatch — whether or not the claimed name
+ * is a real subject anywhere — so this cannot enumerate the key map (the same reasoning
+ * the logs route applies to the URL).
+ *
+ * A *matching* claim is still not what gets used: the host executes under `subject`
+ * regardless, and the claim check exists to fail loudly for clients that would otherwise
+ * believe their `userId` was honored.
+ */
+export function assertPrincipalClaim(
+  claimedUserId: string | undefined,
+  subject: string
+): string {
+  if (claimedUserId !== undefined && !subjectMatches(subject, claimedUserId)) {
+    throw new RequestValidationError(
+      403,
+      "FORBIDDEN",
+      "The claimed user id does not match the authenticated principal."
+    );
+  }
+  return subject;
+}
+
 /**
  * Parse and bound an execute request body.
  *
@@ -301,7 +412,7 @@ export function parseExecuteBody(
     prompt,
     tools,
     blockedTools,
-    userId: normalizedHeader ?? bodyUserId ?? "anonymous",
+    ...(normalizedHeader ?? bodyUserId ? { claimedUserId: normalizedHeader ?? bodyUserId } : {}),
     tier,
   };
 }
@@ -678,10 +789,10 @@ export function markUntrusted(text: string): string {
  * not be executed unbuilt, which is the whole reason the engine is portable.
  */
 export class RequestValidationError extends Error {
-  readonly status: 400 | 413;
+  readonly status: 400 | 403 | 413;
   readonly code: string;
 
-  constructor(status: 400 | 413, code: string, message: string) {
+  constructor(status: 400 | 403 | 413, code: string, message: string) {
     super(message);
     this.name = "RequestValidationError";
     this.status = status;

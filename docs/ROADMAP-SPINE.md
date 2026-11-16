@@ -97,12 +97,13 @@ new CPU-heavy feature → benchmark → profile → only then consider native co
   lines may keep `npx` as *historical evidence*, not instruction); evaluate stable TypeScript 7
   (`tsc`) vs `@typescript/native-preview` (`tsgo`) in an isolated branch — do NOT mix with features;
   verify `@cloudflare/vitest-pool-workers` ↔ Vitest 4/5 compatibility before bumping.
-- **A3 AUTH-004 principal identity** 🔴 — credential → authenticated principal → `principalId`
-  is the ONLY source of userId/quota/task/schedule/memory/retrieval/connector/credential/ledger
-  ownership. Client-chosen `X-Simorgh-User-Id` must never be believed by `/api/v1/agent/execute`
-  (see docs/SECURITY-AUDIT.md:49–54, src/index.ts:368, phoenix-core/src/security.ts:293).
-  Required negative tests: A cannot execute/schedule/read/consume/search/invoke as B (7 cases).
-  **Gate: multi-user autonomous execution is forbidden until A3 ships.**
+- **A3 AUTH-004 principal identity** ✅ shipped 2026-11-16 — credential → authenticated principal →
+  `principalId` is the ONLY source of userId/quota/task/schedule/ledger ownership on both hosts.
+  Client-chosen `X-Simorgh-User-Id` and body `userId` are now claims that must match the credential's
+  subject; execute, schedule, the MCP `ask` tool, rate-limit keys and ledger rows resolve from the
+  token. Cross-principal negative tests (header/body spoof, quota isolation, unknown token, matching
+  claim) run against a real core in both suites. The seven-case list stays the acceptance target for
+  the parts that do not exist yet: knowledge search and connector invocation arrive with C1/C2 and E.
 
 ### EPIC-B · Make the existing architecture execute (the spine)
 

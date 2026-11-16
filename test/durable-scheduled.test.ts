@@ -32,6 +32,9 @@ import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 const MINUTE = 60_000;
+
+/** The single owner these state-machine tests schedule under (A3 made rows owned). */
+const OWNER = "p1";
 /** `SCHEDULED_LEASE_MS`, restated so this file cannot silently follow a wrong value. */
 const LEASE_MS = 300_000;
 
@@ -62,7 +65,7 @@ describe("FlockCoordinator — durable delay", () => {
   it("arms a real alarm when a task is scheduled", async () => {
     const stub = coordinator();
     const resumeAt = Date.now() + 30 * MINUTE;
-    await stub.scheduleDelayed({ id: "t1", prompt: "later", resumeAt });
+    await stub.scheduleDelayed({ id: "t1", principal: OWNER, prompt: "later", resumeAt });
 
     const { alarm } = await inspect(stub);
     // This is the assertion the whole slice rests on. Before `rearmAlarm` existed the
@@ -73,7 +76,7 @@ describe("FlockCoordinator — durable delay", () => {
 
   it("firing the alarm claims the row exactly once", async () => {
     const stub = coordinator();
-    await stub.scheduleDelayed({ id: "t1", prompt: "hello", resumeAt: due() });
+    await stub.scheduleDelayed({ id: "t1", principal: OWNER, prompt: "hello", resumeAt: due() });
 
     // Not asserted: whether this helper reports `true`. An alarm due in the past is
     // fired by the runtime itself, so by the time we ask there may be nothing left to
@@ -83,7 +86,7 @@ describe("FlockCoordinator — durable delay", () => {
 
     // `attempts` is the observable. It is incremented inside the same compare-and-set that
     // moves the row out of `pending`, so a value above 1 can only come from a re-claim.
-    const rows = (await stub.listScheduled()) as { id: string; state: string; attempts: number }[];
+    const rows = (await stub.listScheduled(OWNER)) as { id: string; state: string; attempts: number }[];
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: "t1", attempts: 1 });
     expect(rows[0].state).not.toBe("pending");
@@ -95,13 +98,13 @@ describe("FlockCoordinator — durable delay", () => {
     // and the guarantee has to come from the state machine rather than from the scheduler
     // happening to be careful. Two deliveries, one claim.
     const stub = coordinator();
-    await stub.scheduleDelayed({ id: "t1", prompt: "hello", resumeAt: due() });
+    await stub.scheduleDelayed({ id: "t1", principal: OWNER, prompt: "hello", resumeAt: due() });
 
     await runDurableObjectAlarm(stub);
     await runDurableObjectAlarm(stub);
     await runDurableObjectAlarm(stub);
 
-    const rows = (await stub.listScheduled()) as { state: string; attempts: number }[];
+    const rows = (await stub.listScheduled(OWNER)) as { state: string; attempts: number }[];
     expect(rows[0].attempts).toBe(1);
   });
 
@@ -109,8 +112,8 @@ describe("FlockCoordinator — durable delay", () => {
     const stub = coordinator();
     await seed(stub, (sql) => {
       sql.exec(
-        `INSERT INTO scheduled_task (id, prompt, tools, state, resume_at, claimed_at, created_at, attempts, result)
-         VALUES ('done', 'hi', '[]', 'done', ?, 0, 1, 1, '{"answer":"already answered"}')`,
+        `INSERT INTO scheduled_task (id, principal, prompt, tools, state, resume_at, claimed_at, created_at, attempts, result)
+         VALUES ('done', 'p1', 'hi', '[]', 'done', ?, 0, 1, 1, '{"answer":"already answered"}')`,
         Date.now() - MINUTE
       );
       return true;
@@ -121,7 +124,7 @@ describe("FlockCoordinator — durable delay", () => {
     expect(armed.alarm).toBeNull();
     expect(await runDurableObjectAlarm(stub)).toBe(false);
 
-    const rows = (await stub.listScheduled()) as { state: string; attempts: number; result: string }[];
+    const rows = (await stub.listScheduled(OWNER)) as { state: string; attempts: number; result: string }[];
     expect(rows[0]).toMatchObject({ state: "done", attempts: 1 });
     expect(JSON.parse(rows[0].result)).toEqual({ answer: "already answered" });
   });
@@ -133,8 +136,8 @@ describe("FlockCoordinator — durable delay", () => {
     const stub = coordinator();
     await seed(stub, (sql) => {
       sql.exec(
-        `INSERT INTO scheduled_task (id, prompt, tools, state, resume_at, claimed_at, created_at, attempts)
-         VALUES ('t1', 'hello', '[]', 'running', ?, 1, 1, 1)`,
+        `INSERT INTO scheduled_task (id, principal, prompt, tools, state, resume_at, claimed_at, created_at, attempts)
+         VALUES ('t1', 'p1', 'hello', '[]', 'running', ?, 1, 1, 1)`,
         Date.now() - MINUTE
       );
       return true;
@@ -146,14 +149,14 @@ describe("FlockCoordinator — durable delay", () => {
     // `rearmAlarm` is what has to notice the abandoned claim and arm the sweep. A
     // pending-only re-arm returns null here and deletes the alarm, and the row is
     // stranded for good.
-    await stub.scheduleDelayed({ id: "t1", prompt: "hello", resumeAt: due() });
+    await stub.scheduleDelayed({ id: "t1", principal: OWNER, prompt: "hello", resumeAt: due() });
     // No alarm assertion here: `claimed_at` is 1ms after the epoch, so the lease is long
     // expired, `nextWakeAt` clamps it to `now`, and the runtime fires the alarm on its own
     // before the next statement runs. Reading `getAlarm()` back is therefore a race. What
     // matters is the sweep below.
     await runDurableObjectAlarm(stub);
 
-    const rows = (await stub.listScheduled()) as { state: string; attempts: number }[];
+    const rows = (await stub.listScheduled(OWNER)) as { state: string; attempts: number }[];
     // attempts 1 → 2 is the reclaim. Without the `running` branch in `nextWakeAt` nothing
     // would have woken this object at all.
     expect(rows[0].attempts).toBe(2);
@@ -165,9 +168,9 @@ describe("FlockCoordinator — durable delay", () => {
     // `openMemorySql` is per-handle and in-memory.
     const stub = coordinator();
     const resumeAt = Date.now() + 30 * MINUTE;
-    await stub.scheduleDelayed({ id: "keep", prompt: "later", resumeAt });
+    await stub.scheduleDelayed({ id: "keep", principal: OWNER, prompt: "later", resumeAt });
 
-    const rows = (await stub.listScheduled()) as { id: string; state: string; resume_at: number }[];
+    const rows = (await stub.listScheduled(OWNER)) as { id: string; state: string; resume_at: number }[];
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: "keep", state: "pending", resume_at: resumeAt });
   });
@@ -176,13 +179,31 @@ describe("FlockCoordinator — durable delay", () => {
     // A `toContain`-is-not-`toEqual` case from this repo's own history: completeness is the
     // property, so it is asserted as a length and as a set, not by looking for one id.
     const stub = coordinator();
-    await stub.scheduleDelayed({ id: "a", prompt: "one", resumeAt: due() });
-    await stub.scheduleDelayed({ id: "b", prompt: "two", resumeAt: due() });
-    await stub.scheduleDelayed({ id: "a", prompt: "one-again", resumeAt: due() });
+    await stub.scheduleDelayed({ id: "a", principal: OWNER, prompt: "one", resumeAt: due() });
+    await stub.scheduleDelayed({ id: "b", principal: OWNER, prompt: "two", resumeAt: due() });
+    await stub.scheduleDelayed({ id: "a", principal: OWNER, prompt: "one-again", resumeAt: due() });
 
-    const rows = (await stub.listScheduled()) as { id: string }[];
+    const rows = (await stub.listScheduled(OWNER)) as { id: string }[];
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.id).sort()).toEqual(["a", "b"]);
+  });
+
+  it("refuses one principal taking another's schedule id over RPC (A3)", async () => {
+    // The DO boundary is where the ownership claim becomes an answer: the engine says
+    // `conflict`, and this is the RPC the HTTP route maps to a 409. A silent overwrite —
+    // the pre-A3 behaviour — would rewrite alice's prompt while it still belonged to her.
+    const stub = coordinator();
+    const first = await stub.scheduleDelayed({ id: "mine", principal: "alice", prompt: "alice", resumeAt: due() });
+    expect(first.status).toBe("scheduled");
+
+    const clash = await stub.scheduleDelayed({ id: "mine", principal: "bob", prompt: "bob", resumeAt: due() });
+    expect(clash.status).toBe("conflict");
+
+    // Nothing moved: alice still owns the row and its prompt, and bob sees nothing
+    // in his own listing.
+    const aliceRows = (await stub.listScheduled("alice")) as { id: string; prompt?: string }[];
+    expect(aliceRows.map((r) => r.id)).toEqual(["mine"]);
+    expect((await stub.listScheduled("bob"))).toHaveLength(0);
   });
 
   it("ignores a re-schedule of a row that has already been claimed", async () => {
@@ -190,12 +211,12 @@ describe("FlockCoordinator — durable delay", () => {
     // every non-pending row, so rescheduling a task mid-flight changed the row out from
     // under the flight already dialling it.
     const stub = coordinator();
-    await stub.scheduleDelayed({ id: "t1", prompt: "original", resumeAt: due() });
+    await stub.scheduleDelayed({ id: "t1", principal: OWNER, prompt: "original", resumeAt: due() });
     await runDurableObjectAlarm(stub);
 
-    await stub.scheduleDelayed({ id: "t1", prompt: "replacement", resumeAt: Date.now() + 60 * MINUTE });
+    await stub.scheduleDelayed({ id: "t1", principal: OWNER, prompt: "replacement", resumeAt: Date.now() + 60 * MINUTE });
 
-    const rows = (await stub.listScheduled()) as { attempts: number }[];
+    const rows = (await stub.listScheduled(OWNER)) as { attempts: number }[];
     expect(rows).toHaveLength(1);
     expect(rows[0].attempts).toBe(1);
   });
@@ -207,7 +228,7 @@ describe("FlockCoordinator — the lease the alarm assumes", () => {
     // outstanding row is `running`, so the re-arm can only be correct if it consults the
     // lease — a `pending`-only query returns null and the alarm is deleted.
     const stub = coordinator();
-    await stub.scheduleDelayed({ id: "t1", prompt: "hello", resumeAt: due() });
+    await stub.scheduleDelayed({ id: "t1", principal: OWNER, prompt: "hello", resumeAt: due() });
     await runDurableObjectAlarm(stub);
 
     const { alarm } = await inspect(stub);
@@ -221,7 +242,7 @@ describe("FlockCoordinator — the lease the alarm assumes", () => {
     // The cheap case, and the one that keeps a Durable Object from holding an alarm for
     // nothing: an armed alarm is a wake-up nobody asked for.
     const stub = coordinator();
-    await stub.listScheduled();
+    await stub.listScheduled(OWNER);
 
     const { alarm } = await inspect(stub);
     expect(alarm).toBeNull();

@@ -5,8 +5,11 @@ import {
   MAX_MODEL_OUTPUT_CHARS,
   MAX_PROMPT_CHARS,
   MAX_TOOLS,
+  SERVICE_PRINCIPAL,
   UNTRUSTED_CLOSE,
   UNTRUSTED_OPEN,
+  assertPrincipalClaim,
+  authenticateExecuteIdentity,
   authenticateServiceIdentity,
   authenticateServiceRequest,
   constantTimeEqual,
@@ -15,6 +18,7 @@ import {
   markUntrusted,
   parseExecuteBody,
   parseTokenSubjects,
+  RequestValidationError,
   sanitizeModelOutput,
   subjectMatches,
 } from "../src/security.ts";
@@ -135,7 +139,7 @@ describe("parseExecuteBody", () => {
       prompt: "hello",
       tools: ["search_web", "get_server_time"],
       blockedTools: ["bad"],
-      userId: "telegram:123",
+      claimedUserId: "telegram:123",
       tier: "Free-Volunteer",
     });
   });
@@ -187,13 +191,21 @@ describe("parseExecuteBody", () => {
       AGENT_TOOLS,
       "a"
     );
-    expect(parsed).toMatchObject({ userId: "a", tier: "Pro-Data-Pact" });
+    expect(parsed).toMatchObject({ claimedUserId: "a", tier: "Pro-Data-Pact" });
   });
 
-  it("defaults an anonymous caller and rejects an unusable user id", () => {
-    expect(parseExecuteBody(JSON.stringify({ prompt: "hi" }), AGENT_TOOLS).userId).toBe(
-      "anonymous"
+  it("carries no identity at all when the caller claims none — no anonymous default", () => {
+    // A3 deleted the `?? "anonymous"` fallback from this function. A request that claims
+    // nothing now parses to a request with `claimedUserId === undefined`, and *nothing*
+    // downstream has an identity until the credential resolver supplies one. An anonymous
+    // *claim* is still a claim; the forbidden part was the automatic ownership.
+    expect(parseExecuteBody(JSON.stringify({ prompt: "hi" }), AGENT_TOOLS)).not.toHaveProperty(
+      "claimedUserId"
     );
+    expect(
+      parseExecuteBody(JSON.stringify({ prompt: "hi", userId: "anonymous" }), AGENT_TOOLS)
+        .claimedUserId
+    ).toBe("anonymous");
     expect(() =>
       parseExecuteBody(JSON.stringify({ prompt: "hi", userId: "<script>" }), AGENT_TOOLS)
     ).toThrow(/userId/);
@@ -785,6 +797,96 @@ describe("subjectMatches", () => {
     expect(subjectMatches("alice", "alice")).toBe(true);
     for (const claimed of ["Alice", "alice ", " alice", "alice2", "", "anonymous"]) {
       expect(subjectMatches("alice", claimed)).toBe(false);
+    }
+  });
+});
+
+// ── The executing principal (A3 / AUTH-004) ───────────────────────────────────
+
+describe("authenticateExecuteIdentity", () => {
+  const TOKENS = { "secret-a": "alice", "secret-b": "bob" };
+
+  it("resolves a mapped token to its user — the reader and the executor are the same caller", async () => {
+    // The AUTH-004 half that made map-tokens *readers only*: execute used to refuse them
+    // (single-key auth) while accepting any userId the *service* token typed. Now the map
+    // answers "who executes", and the request answers nothing.
+    expect(
+      await authenticateExecuteIdentity(headers({ Authorization: "Bearer secret-b" }), {
+        apiKey: "service-key",
+        tokenSubjects: TOKENS,
+        sha256,
+      })
+    ).toEqual({ ok: true, subject: "bob" });
+  });
+
+  it("resolves the service key to the named service principal, never to a user or to anonymous", async () => {
+    // A solo deployment must still be able to execute. What it may not do is execute as
+    // a *fake user*: `service` is a singular, visible identity the operator sees in the
+    // ledger and the rate-limit table — not whichever name each request chose.
+    expect(
+      await authenticateExecuteIdentity(headers({ Authorization: "Bearer solo-key" }), {
+        apiKey: "solo-key",
+        sha256,
+      })
+    ).toEqual({ ok: true, subject: SERVICE_PRINCIPAL });
+
+    expect(
+      await authenticateExecuteIdentity(headers({ Authorization: "Bearer service-key" }), {
+        apiKey: "service-key",
+        tokenSubjects: TOKENS,
+        sha256,
+      })
+    ).toEqual({ ok: true, subject: SERVICE_PRINCIPAL });
+  });
+
+  it("401s an unknown token rather than falling back to any identity", async () => {
+    // The acceptance case "a valid bearer token with an unknown principal cannot fall
+    // back": an *unknown* token here is not valid at all, and a *valid* one always
+    // resolves to service or a mapped user — there is no third path that reaches execute.
+    expect(
+      await authenticateExecuteIdentity(headers({ Authorization: "Bearer nope" }), {
+        apiKey: "service-key",
+        tokenSubjects: TOKENS,
+        sha256,
+      })
+    ).toEqual({ ok: false, status: 401, code: "UNAUTHORIZED" });
+
+    expect(
+      await authenticateExecuteIdentity(headers({}), { apiKey: "service-key", sha256 })
+    ).toEqual({ ok: false, status: 401, code: "UNAUTHORIZED" });
+  });
+
+  it("503s AUTH_NOT_CONFIGURED with neither key nor map — fail closed before anything else", async () => {
+    // Same ordering discipline as every other authed route: an unconfigured deployment
+    // refuses (503) rather than answering to whoever happens to knock (401 forever).
+    for (const h of [headers({}), headers({ Authorization: "Bearer anything" })]) {
+      expect(await authenticateExecuteIdentity(h, { sha256 })).toEqual({
+        ok: false,
+        status: 503,
+        code: "AUTH_NOT_CONFIGURED",
+      });
+    }
+  });
+});
+
+describe("assertPrincipalClaim", () => {
+  it("passes the subject through and ignores the claim when it matches or is absent", () => {
+    expect(assertPrincipalClaim(undefined, "alice")).toBe("alice");
+    expect(assertPrincipalClaim("alice", "alice")).toBe("alice");
+  });
+
+  it("refuses a disagreeing claim with one flat 403 — never revealing which names exist", () => {
+    for (const claimed of ["bob", "anonymous", "service", "alice ", "Alice"]) {
+      expect(() => assertPrincipalClaim(claimed, "alice")).toThrow(
+        /does not match the authenticated principal/
+      );
+      try {
+        assertPrincipalClaim(claimed, "alice");
+      } catch (e) {
+        expect(e).toBeInstanceOf(RequestValidationError);
+        expect((e as { status: number }).status).toBe(403);
+        expect((e as { code: string }).code).toBe("FORBIDDEN");
+      }
     }
   });
 });

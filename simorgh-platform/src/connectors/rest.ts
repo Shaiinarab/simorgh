@@ -89,7 +89,12 @@ export function restConnector(config: RestConnectorConfig): CoreConnector {
         body: JSON.stringify({
           prompt: request.prompt,
           tools: request.tools ?? [],
-          userId: request.userId ?? config.node ?? "simorgh-platform",
+          // A3 / AUTH-004: `userId` is a claim, not an identity. The core attributes the
+          // execution to the principal behind this connector's bearer token and refuses a
+          // claim that disagrees, so the connector must stop inventing one. Used to fall
+          // back to the target's node name — which would now be a 403 on every ask, since
+          // no token's subject is "simorgh-platform" by construction.
+          ...(request.userId ? { userId: request.userId } : {}),
           tier: request.tier ?? "Free-Volunteer",
         }),
       });

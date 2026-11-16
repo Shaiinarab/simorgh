@@ -31,6 +31,8 @@ import {
   QUOTA_SCHEMA,
   RATE_LIMIT_SCHEMA,
   RequestValidationError,
+  assertPrincipalClaim,
+  authenticateExecuteIdentity,
   authenticateServiceIdentity,
   authenticateServiceRequest,
   buildCapabilityStatus,
@@ -82,19 +84,19 @@ export interface NodeRuntimeOptions {
   /**
    * JSON map of `token → userId` (`SIMORGH_API_KEYS`).
    *
-   * The per-user routes (`/api/v1/user/:userId/logs`, `/api/v1/context/:refId`) resolve
-   * their caller from this map rather than from the URL. Absent, they refuse with
-   * `IDENTITY_UNRESOLVED` instead of guessing which user a token speaks for — guessing is
-   * precisely the vulnerability they carried until 2026-10-08.
+   * The per-user read routes (`/api/v1/user/:userId/logs`, `/api/v1/context/:refId`) and,
+   * since A3, *every* executing route (`/api/v1/agent/execute`, the MCP `ask` tool) resolve
+   * their caller from this map rather than from the URL, the body, or `X-Simorgh-User-Id`.
+   * Absent on the read routes, they refuse with `IDENTITY_UNRESOLVED` instead of guessing
+   * which user a token speaks for — guessing is precisely the vulnerability they carried
+   * until 2026-10-08.
    *
-   * **Known gap, deliberate not accidental:** a token that is only in this map can *read*
-   * its own data but cannot call `/api/v1/agent/execute`, which still authenticates against
-   * `apiKey` alone. So a multi-caller deployment must hand each caller both. Fixing that is
-   * not a one-line change: letting a map token execute means the `userId` must come from
-   * the token rather than from `X-Simorgh-User-Id`, or a caller can spend another caller's
-   * rate-limit budget and write ledger rows in their name (AUTH-004). Until that lands, the
-   * map's job is strictly "who is reading", and this comment is the reason a reader is not
-   * left to rediscover it.
+   * A token that is *only* in this map can now do everything: it reads its own data, and
+   * its executions are rate-limited and ledgered under its subject. The single
+   * `apiKey` token still executes too — as the named service principal `service` — so a
+   * solo operator is neither locked out nor silently attributed to a fake user. The old
+   * "map token cannot execute" gap (AUTH-004) is closed by that construction: the userId
+   * comes from the credential, so there is nothing left for the request to choose.
    */
   apiKeys?: string;
   secrets?: Record<string, string | undefined>;
@@ -143,11 +145,21 @@ export async function startNodeRuntime(
     now: () => ports.now(),
   });
 
-  async function runExecute(body: ExecuteArgs, requestId: string) {
+  /**
+   * Run one execute request under a resolved principal.
+   *
+   * `subject` comes from the *credential* — the caller's `X-Simorgh-User-Id` header and
+   * body `userId` are claims checked against it, never identity inputs (A3 / AUTH-004).
+   * Both the rate-limit key and the ledger row are written under `subject`, which is the
+   * whole fix: a caller can no longer spend someone else's budget or file rows in their
+   * name by naming them in the request.
+   */
+  async function runExecute(body: ExecuteArgs, subject: string, requestId: string) {
     const parsed = parseExecuteBody(body.raw, AGENT_TOOLS, body.headerUserId);
+    assertPrincipalClaim(parsed.claimedUserId, subject);
     const decision = consumeRateLimit(
       sql,
-      "execute:" + parsed.userId,
+      "execute:" + subject,
       rateLimit.limit,
       rateLimit.windowMs,
       ports.now()
@@ -176,7 +188,8 @@ export async function startNodeRuntime(
       {
         prompt: parsed.prompt,
         tools: parsed.tools,
-        userId: parsed.userId,
+        // Resolved principal, never the request's claim — see the `runExecute` comment.
+        userId: subject,
         tier: parsed.tier,
         blockedTools: parsed.blockedTools,
         ...(requestId ? { requestId } : {}),
@@ -260,8 +273,8 @@ export async function startNodeRuntime(
       }
 
       if (path === "/api/v1/agent/execute" && req.method === "POST") {
-        const denied = await requireAuth(req, res, requestId);
-        if (denied) return;
+        const subject = await requireExecuteIdentity(req, res, requestId);
+        if (subject === null) return;
         const raw = await readBody(req);
         if (raw === null) {
           return send(res, 413, {
@@ -275,6 +288,7 @@ export async function startNodeRuntime(
         }
         const outcome = await runExecute(
           { raw, headerUserId: header(req, "x-simorgh-user-id") ?? undefined },
+          subject,
           requestId
         );
         for (const [key, value] of Object.entries(outcome.headers)) res.setHeader(key, value);
@@ -400,8 +414,11 @@ export async function startNodeRuntime(
     res: ServerResponse,
     requestId: string
   ): Promise<void> {
-    const denied = await requireAuth(req, res, requestId);
-    if (denied) return;
+    // MCP calls *execute*, so the MCP surface resolves a principal from the credential
+    // too (A3). Before this, every tool ran under whatever `userId` argument the client
+    // sent, with `mcp:<requestId>` when it bothered to send nothing.
+    const subject = await requireExecuteIdentity(req, res, requestId);
+    if (subject === null) return;
 
     const raw = await readBody(req);
     if (raw === null) {
@@ -463,7 +480,11 @@ export async function startNodeRuntime(
                     items: { type: "string", enum: [...AGENT_TOOLS] },
                     description: "Tools to allow. Unknown names are dropped and reported.",
                   },
-                  userId: { type: "string" },
+                  userId: {
+                    type: "string",
+                    description:
+                      "Optional identity claim. If present it must match the principal authenticated by the bearer token, or the call is refused.",
+                  },
                   tier: { type: "string" },
                 },
                 required: ["prompt"],
@@ -495,7 +516,11 @@ export async function startNodeRuntime(
           const available = new Set<string>(AGENT_TOOLS);
           const tools = requested.filter((tool) => available.has(tool));
           const blockedTools = requested.filter((tool) => !available.has(tool));
-          const userId = typeof args.userId === "string" ? args.userId : `mcp:${requestId}`;
+          // A `userId` argument is a claim about who the caller is, checked against the
+          // credential's principal — the same rule the REST seam applies. It used to be
+          // trusted outright (AUTH-004's MCP half), so one valid token could write ledger
+          // rows for any name it typed.
+          const claimed = typeof args.userId === "string" ? args.userId.trim() || undefined : undefined;
           const tier = typeof args.tier === "string" ? args.tier : "Free-Volunteer";
 
           if (!prompt.trim()) {
@@ -505,11 +530,21 @@ export async function startNodeRuntime(
             });
           }
 
+          if (claimed !== undefined && !subjectMatches(subject, claimed)) {
+            return ok({
+              ...asToolContent({
+                success: false,
+                error: { code: "FORBIDDEN", message: "The claimed user id does not match the authenticated principal." },
+              }),
+              isError: true,
+            });
+          }
+
           const result = await executeAgent(
             {
               prompt,
               tools: tools as AgentTool[],
-              userId,
+              userId: subject,
               tier,
               blockedTools,
               requestId,
@@ -573,6 +608,42 @@ export async function startNodeRuntime(
             : auth.code === "IDENTITY_UNRESOLVED"
               ? "This deployment cannot attribute the token to a user. Set SIMORGH_API_KEYS to a JSON map of token to user id."
               : "A valid Bearer token is required.",
+        requestId,
+      },
+    });
+    return null;
+  }
+
+  /**
+   * Auth *and* the executing principal, for routes that *do work* — execute and the MCP
+   * `ask` tool (A3 / AUTH-004).
+   *
+   * Mirrors the edge's `requireExecuteIdentity`: a token in the map executes as its
+   * subject; the deployment's single service key executes as the explicit `service`
+   * principal; anything else is a `401`, and an unconfigured deployment a `503`. There is
+   * no anonymous identity to fall back to any more — the request cannot name who pays.
+   */
+  async function requireExecuteIdentity(
+    req: IncomingMessage,
+    res: ServerResponse,
+    requestId: string
+  ): Promise<string | null> {
+    const auth = await authenticateExecuteIdentity(headerAccessor(req), {
+      ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+      ...(tokenSubjects ? { tokenSubjects } : {}),
+      sha256: ports.sha256,
+    });
+    if (auth.ok) return auth.subject;
+
+    if (auth.status === 401) res.setHeader("WWW-Authenticate", "Bearer");
+    send(res, auth.status, {
+      success: false,
+      error: {
+        code: auth.code,
+        message:
+          auth.code === "AUTH_NOT_CONFIGURED"
+            ? "Simorgh API authentication is not configured."
+            : "A valid Bearer token is required.",
         requestId,
       },
     });

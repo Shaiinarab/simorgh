@@ -39,8 +39,10 @@ verified:
 
 > **TL;DR:** repository snapshot is `main` at `8e3bfcc` (2026-10-12), verified by running both suites in
 > that session: **178 workerd (17 files) and 504 Node (28 files) green**, typecheck exit 0 on Node
-> 26.11.1, Go tests pass across all 8 modules. The remaining execution blockers are AUTH-004 principal
-> ownership, quota admission/usage integration, then retrieval and memory. Follow
+> 26.11.1, Go tests pass across all 8 modules. **A3 (AUTH-004 principal identity) shipped 2026-11-16**
+> after merging Qwen's `qwenone/` work: execution, scheduling, rate limiting and ledger rows resolve
+> from the credential, verified by 188 workerd + 522 Node tests green. The remaining execution
+> blockers are quota admission/usage integration (B1–B4), then retrieval and memory. Follow
 > [the OKF TODO queue](todo/index.md); this file's older sections are historical evidence where marked.
 
 **Written:** 2026-09-22 · **Updated:** 2026-10-12 · **Canonical plan:** [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md).
@@ -492,11 +494,11 @@ paths now agree. Worth noting as a pattern: the test that caught this was not wr
 
 ### 11.4 Found, not fixed
 
-- **A `SIMORGH_API_KEYS` token cannot execute.** It can read its own data but `/api/v1/agent/execute`
-  still authenticates against `SIMORGH_API_KEY` alone, so a multi-caller deployment must issue both.
-  Closing it is not mechanical: the `userId` would have to come from the token instead of
-  `X-Simorgh-User-Id`, or a caller can spend another caller's rate-limit budget and write ledger rows
-  in their name (AUTH-004). Recorded at `NodeRuntimeOptions.apiKeys`.
+- **A `SIMORGH_API_KEYS` token cannot execute.** ~~Found, not fixed~~ — **fixed by A3 on 2026-11-16.**
+  A map token now executes as its mapped subject on both hosts, and the `userId` comes from the token;
+  a service-only deployment executes as the named `service` principal. `X-Simorgh-User-Id` and the
+  body `userId` are validated claims, not identity inputs. `NodeRuntimeOptions.apiKeys` describes the
+  resolved behaviour. This bullet is kept as historical evidence of the seam that was closed.
 - **Four HIGH findings remain carried** under the audit's §4: AUTH-001, SSRF-001, MCP-001, SEC-001.
   With AUTH-002/003 closed the §4 table records two of its six as no longer deferred.
 - **Retrieval is still unbuilt** (`docs/research/WHERE-WE-ARE-AND-WHERE-WE-GO.md` §1). The launch cut
@@ -590,10 +592,11 @@ bump to 5 blindly.
 
 ### 12.3 What §11.4 left open is now formally EPIC-A3 / EPIC-B
 
-- **AUTH-004** (caller-supplied `X-Simorgh-User-Id` still believed by `/api/v1/agent/execute`) is
-  promoted to the **gate**: multi-user autonomous execution is forbidden until credential-derived
-  `principalId` owns every task/schedule/memory/retrieval/connector/ledger operation, with the seven
-  cross-principal negative tests listed in ROADMAP-SPINE A3.
+- **AUTH-004** — **closed 2026-11-16** (A3). Credential-derived `principalId` now owns execute,
+  schedule, rate-limit keys and ledger rows on both hosts; the cross-principal tests named in
+  ROADMAP-SPINE A3 pass for what exists today. The gate is lifted for those surfaces. The remaining
+  negative cases in the original seven — knowledge search and connector invocation as another
+  principal — become acceptance checks for C1/C2 and E, where those surfaces are built.
 - **The quota brain is still disconnected from the machine that spends quota.** `planTaskRun()` calls
   `planQuotaRun()`, but production scheduled execution is claim→fly. EPIC-B makes the invariant real:
   *nothing spends provider quota until the capacity planner says it can*, then closes the usage loop

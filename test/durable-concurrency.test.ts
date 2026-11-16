@@ -21,6 +21,9 @@ import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 const CONCURRENCY = 10;
+
+/** The single owner these concurrency tests schedule under (A3). */
+const OWNER = "p1";
 const WINDOW_MS = 60_000;
 
 function coordinator() {
@@ -135,6 +138,7 @@ describe("Story 5.1 — 10 concurrent requests against one Durable Object", () =
     const stub = coordinator();
     await stub.scheduleDelayed({
       id: "contended",
+      principal: OWNER,
       prompt: "hello",
       resumeAt: Date.now() - 60_000,
     });
@@ -147,7 +151,7 @@ describe("Story 5.1 — 10 concurrent requests against one Durable Object", () =
     ]);
     void alarms;
 
-    const rows = (await stub.listScheduled()) as { id: string; attempts: number }[];
+    const rows = (await stub.listScheduled(OWNER)) as { id: string; attempts: number }[];
     expect(rows).toHaveLength(1);
     // attempts is incremented inside the same compare-and-set that claims the row, so a
     // value of 1 is the proof that only one caller transitioned it.
@@ -160,11 +164,11 @@ describe("Story 5.1 — 10 concurrent requests against one Durable Object", () =
 
     await Promise.all(
       ids.map((id) =>
-        stub.scheduleDelayed({ id, prompt: `prompt-${id}`, resumeAt: Date.now() - 1_000 })
+        stub.scheduleDelayed({ id, principal: OWNER, prompt: `prompt-${id}`, resumeAt: Date.now() - 1_000 })
       )
     );
 
-    const rows = (await stub.listScheduled()) as { id: string }[];
+    const rows = (await stub.listScheduled(OWNER)) as { id: string }[];
     expect(rows).toHaveLength(CONCURRENCY);
 
     // Read the stored prompts, not the RPC projection: `listScheduled` deliberately returns

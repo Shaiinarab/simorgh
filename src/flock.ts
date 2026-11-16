@@ -51,6 +51,7 @@ import {
   nextDueTasks,
   nextWakeAt,
   SCHEDULED_SCHEMA,
+  migrateScheduledSchema,
   scheduleTask,
   isRateLimitError,
   recordObservation,
@@ -58,6 +59,7 @@ import {
   workersAiProvider,
   type Provider,
   type ProviderContext,
+  type ScheduleOutcome,
   type ProviderStatus,
   type QuotaRow,
   type RateLimitDecision,
@@ -426,6 +428,9 @@ export class FlockCoordinator extends DurableObject<Env> {
       await this.ctx.storage.sql.exec(RATE_LIMIT_SCHEMA);
       await this.ctx.storage.sql.exec(QUOTA_SCHEMA);
       await this.ctx.storage.sql.exec(SCHEDULED_SCHEMA);
+      // A3 added a `principal` column; `CREATE TABLE IF NOT EXISTS` cannot retrofit it
+      // onto a live DO's persisted table, so every boot runs the one-time probe.
+      migrateScheduledSchema(this.ctx.storage.sql);
     });
   }
 
@@ -504,32 +509,36 @@ export class FlockCoordinator extends DurableObject<Env> {
   }
 
   /**
-   * Schedule a prompt to run through the flock at or after `resumeAt`.
+   * Schedule a prompt to run through the flock at or after `resumeAt`, owned by `principal`.
    *
-   * Re-inserting the same id rewrites the request while the row is still `pending`. Once it
-   * has been claimed, or has finished, the insert is a no-op on state: a run that already
-   * happened cannot be un-happened, and a run in flight cannot be edited underneath its own
-   * executor. See `scheduleTask` for why `running` is as immutable as `done`.
+   * Re-inserting the same id rewrites the request while the row is still `pending` — *as
+   * long as the same principal owns it*. An id already owned by a different principal is a
+   * conflict (A3: "Test A cannot schedule as B"). Once it has been claimed, or has
+   * finished, the insert is a no-op on state: a run that already happened cannot be
+   * un-happened, and a run in flight cannot be edited underneath its own executor. See
+   * `scheduleTask` for why `running` is as immutable as `done`.
    */
   async scheduleDelayed(input: {
     id: string;
+    principal: string;
     prompt: string;
     tools?: string[];
     resumeAt: number;
-  }): Promise<{ id: string; resumeAt: number }> {
+  }): Promise<{ status: ScheduleOutcome; id: string; resumeAt: number }> {
     const now = Date.now();
-    scheduleTask(
+    const status = scheduleTask(
       this.ctx.storage.sql,
       {
         id: input.id,
+        principal: input.principal,
         prompt: input.prompt,
         tools: input.tools ?? [],
         resumeAt: input.resumeAt,
       },
       now
     );
-    await this.rearmAlarm(now);
-    return { id: input.id, resumeAt: input.resumeAt };
+    if (status !== "conflict") await this.rearmAlarm(now);
+    return { status, id: input.id, resumeAt: input.resumeAt };
   }
 
   /**
@@ -550,10 +559,10 @@ export class FlockCoordinator extends DurableObject<Env> {
     await this.ctx.storage.setAlarm(next);
   }
 
-  async listScheduled(): Promise<{
+  async listScheduled(principal: string): Promise<{
     id: string; state: string; resume_at: number; attempts: number; result: string | null; error: string | null;
   }[]> {
-    return listTasks(this.ctx.storage.sql).map((t) => ({
+    return listTasks(this.ctx.storage.sql, principal).map((t) => ({
       id: t.id, state: t.state, resume_at: t.resume_at, attempts: t.attempts, result: t.result, error: t.error,
     }));
   }

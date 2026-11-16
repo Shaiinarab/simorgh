@@ -16,6 +16,8 @@ import {
 } from "@simorgh/phoenix-core";
 import { executeAgent } from "./agent-service";
 import {
+  assertPrincipalClaim,
+  authenticateExecuteIdentity,
   authenticateServiceIdentity,
   authenticateServiceRequest,
   isAllowedOrigin,
@@ -149,6 +151,47 @@ async function requireIdentity(
   return response;
 }
 
+/**
+ * Auth *and* the executing principal, for the routes that *do work* (A3 / AUTH-004).
+ *
+ * Execute and schedule used to sit behind `requireServiceAuth` alone, then take the
+ * acting identity from `X-Simorgh-User-Id` or the body — so any valid token could spend
+ * another user's rate-limit budget and write ledger rows in their name. This gate makes
+ * the credential the only source of the subject, exactly like `requireIdentity` makes it
+ * the only source for reads.
+ *
+ * Unlike the read routes there is no `IDENTITY_UNRESOLVED` refusal here, and that is the
+ * explicit service-principal decision from the engine: a deployment configured with only
+ * `SIMORGH_API_KEY` may still execute — under the named, visible `service` principal,
+ * which owns its own rate budget and its own ledger rows — rather than either guessing a
+ * user or denying the solo operator (who holds no map) the feature they deployed for.
+ * What it may *not* do is read per-user data: that stays on `requireIdentity`, where the
+ * service token remains unattributable by design.
+ */
+async function requireExecuteIdentity(
+  c: Context<{ Bindings: Env }>
+): Promise<{ subject: string } | Response> {
+  const auth = await authenticateExecuteIdentity(c.req.raw, c.env);
+  if (auth.ok) return { subject: auth.subject };
+
+  const response = c.json(
+    {
+      success: false,
+      error: {
+        code: auth.code,
+        message:
+          auth.code === "AUTH_NOT_CONFIGURED"
+            ? "Simorgh API authentication is not configured."
+            : "A valid Bearer token is required.",
+        requestId: c.res.headers.get("X-Request-Id"),
+      },
+    },
+    auth.status
+  );
+  if (auth.status === 401) response.headers.set("WWW-Authenticate", "Bearer");
+  return response;
+}
+
 app.onError((error, c) => {
   const requestId = c.res.headers.get("X-Request-Id") ?? "unknown";
   console.error(
@@ -236,10 +279,14 @@ app.get("/api/v1/quota", async (c) => {
 });
 
 app.get("/api/v1/schedule", async (c) => {
-  const denied = await requireServiceAuth(c);
-  if (denied) return denied;
+  // A3: schedules are user content — `prompt` and `result` — so a valid token alone no
+  // longer lists *every* row. The caller sees its own principal's rows; pre-A3 rows,
+  // written before any principal was recorded, are visible to nobody (fail closed) but
+  // still fire, because the alarm reads the state machine, not the ownership column.
+  const identity = await requireExecuteIdentity(c);
+  if (identity instanceof Response) return identity;
 
-  return c.json(await flockStub(c.env).listScheduled());
+  return c.json(await flockStub(c.env).listScheduled(identity.subject));
 });
 
 /** Max id length, mirrored by the `id` pattern below. */
@@ -347,11 +394,35 @@ function parseScheduleBody(raw: string): ParsedScheduleRequest {
 }
 
 app.post("/api/v1/schedule", async (c) => {
-  const denied = await requireServiceAuth(c);
-  if (denied) return denied;
+  const identity = await requireExecuteIdentity(c);
+  if (identity instanceof Response) return identity;
 
   const request = parseScheduleBody(await c.req.text());
-  return c.json(await flockStub(c.env).scheduleDelayed(request), 201);
+  const outcome = await flockStub(c.env).scheduleDelayed({
+    ...request,
+    principal: identity.subject,
+  });
+  if (outcome.status === "conflict") {
+    // The id already belongs to a different principal. The message deliberately does not
+    // distinguish "the id is taken by someone else" from any other conflict an attacker
+    // could not have reached anyway: ids here are caller-chosen, and schedule ids are
+    // namespaced per principal by convention (`<user>:<job>`).
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "SCHEDULE_CONFLICT",
+          message: "This schedule id belongs to another principal.",
+          requestId: c.res.headers.get("X-Request-Id"),
+        },
+      },
+      409
+    );
+  }
+  return c.json(
+    { id: outcome.id, resumeAt: outcome.resumeAt },
+    201
+  );
 });
 
 /**
@@ -361,8 +432,8 @@ app.post("/api/v1/schedule", async (c) => {
 const FLOCK_RETRY_FLOOR_SECONDS = 1;
 
 app.post("/api/v1/agent/execute", async (c) => {
-  const denied = await requireServiceAuth(c);
-  if (denied) return denied;
+  const identity = await requireExecuteIdentity(c);
+  if (identity instanceof Response) return identity;
 
   const raw = await c.req.text();
   const request = parseExecuteBody(
@@ -371,10 +442,16 @@ app.post("/api/v1/agent/execute", async (c) => {
     c.req.header("X-Simorgh-User-Id")
   );
 
+  // A3 / AUTH-004: the request's identity fields are claims, the credential is authority.
+  // A mismatch refuses the call (403) before any quota or ledger write can land under
+  // somebody else's name; a match *and* an absent claim both execute as `identity.subject`,
+  // because the claim was never the thing that would have been trusted.
+  const principal = assertPrincipalClaim(request.claimedUserId, identity.subject);
+
   const id = c.env.FLOCK_COORDINATOR.idFromName("global");
   const limiter = c.env.FLOCK_COORDINATOR.get(id);
   const decision = await limiter.checkRateLimit(
-    "execute:" + request.userId,
+    "execute:" + principal,
     20,
     60_000
   );
@@ -403,7 +480,9 @@ app.post("/api/v1/agent/execute", async (c) => {
   const result = await executeAgent(c.env, {
     prompt: request.prompt,
     tools: request.tools,
-    userId: request.userId,
+    // The ledger row is written under the *resolved principal*, never under a value the
+    // request carried. This is the line AUTH-004 was filed against.
+    userId: principal,
     tier: request.tier,
     blockedTools: request.blockedTools,
     requestId: c.res.headers.get("X-Request-Id") ?? undefined,

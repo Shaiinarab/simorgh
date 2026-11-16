@@ -1101,7 +1101,10 @@ export function renderDashboard(env: Env): string {
     api("/api/v1/agent/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: prompt, tools: ["get_server_time", "search_web"], userId: "dashboard", tier: "Free-Volunteer" })
+      // No "userId": since A3 the acting identity is the principal behind the bearer
+      // token the operator typed into this page, and a body userId is only ever a
+      // claim that must match it. "dashboard" was decorative - the credential names us.
+      body: JSON.stringify({ prompt: prompt, tools: ["get_server_time", "search_web"], tier: "Free-Volunteer" })
     }).then(function (r) {
       var body = r.body || {};
       if (!r.ok) {

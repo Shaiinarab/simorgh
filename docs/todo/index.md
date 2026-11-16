@@ -2,19 +2,17 @@
 
 ## TL;DR
 
-**Do next: A3 — credential-derived principal identity.** Then wire the existing task graph and scheduler
-through quota admission and usage reconciliation. Only after one durable task is correct should we build
-retrieval, knowledge, memory, the first swarm workflow, and current-revision MCP.
-
-A3 is not wholly unstarted: its credential→principal primitives are already wired on the read routes, and
-what is next is the gate — execute and schedule identity, which still take `X-Simorgh-User-Id` from the
-request.
+**Do next: B1 — unified task/schedule/execution.** A3 (credential-derived principal identity) shipped
+2026-11-16: execution, scheduling, rate-limit keys, ledger rows and the MCP `ask` tool now resolve the
+principal from the credential, with cross-principal tests on both hosts. Then wire quota admission and
+usage reconciliation. Only after one durable task is correct should we build retrieval, knowledge, memory,
+the first swarm workflow, and current-revision MCP.
 
 **Order:** A3 → B1 → B2 → B3 → B4 → C1 → C2 → C3 → C4 → D1 → E1 → E2 → E3.
 
 | Order | Task | Work status | Depends on |
 |---:|---|---|---|
-| 1 | [A3 — Principal identity](A3-principal-identity.md) | next | — |
+| 1 | [A3 — Principal identity](A3-principal-identity.md) | done | — |
 | 2 | [B1 — Unified execution](B1-unified-execution.md) | queued | A3 |
 | 3 | [B2 — Quota admission](B2-quota-admission.md) | queued | A3, B1 |
 | 4 | [B3 — Usage reconciliation](B3-usage-reconciliation.md) | queued | B2 |

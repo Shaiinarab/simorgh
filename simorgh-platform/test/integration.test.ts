@@ -74,7 +74,9 @@ describe("a live core reached over REST", () => {
   });
 
   it("answers an ask through the real engine", async () => {
-    const result = await rest().ask({ prompt: "who are you?", userId: "u-rest" });
+    // No `userId` since A3: this connector holds the token for `u-ledger`, so the ask
+    // *is* u-ledger's. The old version passed `userId: "u-rest"` and the core believed it.
+    const result = await rest().ask({ prompt: "who are you?" });
     expect(result.success).toBe(true);
     expect(result.answer).toBe("canned: who are you?");
     expect(result.answeredBy).toBe("Canned (Test double)");
@@ -84,7 +86,6 @@ describe("a live core reached over REST", () => {
     const result = await rest().ask({
       prompt: "what time is it?",
       tools: ["get_server_time"],
-      userId: "u-tools",
     });
     // The synthesis prompt — not the raw prompt — is what the provider saw, which is
     // how the tool result reaches the answer.
@@ -92,21 +93,29 @@ describe("a live core reached over REST", () => {
     expect(result.answer).toContain("[get_server_time]");
   });
 
-  it("records the call on the transparency ledger", async () => {
-    await rest().ask({ prompt: "ledger me", userId: "u-ledger" });
+  it("records the call on the transparency ledger under the token's principal", async () => {
+    await rest().ask({ prompt: "ledger me" });
     const response = await fetch(`${runtime.url}/api/v1/user/u-ledger/logs`, {
       headers: { Authorization: `Bearer ${API_KEY}` },
     });
     const body = (await response.json()) as { count: number; entries: { action: string }[] };
-    expect(body.count).toBe(1);
-    expect(body.entries[0]?.action).toBe("execute");
+    expect(body.count).toBeGreaterThanOrEqual(1);
+    expect(body.entries.some((e) => e.action === "execute")).toBe(true);
+
+    // A3: rows land under the *credential's* subject. The name an earlier test used to
+    // pick from the body ("u-rest") never owns a row here — and this caller cannot even
+    // ask whether it does; that question is the non-owner's 403.
+    const orphan = await fetch(`${runtime.url}/api/v1/user/u-rest/logs`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+    expect(orphan.status).toBe(403);
   });
 
   // AUTH-002 / AUTH-003 again, but on the *self-hosted* host. The two hosts serve the
   // same routes over the same engine, so a fix that landed on only one of them would
   // leave the other reachable — and the workers suite cannot see this runtime at all.
   it("refuses to read another user's ledger on the node host (AUTH-002)", async () => {
-    await rest().ask({ prompt: "identify me", userId: "u-ledger" });
+    await rest().ask({ prompt: "identify me" });
 
     // Positive control: the owner still reads their own ledger.
     const owner = await fetch(`${runtime.url}/api/v1/user/u-ledger/logs`, {
@@ -123,13 +132,14 @@ describe("a live core reached over REST", () => {
   });
 
   it("refuses to serve another user's offloaded context on the node host (AUTH-003)", async () => {
-    // Executed with the *service* key, because `/api/v1/agent/execute` still authenticates
-    // against `SIMORGH_API_KEY` alone — a token from the `SIMORGH_API_KEYS` map cannot call
-    // it (see the note on `NodeRuntimeOptions.apiKeys`). Ownership, which is what this test
-    // is about, comes from the `userId` in the body, not from the token that executed.
+    // Executed with u-other's *own* token. Before A3 this test wrote the body name
+    // `u-other` while holding the service key — because the execute seam took ownership
+    // from the body — and the comment had to say so. Now the credential is the only
+    // authority: a *matching* claim is accepted as a claim, and ownership lands the same
+    // place either way, which is the point of the A3 seam.
     const executed = await fetch(`${runtime.url}/api/v1/agent/execute`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${OTHER_KEY}` },
       body: JSON.stringify({ prompt: "private context", tools: [], userId: "u-other" }),
     });
     expect(executed.status).toBe(200);
@@ -228,8 +238,8 @@ describe("the same core reached over MCP", () => {
   it("returns the same answer as REST", async () => {
     // The parity claim, asserted directly: two transports, one core, one answer.
     const [overRest, overMcp] = await Promise.all([
-      rest().ask({ prompt: "who are you?", userId: "u-parity" }),
-      mcp().ask({ prompt: "who are you?", userId: "u-parity" }),
+      rest().ask({ prompt: "who are you?" }),
+      mcp().ask({ prompt: "who are you?" }),
     ]);
 
     expect(overMcp.answer).toBe(overRest.answer);
@@ -243,6 +253,173 @@ describe("the same core reached over MCP", () => {
       fetch: (u, i) => fetch(u, i as RequestInit),
     });
     expect((await anonymous.health()).reachable).toBe(false);
+  });
+});
+
+// ── Cross-principal execution (A3 / AUTH-004) ──────────────────────────────────
+//
+// The security gate, asserted over a *real* core on a real port — not a fixture. The
+// claim under test is the narrow one: with two valid tokens, neither can make the
+// core do anything in the other's name. Every spoof here goes through both doors the
+// old seam had (the header and the body), on this host; the Workers twin is
+// `test/identity.test.ts`.
+
+const postExecute = (token: string, body: unknown, headerUser?: string) =>
+  fetch(`${runtime.url}/api/v1/agent/execute`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(headerUser ? { "X-Simorgh-User-Id": headerUser } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+const logsCount = async (userId: string, token: string): Promise<number | string> => {
+  const res = await fetch(`${runtime.url}/api/v1/user/${userId}/logs`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return res.status;
+  return ((await res.json()) as { count: number }).count;
+};
+
+describe("cross-principal execution (A3)", () => {
+  it("refuses a header spoof: a valid token cannot execute as another user by naming them", async () => {
+    const before = await logsCount("u-other", OTHER_KEY);
+    expect(typeof before).toBe("number");
+
+    const res = await postExecute(API_KEY, { prompt: "spoof the header", tools: [] }, "u-other");
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("FORBIDDEN");
+
+    // Zero side effects: u-other's ledger is untouched by somebody else's refusal.
+    expect(await logsCount("u-other", OTHER_KEY)).toBe(before);
+  });
+
+  it("refuses a body spoof: `userId` is a claim, not an identity", async () => {
+    const res = await postExecute(OTHER_KEY, { prompt: "spoof the body", tools: [], userId: "u-ledger" });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("FORBIDDEN");
+    // One flat message for every mismatch, whether or not the claimed name is real:
+    // this response cannot enumerate the token map.
+    expect(body.error.message).toBe("The claimed user id does not match the authenticated principal.");
+  });
+
+  it("accepts a *matching* claim and still attributes by the credential, not the claim", async () => {
+    const mine = await logsCount("u-ledger", API_KEY);
+    const theirs = await logsCount("u-other", OTHER_KEY);
+
+    const res = await postExecute(API_KEY, { prompt: "agrees with me", tools: [], userId: "u-ledger" });
+    expect(res.status).toBe(200);
+
+    expect(await logsCount("u-ledger", API_KEY)).toBe((mine as number) + 1);
+    expect(await logsCount("u-other", OTHER_KEY)).toBe(theirs);
+  });
+
+  it("isolates the rate-limit budget: exhausting one principal does not touch another", async () => {
+    // 20 per minute by default. Loop until the fourth wall appears — the *count* to
+    // get there is a property of shared state this suite mutates, so the claim pinned
+    // here is "OTHER_KEY hits 429 while API_KEY keeps answering", not "exactly 21".
+    let exhausted: Response | undefined;
+    for (let i = 0; i < 25; i += 1) {
+      const res = await postExecute(OTHER_KEY, { prompt: `spend ${i}`, tools: [] });
+      if (res.status === 429) {
+        exhausted = res;
+        break;
+      }
+    }
+    expect(exhausted?.status).toBe(429);
+    expect(((await exhausted!.json()) as { error: { code: string } }).error.code).toBe("RATE_LIMITED");
+
+    // The isolation itself: the other principal is entirely uninvolved.
+    const untouched = await postExecute(API_KEY, { prompt: "still mine", tools: [] });
+    expect(untouched.status).toBe(200);
+  });
+
+  it("401s an unknown token — no fallback identity executes anything", async () => {
+    // The acceptance line "a valid bearer token with an unknown principal cannot fall
+    // back to anonymous user ownership": an *unknown* token is refused outright, and a
+    // valid one never needed a fallback because it always resolves to a named subject.
+    const res = await postExecute("not-a-token", { prompt: "who am i", tools: [] });
+    expect(res.status).toBe(401);
+    const anonymous = await postExecute("", { prompt: "who am i", tools: [] });
+    expect(anonymous.status).toBe(401);
+  });
+
+  it("MCP `ask` applies the same claim rule as REST", async () => {
+    const call = async (token: string, args: Record<string, unknown>) => {
+      const res = await fetch(`${runtime.url}/mcp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "simorgh_ask", arguments: args },
+        }),
+      });
+      return ((await res.json()) as {
+        result?: { isError?: boolean; content?: { text: string }[] };
+      }).result;
+    };
+
+    const spoof = await call(API_KEY, { prompt: "mcp spoof", userId: "u-other" });
+    expect(spoof?.isError).toBe(true);
+    expect(spoof?.content?.[0]?.text).toContain("FORBIDDEN");
+
+    const clean = await call(API_KEY, { prompt: "mcp as myself" });
+    expect(clean?.isError).not.toBe(true);
+    expect(clean?.content?.[0]?.text).toContain("mcp as myself");
+  });
+});
+
+describe("a solo deployment still flies (service principal)", () => {
+  // The other half of the A3 decision: `SIMORGH_API_KEY`-only configuration keeps
+  // working, and executes under the named `service` principal — explicit in the
+  // ledger, never a fake user, never anonymous.
+  it("executes as `service` and refuses to splinter into named users", async () => {
+    const SOLO = "solo-deploy-key";
+    const solo = await startNodeRuntime({ port: 0, apiKey: SOLO, secrets: {}, providers: [canned] });
+    try {
+      const fly = await fetch(`${solo.url}/api/v1/agent/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SOLO}` },
+        body: JSON.stringify({ prompt: "solo flight", tools: [] }),
+      });
+      expect(fly.status).toBe(200);
+
+      const agree = await fetch(`${solo.url}/api/v1/agent/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SOLO}` },
+        body: JSON.stringify({ prompt: "i agree", tools: [], userId: "service" }),
+      });
+      expect(agree.status).toBe(200);
+
+      // The solo operator cannot invent users by naming them — every request here is
+      // the one service principal, whoever it claims to be.
+      const invent = await fetch(`${solo.url}/api/v1/agent/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SOLO}` },
+        body: JSON.stringify({ prompt: "make me admin", tools: [], userId: "admin" }),
+      });
+      expect(invent.status).toBe(403);
+
+      // The documented asymmetry: `service` may *write*; reading per-user history
+      // stays on the map, where the service token is `IDENTITY_UNRESOLVED` — including
+      // for its own `service` rows, so no single-key deployment ever has a user-read
+      // surface by accident.
+      const read = await fetch(`${solo.url}/api/v1/user/service/logs`, {
+        headers: { Authorization: `Bearer ${SOLO}` },
+      });
+      expect(read.status).toBe(503);
+      expect(((await read.json()) as { error: { code: string } }).error.code).toBe(
+        "IDENTITY_UNRESOLVED"
+      );
+    } finally {
+      await solo.close();
+    }
   });
 });
 

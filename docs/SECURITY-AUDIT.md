@@ -76,10 +76,16 @@ sources:
 - **Fix:** The `refId` is now a claim that gets checked. `LedgerPort.findByRef(refId)` returns the append-only row that binds a reference to the principal that created it, and the route serves the payload only when that owner is the caller. A missing row is treated as **not yours**, never as "unowned, therefore allowed". Refusals return the *same* `404 {error:"not_found"}` as a reference that does not exist, so the route cannot be used to learn which references exist, and the stored payload is not read at all on that path. The `ref_id` index (`LEDGER_REF_INDEX`) is applied as a **second** `exec` rather than appended to `LEDGER_SCHEMA`, because the Node host's `SqlPort` is built on `node:sqlite`'s `prepare()`, which prepares one statement — a two-statement schema string would throw there while working on a Durable Object.
 - **Verification:** Negative control run — with the ownership check disabled, the new AUTH-003 tests fail (`expected 200 to be 404`) on **both** hosts. Restored: `npm run typecheck` clean, `npm test` green (134 workerd + 462 node), `platform:smoke` 5/5, `e2e:ask` 10/10, Go build/vet/test green, `security:scan` PASS. Each test runs its **positive** control too (the owner is still served), because an ownership check that denies everybody is a different bug from one that denies nobody and a denial-only assertion cannot tell them apart.
 - **Found but not fixed, and recorded so it is not rediscovered:** a token that exists *only* in `SIMORGH_API_KEYS` can read its own data but cannot call `/api/v1/agent/execute`, which still authenticates against `SIMORGH_API_KEY` alone. A multi-caller deployment must therefore issue both. Closing that is not mechanical: it means the `userId` must come from the token instead of `X-Simorgh-User-Id`, or a caller can spend another caller's rate-limit budget and write ledger rows in their name (AUTH-004). Noted at `NodeRuntimeOptions.apiKeys`.
+  - **Resolved 2026-11-16 (A3):** a map token now executes as its mapped subject on both hosts; the single service key executes as the explicit `service` principal. The `userId` is a claim checked against the credential, so a caller cannot spend another's budget or file rows in another's name. `NodeRuntimeOptions.apiKeys` documents the new behaviour.
 
 ### AUTH-004 — Rate-limit key is spoofable via `X-Simorgh-User-Id` header
 - **Severity:** medium · **Status 2026-10-09:** OPEN — promoted to **EPIC-A3, the gate** in
-  [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md). Scope beyond this finding's original "rate-limit key" framing:
+  [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md). **Status 2026-11-16: CLOSED** — `authenticateExecuteIdentity`
+  resolves the principal from the credential, `assertPrincipalClaim` refuses a disagreeing header/body
+  claim with a flat 403, and rate-limit keys, ledger rows and schedules are keyed on the resolved
+  subject on both hosts. Verified with both suites (188 workerd + 522 Node green), a live-core
+  cross-principal spoof/isolation suite, and `security:scan` PASS. Finding text below is kept as the
+  historical record. Scope beyond this finding's original "rate-limit key" framing:
   credential → authenticated principal → `principalId` must own *every* task/schedule/memory/retrieval/
   connector/credential/ledger operation, with seven cross-principal negative tests (A cannot execute /
   schedule / read context / read logs / consume quota / search knowledge / invoke connectors as B).

@@ -108,12 +108,12 @@ function testEnv(flock: unknown = fakeFlockNamespace()): Env {
   } as unknown as Env;
 }
 
-const post = (body: unknown, flock?: unknown) =>
+const post = (body: unknown, flock?: unknown, token: string = TOKEN) =>
   app.request(
     "/api/v1/agent/execute",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer test-secret" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     },
     testEnv(flock)
@@ -193,7 +193,6 @@ describe("POST /api/v1/agent/execute", () => {
     const res = await post({
       prompt: "hello flock",
       tools: ["search_web", "rm_rf_root", "get_server_time", "drop_tables"],
-      userId: "u-allow",
       tier: "Free-Volunteer",
     });
 
@@ -293,7 +292,9 @@ describe("POST /api/v1/agent/execute", () => {
     );
   });
 
-  it("records the call in the transparency ledger, defaulting identity for anonymous callers", async () => {
+  it("records the call in the transparency ledger under the principal the token names", async () => {
+    // A3 deleted the "anonymous default": this row is under `anonymous` because the map
+    // says TOKEN *is* anonymous, not because the request left the field out.
     const res = await post({ prompt: "anonymous please", tools: [] });
     const { meta } = (await res.json()) as { meta: { contextRefId: string } };
 
@@ -313,8 +314,16 @@ describe("POST /api/v1/agent/execute", () => {
     expect(entry).toMatchObject({ tier: "Free-Volunteer", action: "execute" });
   });
 
-  it("logs the caller's own identity when given one", async () => {
-    await post({ prompt: "identify me", tools: [], userId: "u-ledger", tier: "Pro-Data-Pact" });
+  it("logs the caller's identity — taken from the token, a matching claim beside it", async () => {
+    // Before A3 this posted the *service* token while naming `u-ledger` in the body, and
+    // the core believed the body. Now the claim must agree with the credential, so the
+    // `u-ledger` token is what makes this a `u-ledger` row — claim and credential point
+    // at the same subject.
+    await post(
+      { prompt: "identify me", tools: [], userId: "u-ledger", tier: "Pro-Data-Pact" },
+      undefined,
+      OTHER_TOKEN
+    );
 
     // `u-ledger`'s own token, because this route now requires the caller to *be* the user
     // whose logs they are asking for.
@@ -334,7 +343,7 @@ describe("POST /api/v1/agent/execute", () => {
 // control against any detector.
 describe("identity and ownership (AUTH-002 / AUTH-003)", () => {
   it("serves a user their own ledger and 403s another caller's (AUTH-002)", async () => {
-    await post({ prompt: "identify me", tools: [], userId: "u-ledger" });
+    await post({ prompt: "identify me", tools: [] }, undefined, OTHER_TOKEN);
 
     // Positive control: `u-ledger` can still read `u-ledger`.
     const owner = await authedGet("/api/v1/user/u-ledger/logs", OTHER_TOKEN);
@@ -349,13 +358,13 @@ describe("identity and ownership (AUTH-002 / AUTH-003)", () => {
   });
 
   it("serves an owner their offloaded context and 404s it to another caller (AUTH-003)", async () => {
-    // Owned by `u-ledger`: ownership comes from the ledger row the execute call writes,
-    // not from whichever token created it.
-    const created = await post({
-      prompt: "private",
-      tools: ["get_server_time"],
-      userId: "u-ledger",
-    });
+    // Owned by `u-ledger` because *its own token* executed it (A3): ownership comes from
+    // the credential, not from a name typed into the body.
+    const created = await post(
+      { prompt: "private", tools: ["get_server_time"] },
+      undefined,
+      OTHER_TOKEN
+    );
     const { meta } = (await created.json()) as { meta: { contextRefId: string } };
 
     const owner = await authedGet(`/api/v1/context/${meta.contextRefId}`, OTHER_TOKEN);
