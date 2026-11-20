@@ -42,11 +42,13 @@ the document lifecycle.
 - [Project state](STATE-OF-PROJECT.md) — evidence-backed capabilities and known gaps.
 - [Architecture](ARCHITECTURE.md) and [reference architecture](REFERENCE-ARCHITECTURE.md) — invariants and reusable mechanisms.
 - [Security audit](SECURITY-AUDIT.md) — findings, severity and disposition.
+- [REST contract](api/CONTRACT.md) — the single API/config surface used by the CLI, dashboard and Android client.
 
 ## Decisions and research
 
 - [Architecture decisions](adr/) — decisions that constrain implementation.
 - [Research](research/) — ecosystem evidence, benchmarks and adoption studies.
+- [PRD research programme (August 2026)](research/prd-program-2026-08/index.md) — the brief, the epics digest and the 1M-user capacity arithmetic the August PRD was written from.
 - [Continuation review](research/CONTINUATION-REVIEW-2026-10-10.md) — why the next work is identity → quota-aware durable execution → knowledge → swarm.
 - [Retirement record](history/coordination-retirement-2026-10-10.md) — where the former coordination framework's conclusions now live.
 
