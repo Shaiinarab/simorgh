@@ -18,6 +18,7 @@ Ecosystem evidence, audits and adoption specs. Dated conclusions are marked `dep
 ## Subdirectories
 
 * [adoption/](adoption/) — 5 concepts
+* [prd-program-2026-08/](prd-program-2026-08/) — 6 concepts + 3 prompts: the research the August PRD was written from, imported 2026-11-20
 
 ## See also
 
