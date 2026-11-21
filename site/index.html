@@ -76,7 +76,7 @@
     padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; color: var(--muted); }
   .note b { color: var(--amber); }
   .note.good { border-left-color: var(--green); background: rgba(63,185,80,.07); }
-  .note.good b { color: var(--green); }
+  .note.good b { color: var(--green); }\n  .setup-status { border: 1px solid rgba(210,153,34,.45); border-radius: 10px; background: rgba(210,153,34,.06); padding: 14px 16px; margin: 18px 0 4px; color: var(--muted); }\n  .setup-status strong { color: var(--amber); }\n  .setup-status a { color: var(--accent); }
   table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .9rem; }
   th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
@@ -125,6 +125,12 @@
         <span class="badge">MIT licensed</span>
         <span class="badge">2 hosts: Node + Cloudflare</span>
         <span class="badge">MCP 2026-07-28</span>
+      </div>
+      <div class="setup-status" role="status"><strong>Setup status: manual bootstrap.</strong>
+        This Pages site currently generates a personal token and guides you through local deployment.
+        It does not collect provider keys or deploy into your cloud account. Never paste provider keys
+        or GitHub/Cloudflare access tokens into this public page. The secure guided provisioner is being
+        designed around a local CLI companion. <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/design/simorgh-control-center.md">Control Center design</a>.
       </div>
     </div>
 
@@ -308,6 +314,12 @@ curl -s -X POST http://127.0.0.1:8788/api/v1/agent/execute \
         <span class="badge">مجوز MIT</span>
         <span class="badge">دو میزبان: Node + Cloudflare</span>
         <span class="badge">MCP 2026-07-28</span>
+      </div>
+      <div class="setup-status" role="status"><strong>وضعیت راه‌اندازی: فعلاً دستی.</strong>
+        این صفحه فعلاً توکن شخصی می‌سازد و مراحل استقرار محلی را توضیح می‌دهد؛ کلیدهای پروایدر را دریافت نمی‌کند
+        و در حساب ابری شما چیزی deploy نمی‌کند. کلید پروایدر یا توکن دسترسی GitHub و Cloudflare را در این صفحه وارد نکنید.
+        نسخهٔ امنِ راه‌اندازی با همراهِ محلی CLI طراحی شده است.
+        <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/design/simorgh-control-center.md">طرح Control Center</a>.
       </div>
     </div>
 
