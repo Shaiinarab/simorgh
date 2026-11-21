@@ -111,7 +111,9 @@ No GitHub PAT in the browser. No GitHub Actions workflow that accepts arbitrary 
 - **htmx 4.0.0 is released** (2026-08-28). It is a strong fit for the local Hono wizard because the UI is server-rendered and benefits from fetch-based partial updates and streaming extensions. Pin `htmx.org@4.0.0` explicitly: npm intentionally keeps 2.x on `latest` and 4.x on `next` until early 2027. Account for explicit attribute inheritance and renamed event names.
 - The repository currently pins `@typescript/native-preview@7.0.0-dev.20260707.2`, an old development snapshot. TypeScript 7.1 Beta was announced on 2026-10-20. Keep compiler upgrades separate from UI implementation: test the current native compiler against the full workspace, then move to a supported TypeScript 7.0 release or 7.1 beta only after parity and toolchain checks.
 - Keep Go 1.27 as the high-throughput gateway/runtime convergence track (G2), not as a rewrite of the wizard. Update the repository's Go 1.27.2 evidence/build images to the latest 1.27 patch before release; Go 1.27.4 was published 2026-11-10.
-- Rust remains optional and evidence-gated under ADR-0010. Do not add Rust to the onboarding critical path.
+- **Client order:** CLI/provisioner first, local web app second, Android third. Freeze the versioned connection-profile contract before the latter two clients are built.
+- **Long-term CLI direction:** make Go 1.27 the primary distributable CLI and local process supervisor after G2's Go runtime passes the shared conformance suite. Keep the existing TypeScript CLI/planner as the current implementation and migration reference until that parity exists; do not fork deployment semantics.
+- Rust should remain an optional native module behind a narrow FFI/port, not a mandatory second CLI runtime. The current output-shield experiment measured 1.5–1.7× slower than V8, so there is no evidence to make Rust part of the setup critical path.
 
 ## Acceptance criteria
 
