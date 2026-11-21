@@ -49,7 +49,7 @@ sources:
 ## Implementation slices
 
 1. **G4.1 — UX and truth pass:** audit existing site copy and steps; distinguish shipped manual behavior from planned automation; add target/secret trust explanations.
-2. **G4.2 — Local provisioner:** CLI command, loopback HTTP server, Origin validation, one-time pairing, redacted structured logs, graceful shutdown.
+2. **G4.2 — Local provisioner:** CLI command, loopback HTTP server, Host/Origin/CSRF validation, short-lived local session bootstrap, redacted structured logs, graceful shutdown.
 3. **G4.3 — Provider setup:** reuse provider catalog and validation; install secrets through host adapters; test wrong keys, provider outage and key redaction.
 4. **G4.4 — Deploy orchestration:** reuse plan/preflight/apply; preview, explicit confirmation, retries, health/capability/flock probes.
 5. **G4.5 — Identity lifecycle:** generate personal credential, map to principal, export profile; test wrong principal, service-token misuse, rotation/revocation.
