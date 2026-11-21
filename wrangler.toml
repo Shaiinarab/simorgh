@@ -18,6 +18,10 @@ class_name = "FlockCoordinator"
 name = "DATA_TRUST_VAULT"
 class_name = "DataTrustVault"
 
+[[durable_objects.bindings]]
+name = "KNOWLEDGE_VAULT"
+class_name = "KnowledgeVault"
+
 # ── Durable Object migrations ────────────────────────────
 # v1 creates both classes as SQLite-backed Durable Objects (both use
 # `this.state.storage.sql`). v2 is an empty tag bump — see docs/DEPLOY.md §C.
@@ -27,6 +31,11 @@ new_sqlite_classes = ["FlockCoordinator", "DataTrustVault"]
 
 [[migrations]]
 tag = "v2"
+
+# v3 adds the knowledge store (C2). A new SQLite class, so existing objects are untouched.
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["KnowledgeVault"]
 
 [triggers]
 crons = ["15 6 * * *"]

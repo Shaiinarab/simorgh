@@ -188,3 +188,77 @@ export interface LedgerPort {
    */
   findByRef(refId: string): Promise<LedgerRow | null>;
 }
+
+// ── Retrieval ─────────────────────────────────────────────────────────────────
+
+/**
+ * One document (or chunk) stored in a retrieval namespace.
+ *
+ * `id` is unique per namespace, not globally: the same document id in two namespaces
+ * is two documents, and the port never guesses which one a caller means.
+ */
+export interface RetrievalDocument {
+  /** Stable, caller-chosen. Unique within a namespace. */
+  id: string;
+  /** Tenant/agent namespace. The port never invents one. */
+  namespace: string;
+  title?: string;
+  text: string;
+  /** JSON-serialisable metadata, stored verbatim and returned on a hit. */
+  metadata?: Record<string, string | number | boolean | null>;
+  /** Epoch milliseconds; the adapter falls back to its clock when absent. */
+  timestamp?: number;
+}
+
+/** A search over exactly one namespace. */
+export interface RetrievalQuery {
+  namespace: string;
+  text: string;
+  /** Default 10, capped by the adapter. */
+  limit?: number;
+}
+
+/**
+ * One ranked result.
+ *
+ * `score` is **higher-is-better** so a host can merge adapters without knowing the
+ * substrate's native rank direction (FTS5's `rank` is negative, for example). `source`
+ * names the adapter that produced the hit — `"fts5"`, `"orama"`, `"ai-search"` — because
+ * a result without provenance is a claim without evidence.
+ */
+export interface RetrievalHit {
+  documentId: string;
+  /**
+   * Which passage of the document this hit is, 0-based. Present on search hits
+   * (passage-level provenance); absent on a whole-document `get`. `0` is a real
+   * chunk, not a missing value.
+   */
+  chunkId?: number;
+  namespace: string;
+  title?: string;
+  text: string;
+  score: number;
+  source: string;
+  timestamp?: number;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+/**
+ * Search over documents the host has indexed.
+ *
+ * A port rather than a module because the substrate is host-specific: Cloudflare
+ * Durable Object SQLite and Node's `node:sqlite` both ship **FTS5**, so a zero-dependency
+ * lexical adapter works on both, while a hosted index (AI Search, Vectorize) is a
+ * different adapter with different eligibility. The engine declares the contract; hosts
+ * bind what they have and report what they do not.
+ */
+export interface RetrievalPort {
+  /** Index or replace one document. */
+  index(document: RetrievalDocument): Promise<void>;
+  /** Ranked search within one namespace. */
+  search(query: RetrievalQuery): Promise<RetrievalHit[]>;
+  /** One document by id, or `null` when the namespace does not hold it. */
+  get(namespace: string, documentId: string): Promise<RetrievalHit | null>;
+  /** Remove one document from one namespace. */
+  delete(namespace: string, documentId: string): Promise<void>;
+}

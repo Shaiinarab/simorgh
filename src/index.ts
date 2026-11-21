@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { FlockCoordinator, PROVIDERS, readFlockStatus } from "./flock";
 import { DataTrustVault } from "./data-trust";
+import { KnowledgeVault } from "./knowledge-vault";
 import { renderDashboard } from "./dashboard";
 import { AGENT_TOOLS } from "./agent";
 import {
@@ -13,6 +14,11 @@ import {
   rateLimitHeaders,
   renderCapabilitySummary,
   unclaimedCapabilityProbes,
+  knowledgeNamespaceFor,
+  parseKnowledgeIndex,
+  parseKnowledgeSearch,
+  parseKnowledgeTarget,
+  toPublicKnowledgeHit,
 } from "@simorgh/phoenix-core";
 import { executeAgent } from "./agent-service";
 import {
@@ -74,7 +80,7 @@ app.use("/api/*", async (c, next) => {
       "Access-Control-Allow-Headers",
       "Authorization, Content-Type, X-Simorgh-User-Id"
     );
-    c.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    c.header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     c.header("Access-Control-Expose-Headers", "X-Request-Id, Retry-After");
     c.header("Access-Control-Max-Age", "86400");
   }
@@ -624,6 +630,80 @@ app.get("/api/v1/user/:userId/logs", async (c) => {
   return c.json(await vault.getUserLogs(userId));
 });
 
+// ── Knowledge (C2) ────────────────────────────────────────────────────────────
+//
+// Four thin routes over the RetrievalPort. The namespace the caller sends is a *label*;
+// the stored namespace is `<subject>::<label>`, so a principal cannot name another
+// principal's data even by guessing the label. The credential is the only source of the
+// subject (A3), and `requireIdentity` refuses a deployment that cannot attribute one.
+
+function knowledgeVault(env: Env) {
+  return env.KNOWLEDGE_VAULT.get(env.KNOWLEDGE_VAULT.idFromName("global"));
+}
+
+app.post("/api/v1/knowledge", async (c) => {
+  const identity = await requireIdentity(c);
+  if (identity instanceof Response) return identity;
+
+  const document = parseKnowledgeIndex(await c.req.text(), crypto.randomUUID());
+  const vault = knowledgeVault(c.env);
+  await vault.indexDocument({
+    ...document,
+    namespace: knowledgeNamespaceFor(identity.subject, document.namespace),
+  });
+
+  return c.json({ documentId: document.id, namespace: document.namespace }, 201);
+});
+
+app.get("/api/v1/knowledge/:id", async (c) => {
+  const identity = await requireIdentity(c);
+  if (identity instanceof Response) return identity;
+
+  const id = c.req.param("id");
+  const namespace = c.req.query("namespace") ?? "";
+  parseKnowledgeTarget(id, namespace);
+
+  const vault = knowledgeVault(c.env);
+  const hit = await vault.getDocument(
+    knowledgeNamespaceFor(identity.subject, namespace),
+    id
+  );
+  if (!hit) return c.json({ error: "not_found" }, 404);
+  return c.json(toPublicKnowledgeHit(identity.subject, hit));
+});
+
+app.post("/api/v1/knowledge/search", async (c) => {
+  const identity = await requireIdentity(c);
+  if (identity instanceof Response) return identity;
+
+  const query = parseKnowledgeSearch(await c.req.text());
+  const vault = knowledgeVault(c.env);
+  const hits = await vault.searchDocuments({
+    ...query,
+    namespace: knowledgeNamespaceFor(identity.subject, query.namespace),
+  });
+
+  return c.json({
+    results: hits.map((hit) => toPublicKnowledgeHit(identity.subject, hit)),
+  });
+});
+
+app.delete("/api/v1/knowledge/:id", async (c) => {
+  const identity = await requireIdentity(c);
+  if (identity instanceof Response) return identity;
+
+  const id = c.req.param("id");
+  const namespace = c.req.query("namespace") ?? "";
+  parseKnowledgeTarget(id, namespace);
+
+  const vault = knowledgeVault(c.env);
+  const stored = knowledgeNamespaceFor(identity.subject, namespace);
+  const existing = await vault.getDocument(stored, id);
+  if (!existing) return c.json({ error: "not_found" }, 404);
+  await vault.deleteDocument(stored, id);
+  return c.json({ deleted: true });
+});
+
 app.post("/api/v1/telegram/webhook", (c) =>
   handleTelegramWebhook(c.req.raw, c.env)
 );
@@ -765,4 +845,4 @@ const scheduled: ExportedHandlerScheduledHandler<Env> = async (
 };
 
 export default { fetch: app.fetch, scheduled } satisfies ExportedHandler<Env>;
-export { app, FlockCoordinator, DataTrustVault };
+export { app, FlockCoordinator, DataTrustVault, KnowledgeVault };

@@ -28,4 +28,6 @@ export * from "./security.ts";
 export * from "./execute.ts";
 export * from "./models.ts";
 export * from "./ledger.ts";
+export * from "./retrieval.ts";
+export * from "./knowledge.ts";
 export * from "./tools.ts";

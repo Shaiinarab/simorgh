@@ -27,8 +27,24 @@ interface SimorghSecrets {
   CORS_ORIGINS?: string;
 }
 
-interface Env extends SimorghSecrets {}
+interface Env extends SimorghSecrets {
+  /**
+   * The knowledge store (C2). A SQLite-backed Durable Object whose `ctx.storage.sql`
+   * backs the FTS5 retrieval adapter. Hand-typed here because `wrangler types` requires
+   * a network round-trip that is not available on every box; the generated
+   * `worker-configuration.d.ts` remains the source for the other bindings.
+   */
+  KNOWLEDGE_VAULT: DurableObjectNamespace<import("./src/knowledge-vault").KnowledgeVault>;
+}
 
 declare namespace Cloudflare {
-  interface Env extends SimorghSecrets {}
+interface Env extends SimorghSecrets {
+  /**
+   * The knowledge store (C2). A SQLite-backed Durable Object whose `ctx.storage.sql`
+   * backs the FTS5 retrieval adapter. Hand-typed here because `wrangler types` requires
+   * a network round-trip that is not available on every box; the generated
+   * `worker-configuration.d.ts` remains the source for the other bindings.
+   */
+  KNOWLEDGE_VAULT: DurableObjectNamespace<import("./src/knowledge-vault").KnowledgeVault>;
+}
 }
