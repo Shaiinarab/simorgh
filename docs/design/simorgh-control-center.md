@@ -24,6 +24,15 @@ sources:
   - id: roadmap
     resource: "../ROADMAP-SPINE.md"
     title: "Canonical roadmap"
+  - id: ts7
+    resource: "https://devblogs.microsoft.com/typescript/2026/10/20/announcing-typescript-7-1-beta/"
+    title: "TypeScript 7.1 Beta announcement"
+  - id: htmx4
+    resource: "https://four.htmx.org/announcements/2026-08-28-htmx-4.0.0-is-released"
+    title: "htmx 4.0 release announcement"
+  - id: go127
+    resource: "https://go.dev/doc/devel/release"
+    title: "Go release history and patch releases"
 ---
 
 # Simorgh Control Center
@@ -85,9 +94,9 @@ The current A3 implementation uses a JSON token-to-subject map. The first implem
 
 ## Deployment and trust boundaries
 
-**GitHub Pages** serves only the static, bilingual Control Center shell. It is the discovery/documentation surface, not a secret vault or provisioning backend.
+**GitHub Pages** serves the public, bilingual landing page, docs and launcher instructions only. It is not the interactive secret-entry origin, a vault, or a provisioning backend.
 
-**Local setup companion** is the trusted provisioning boundary. The user launches it through the CLI; it binds to loopback only, validates the browser Origin, uses short-lived one-time pairing, and delegates deployment to existing target adapters/Wrangler. It accepts provider keys only over loopback, redacts all output, writes secrets directly to the selected host, and never returns provider keys to the page after submission. It must reject non-loopback binds by default.
+**Local setup companion** is the trusted provisioning boundary and the actual interactive wizard. The user launches it through the CLI; it binds to loopback only and serves the wizard UI from its own `http://127.0.0.1` origin. The browser therefore submits provider keys same-origin to the local process instead of cross-origin from GitHub Pages. The companion delegates deployment to existing target adapters/Wrangler, redacts all output, writes secrets directly to the selected host, and never returns provider keys to the page after submission. It must reject non-loopback binds by default. The Pages page may link to the local UI after the user has started it, but must not proxy or collect secrets itself.
 
 **Core API** remains the single runtime contract shared by Node/Go/Workers and clients. The existing `POST /api/v1/setup/validate` and `POST /api/v1/setup/check-mcp` routes are validation helpers, not a remote secret installation API. Keep them that way unless a separately reviewed security design changes the boundary.
 
@@ -97,11 +106,11 @@ No GitHub PAT in the browser. No GitHub Actions workflow that accepts arbitrary 
 
 - Reuse the existing `simorgh-platform/src/deploy/{plan,preflight,apply}.ts` planner and target matrix. Do not create a second deployment engine.
 - Add a small local provisioning command and loopback HTTP bridge in `simorgh-platform`; the existing CLI remains the orchestration entry point.
-- Keep the static Pages surface dependency-light. The first version can remain semantic HTML + TypeScript/vanilla modules; use progressive enhancement and accessible form controls.
-- Use the current Hono 4 host and shared `phoenix-core` contracts. Avoid adding a second backend framework.
-- TypeScript 7 native preview is already present in the repository toolchain; treat it as a pinned compiler experiment, not a reason to migrate application code to unstable APIs.
-- HTMX 4 can be evaluated for server-rendered local wizard fragments only after its release/API stability and browser behavior are verified. It is not required for the static shell or a reason to introduce a server round-trip architecture.
-- Keep Go 1.27 as the high-throughput gateway/runtime convergence track (G2), not as a rewrite of the wizard.
+- Keep the Pages landing page dependency-light. The local wizard can use semantic server-rendered HTML + progressive enhancement.
+- Reuse the current Hono 4 host and shared `phoenix-core` contracts. Do not add another backend framework.
+- **htmx 4.0.0 is released** (2026-08-28). It is a strong fit for the local Hono wizard because the UI is server-rendered and benefits from fetch-based partial updates and streaming extensions. Pin `htmx.org@4.0.0` explicitly: npm intentionally keeps 2.x on `latest` and 4.x on `next` until early 2027. Account for explicit attribute inheritance and renamed event names.
+- The repository currently pins `@typescript/native-preview@7.0.0-dev.20260707.2`, an old development snapshot. TypeScript 7.1 Beta was announced on 2026-10-20. Keep compiler upgrades separate from UI implementation: test the current native compiler against the full workspace, then move to a supported TypeScript 7.0 release or 7.1 beta only after parity and toolchain checks.
+- Keep Go 1.27 as the high-throughput gateway/runtime convergence track (G2), not as a rewrite of the wizard. Update the repository's Go 1.27.2 evidence/build images to the latest 1.27 patch before release; Go 1.27.4 was published 2026-11-10.
 - Rust remains optional and evidence-gated under ADR-0010. Do not add Rust to the onboarding critical path.
 
 ## Acceptance criteria
