@@ -25,7 +25,8 @@ G1 is optional/parallel; F (scale) only after B–D prove out.
 | 8 | [C3 — Principal/agent namespaces](C3-knowledge-namespaces.md) | queued | C2 |
 | 9 | [E1 — Current-revision MCP](E1-mcp-current-revision.md) | queued | B1, C2 |
 | 10 | [G2 — Go gateway convergence](G2-go-gateway-convergence.md) | queued | A3 |
-| 11 | [G3 — MCP Apps dashboard](G3-mcp-apps-dashboard.md) | queued | E1 |\n| 12 | [G4 — Control Center wizard](G4-control-center-wizard.md) | queued | A3, existing deploy planner, ADR-0011 |
+| 11 | [G3 — MCP Apps dashboard](G3-mcp-apps-dashboard.md) | queued | E1 |
+| 12 | [G4 — Control Center wizard](G4-control-center-wizard.md) | queued | A3, existing deploy planner, ADR-0011 |
 | 13 | [C4 — Layered memory](C4-layered-memory.md) | queued | C3 |
 | 14 | [D1 — Research digest](D1-research-digest.md) | queued | B4, C2, C4 |
 | 15 | [E2 — Provider discovery](E2-provider-discovery.md) | later | B2, C1 |
