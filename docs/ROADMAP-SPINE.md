@@ -67,7 +67,8 @@ PHASE 6  Memory                NEXT   (C4: editable blocks + archival + provenan
 PHASE 7  Autonomous loop       NEXT   (D1: one evaluated research digest)
 PHASE 8  Connectors            LATER  (Notion/Drive/Telegram/GitHub sync)
 PHASE 9  UI                    NEXT   (G3: MCP Apps — the dashboard as a ui:// resource)
-PHASE 10 Runtime convergence   NEXT   (G2: Go gateway on the core contract; G1: native shield optional)\nPHASE 11 Onboarding            PLANNED (G4: Pages Control Center + loopback CLI provisioner)
+PHASE 10 Runtime convergence   NEXT   (G2: Go gateway on the core contract; G1: native shield optional)
+PHASE 11 Onboarding            PLANNED (G4: Pages Control Center + loopback CLI provisioner)
 ```
 
 ## TL;DR
