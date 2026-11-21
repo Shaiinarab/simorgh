@@ -13,6 +13,7 @@ One concept per decision, in number order. The operative status remains the `**S
 * [ADR-0009 — Retrieval is a port with an FTS5 baseline; modules are adopted per capability](ADR-0009-module-adoption-retrieval.md) — Why FTS5 is the zero-dependency baseline on both hosts, Orama is an optional Node adapter, AI Search is conditional, and search servers / memory engines are refused.
 * [ADR-0010 — Native modules behind ports (evidence-gated Rust policy)](ADR-0010-native-module-policy.md) — Why the Rust/Wasm core stays rejected while native modules are allowed as optional, differentially tested, measured, default-OFF accelerators; records the shield port and the Go-gateway convergence decision.
 * [ADR-0011 — Control Center provisioning and secret boundary](ADR-0011-control-center-provisioning-boundary.md) — GitHub Pages is static; a loopback CLI companion owns provider secrets, deployment and personal credential setup.
+* [ADR-0012 — Global provider catalogue, health lifecycle and cloud topology](ADR-0012-global-provider-catalog-and-cloud-topology.md) — International cardless-provider discovery, evidence-based lifecycle probes, GitHub/Cloudflare/Vercel responsibilities, and a Telegram-first cloud topology.
 
 ## See also
 
