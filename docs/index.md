@@ -46,7 +46,9 @@ the document lifecycle.
 - [ADR-0010 — native-module policy](adr/ADR-0010-native-module-policy.md) — why the Rust/Wasm core stays rejected while native modules are allowed as optional, differentially tested, measured, default-OFF accelerators (the output shield in `native/`).
 - [November 2026 deep recon](research/NOVEMBER-2026-DEEP-RECON.md) — the 2026-11-21 reconnaissance behind roadmap v2: final MCP 2026-07-28, Go-gateway convergence, the free-tier roster, and the native-shield measurement.
 - [Security audit](SECURITY-AUDIT.md) — findings, severity and disposition.
-- [REST contract](api/CONTRACT.md) — the single API/config surface used by the CLI, dashboard and Android client.\n- [Simorgh Control Center](design/simorgh-control-center.md) — six-step onboarding, secure provisioning boundary, identity handoff and client profile design.\n- [ADR-0011](adr/ADR-0011-control-center-provisioning-boundary.md) — Pages stays static; a loopback CLI companion owns secrets and deployment.
+- [REST contract](api/CONTRACT.md) — the single API/config surface used by the CLI, dashboard and Android client.
+- [Simorgh Control Center](design/simorgh-control-center.md) — six-step onboarding, secure provisioning boundary, identity handoff and client profile design.
+- [ADR-0011](adr/ADR-0011-control-center-provisioning-boundary.md) — Pages stays static; a loopback CLI companion owns secrets and deployment.
 
 ## Decisions and research
 
