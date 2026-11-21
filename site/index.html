@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simorgh — setup your own core</title>
+<meta name="description" content="Set up your own Simorgh agentic AI gateway in minutes: a free, no-KYC flock of AI providers behind one API, then point the Android app at it.">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --amber: #d29922;
+    --red: #f85149; --code-bg: #1c2128; --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "Noto Sans Arabic", sans-serif;
+    line-height: 1.6; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 20px; }
+  header { border-bottom: 1px solid var(--border); background: var(--panel); }
+  header .wrap { display: flex; align-items: center; justify-content: space-between;
+    padding-top: 14px; padding-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem;
+    text-decoration: none; color: var(--text); }
+  .brand svg { flex: none; }
+  nav a { color: var(--muted); text-decoration: none; margin-left: 18px; font-size: .92rem; }
+  nav a:hover { color: var(--text); }
+  .lang-btn { background: transparent; border: 1px solid var(--border); color: var(--text);
+    border-radius: 999px; padding: 5px 14px; cursor: pointer; font-size: .9rem; }
+  .lang-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .hero { padding: 56px 0 20px; }
+  .hero h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 12px; }
+  .hero p.sub { font-size: 1.15rem; color: var(--muted); max-width: 640px; margin: 0 0 22px; }
+  .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 28px; }
+  .badge { font-size: .78rem; border: 1px solid var(--border); border-radius: 999px;
+    padding: 3px 12px; color: var(--muted); }
+  .badge b { color: var(--green); }
+  section { padding: 34px 0; border-top: 1px solid var(--border); }
+  section h2 { font-size: 1.5rem; margin: 0 0 8px; }
+  section > .wrap > p { color: var(--muted); }
+  .steps { counter-reset: step; }
+  .step { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 22px 24px; margin: 18px 0; }
+  .step h3 { margin: 0 0 6px; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
+  .step h3 .num { background: var(--accent); color: #0d1117; font-weight: 700; border-radius: 50%;
+    width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: .9rem; flex: none; }
+  .step > p, .step li { color: var(--muted); }
+  .tabs { display: flex; gap: 8px; margin: 14px 0 10px; flex-wrap: wrap; }
+  .tab { background: transparent; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 7px 16px; cursor: pointer; font-size: .92rem; }
+  .tab.active { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,.08); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; position: relative; margin: 10px 0; }
+  code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .88rem; }
+  pre code { color: var(--text); white-space: pre; }
+  .copy { position: absolute; top: 8px; right: 8px; background: var(--panel);
+    border: 1px solid var(--border); color: var(--muted); border-radius: 6px;
+    padding: 3px 10px; font-size: .75rem; cursor: pointer; }
+  .copy:hover { color: var(--accent); border-color: var(--accent); }
+  .field { margin: 12px 0; }
+  .field label { display: block; font-size: .88rem; color: var(--muted); margin-bottom: 4px; }
+  .field input { width: 100%; background: var(--code-bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 10px 14px; font-family: ui-monospace, monospace;
+    font-size: .9rem; }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > .field { flex: 1; min-width: 220px; }
+  button.primary { background: var(--accent); color: #0d1117; border: none; border-radius: 8px;
+    padding: 10px 20px; font-size: .95rem; font-weight: 600; cursor: pointer; }
+  button.primary:hover { filter: brightness(1.1); }
+  .note { border-left: 3px solid var(--amber); background: rgba(210,153,34,.07);
+    padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; color: var(--muted); }
+  .note b { color: var(--amber); }
+  .note.good { border-left-color: var(--green); background: rgba(63,185,80,.07); }
+  .note.good b { color: var(--green); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .9rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  td code { color: var(--accent); }
+  footer { border-top: 1px solid var(--border); padding: 26px 0; color: var(--muted); font-size: .88rem; }
+  footer a { color: var(--accent); text-decoration: none; }
+  .lang-fa { direction: rtl; }
+  .lang-fa .hero h1, .lang-fa .hero p.sub { text-align: right; }
+  .lang-fa .brand { flex-direction: row-reverse; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="#">
+      <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <circle cx="16" cy="16" r="15" stroke="#58a6ff" stroke-width="2"/>
+        <path d="M8 20c4-1 6-4 8-8 2 4 4 7 8 8-3 0-6 2-8 5-2-3-5-5-8-5z" fill="#58a6ff"/>
+      </svg>
+      Simorgh
+    </a>
+    <div>
+      <nav>
+        <a href="#start">Start</a>
+        <a href="#android">Android app</a>
+        <a href="#api">API</a>
+        <a href="https://github.com/Shaiinarab/simorgh" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <button class="lang-btn" id="langBtn" type="button">فارسی</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ══════════ ENGLISH ══════════ -->
+  <div id="en">
+    <div class="hero wrap">
+      <h1>Your own AI gateway,<br>free to run.</h1>
+      <p class="sub">Simorgh federates the internet's free AI provider tiers into one flock, answers
+        from whichever bird is healthy, and degrades honestly instead of making things up. This page
+        sets up your own core — then points the Android app at it.</p>
+      <div class="badges">
+        <span class="badge"><b>0 $</b> to run</span>
+        <span class="badge">no KYC</span>
+        <span class="badge">MIT licensed</span>
+        <span class="badge">2 hosts: Node + Cloudflare</span>
+        <span class="badge">MCP 2026-07-28</span>
+      </div>
+    </div>
+
+    <section id="start">
+      <div class="wrap">
+        <h2>Get running in 3 steps</h2>
+        <p>No account, no card, no build step. Pick where your core lives, mint an API key, then
+          configure the Android app.</p>
+
+        <div class="step">
+          <h3><span class="num">1</span> Start a core</h3>
+          <p>Requires <b>Node 22+</b> and <a href="https://github.com/unjs/upm" target="_blank" rel="noopener">upm</a>
+            (the repo's package manager). All three paths run the same engine.</p>
+          <div class="tabs" id="pathTabs">
+            <button class="tab active" data-panel="path-node" type="button">Local Node (fastest)</button>
+            <button class="tab" data-panel="path-cf" type="button">Cloudflare Workers (free edge)</button>
+            <button class="tab" data-panel="path-vps" type="button">VPS / self-hosted</button>
+          </div>
+
+          <div class="tab-panel active" id="path-node">
+            <pre><code>git clone https://github.com/Shaiinarab/simorgh.git
+cd simorgh
+upm install
+export NO_PROXY=127.0.0.1,localhost
+upm run simorgh -- serve --port 8788</code><button class="copy" type="button">copy</button></pre>
+            <p>The core boots with <b>zero keys</b> — providers you have no key for simply show as
+              <code>dormant</code>. Set provider keys (e.g. <code>GROQ_API_KEY</code>,
+              <code>GEMINI_API_KEY</code>, <code>OLLAMA_BASE_URL</code>) before starting to wake birds.</p>
+          </div>
+
+          <div class="tab-panel" id="path-cf">
+            <pre><code>git clone https://github.com/Shaiinarab/simorgh.git
+cd simorgh
+upm install
+npx wrangler login
+npx wrangler kv namespace create CONTEXT_STORE
+# paste the returned id into wrangler.toml (binding CONTEXT_STORE)</code><button class="copy" type="button">copy</button></pre>
+            <p>Then set your secrets and deploy (step 2 mints the key; the deploy script typechecks
+              first and refuses a broken tree):</p>
+            <pre><code>wrangler secret put SIMORGH_API_KEY       # paste the generated token
+wrangler secret put SIMORGH_API_KEYS      # paste the JSON map from step 2
+upm run deploy</code><button class="copy" type="button">copy</button></pre>
+            <div class="note good"><b>Zero-key guarantee:</b> on Cloudflare, Homā (Workers AI) answers
+              with no provider key at all — the only host where that is true.</div>
+          </div>
+
+          <div class="tab-panel" id="path-vps">
+            <pre><code>git clone https://github.com/Shaiinarab/simorgh.git
+cd simorgh
+upm install
+export NO_PROXY=127.0.0.1,localhost
+export SIMORGH_API_KEY="&lt;token&gt;"
+export SIMORGH_API_KEYS='{"&lt;token&gt;":"&lt;user&gt;"}'
+upm run simorgh -- serve --port 8788</code><button class="copy" type="button">copy</button></pre>
+            <p>Put it behind systemd or a supervisor; put TLS in front (Caddy, nginx). The Node
+              runtime reads <code>process.env</code> and nothing else — see
+              <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">docs/DEPLOY.md</a>.</p>
+            <div class="note"><b>Heads-up:</b> the shipped Node entrypoints keep SQLite in memory —
+              the ledger and counters reset on restart. For durable state, call
+              <code>startNodeRuntime({ sqlPath: "/var/lib/simorgh/core.db" })</code> from your own
+              entry point.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <h3><span class="num">2</span> Mint your API key</h3>
+          <p>A token is just a string you invent; the map <code>SIMORGH_API_KEYS</code> binds it to a
+            user id. The Android app sends the token as a Bearer credential, and the core resolves
+            <b>the user from the token</b> — never from a client claim.</p>
+          <div class="row">
+            <div class="field" style="flex:0 0 220px">
+              <label for="username">Your user id</label>
+              <input id="username" type="text" value="me" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="field" style="flex:0 0 auto; display:flex; align-items:flex-end">
+              <button class="primary" id="genBtn" type="button">Generate token</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="tokenOut">Your token (keep it secret — it is the credential)</label>
+            <input id="tokenOut" type="text" readonly autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="mapOut"><code>SIMORGH_API_KEYS</code> — export this, or store it as a Wrangler secret</label>
+            <input id="mapOut" type="text" readonly autocomplete="off">
+          </div>
+          <pre><code>export SIMORGH_API_KEYS='<span id="mapPre">{"…":"…"}</span>'
+export SIMORGH_API_KEY='<span id="tokenPre">…</span>'   # service token for CLIs; optional</code><button class="copy" type="button">copy</button></pre>
+          <div class="note"><b>Missing auth fails closed:</b> with no key configured, every authed
+            route answers <code>503 AUTH_NOT_CONFIGURED</code> — never an open door.</div>
+        </div>
+
+        <div class="step">
+          <h3><span class="num">3</span> Point the Android app at your core</h3>
+          <p>Build the app from source (no prebuilt APK is published): with the Android SDK installed
+            and <code>android/local.properties</code> pointing <code>sdk.dir</code> at it,</p>
+          <pre><code>cd android
+./gradlew assembleDebug
+# APK: android/app/build/outputs/apk/debug/app-debug.apk</code><button class="copy" type="button">copy</button></pre>
+          <p>Install it, open <b>Config</b>, and enter exactly these three values — they are pre-filled
+            from step 2 where possible:</p>
+          <div class="row">
+            <div class="field">
+              <label for="cfgUrl">Base URL</label>
+              <input id="cfgUrl" type="text" value="http://127.0.0.1:8788" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="field">
+              <label for="cfgKey">API key (the token)</label>
+              <input id="cfgKey" type="text" readonly autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="cfgUser">User id (claim; leave blank unless it equals your token's subject)</label>
+              <input id="cfgUser" type="text" readonly autocomplete="off">
+            </div>
+          </div>
+          <p>On the <b>Agent</b> screen, send a prompt. A core with no provider keys still answers
+            honestly: <code>answered_by: "none"</code> with a clear error — never a fabricated reply.</p>
+          <div class="note good"><b>Verify from a terminal first:</b>
+            <pre style="margin:8px 0 0"><code>curl -s http://127.0.0.1:8788/health
+curl -s -X POST http://127.0.0.1:8788/api/v1/agent/execute \
+  -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" \
+  -d '{"prompt":"who is simorgh"}'</code><button class="copy" type="button">copy</button></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="android">
+      <div class="wrap">
+        <h2>What the Android app talks to</h2>
+        <p>Three screens, one contract (<a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/api/CONTRACT.md" target="_blank" rel="noopener">docs/api/CONTRACT.md</a>).
+          The credential is the only identity; a <code>userId</code> is a claim the core validates.</p>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Used by</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/health</code></td><td>none</td><td>Status screen</td></tr>
+            <tr><td><code>GET</code></td><td><code>/api/v1/flock/status</code></td><td>none</td><td>Status screen — which birds are awake</td></tr>
+            <tr><td><code>POST</code></td><td><code>/api/v1/agent/execute</code></td><td>Bearer</td><td>Agent screen — the tool loop + flock failover</td></tr>
+          </tbody>
+        </table>
+        <p>Errors the app handles explicitly, and what they mean:</p>
+        <table>
+          <thead><tr><th>Status</th><th>Code</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>401</td><td><code>UNAUTHORIZED</code></td><td>missing or unknown token — check the API key field</td></tr>
+            <tr><td>403</td><td><code>FORBIDDEN</code></td><td>the userId claim disagrees with the token — leave it blank</td></tr>
+            <tr><td>429</td><td><code>RATE_LIMITED</code></td><td>honour <code>Retry-After</code>; the flock is rate-limited, not broken</td></tr>
+            <tr><td>503</td><td><code>AUTH_NOT_CONFIGURED</code></td><td>the core has no key configured — set <code>SIMORGH_API_KEY(S)</code> and restart</td></tr>
+            <tr><td>503</td><td><code>IDENTITY_UNRESOLVED</code></td><td>a read route saw the service token — use a mapped token (<code>SIMORGH_API_KEYS</code>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="api">
+      <div class="wrap">
+        <h2>Without keys it still tells the truth</h2>
+        <p>Simorgh boots with <b>zero secrets</b>. A provider with no key is <code>dormant</code>, not
+          broken: it is skipped without a cooldown and the flock answers from whatever is awake. On
+          Cloudflare, Homā (Workers AI) is keyless by design. On Node, add a free key or point
+          <code>OLLAMA_BASE_URL</code> at a local daemon to wake birds. If nothing is awake, the answer
+          says so — <code>answered_by: "none"</code>, never a hallucination.</p>
+        <p>Full provider-key matrix, traps and per-host detail:
+          <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">docs/DEPLOY.md</a>
+          · <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/ROADMAP-SPINE.md" target="_blank" rel="noopener">roadmap</a>
+          · <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/STATE-OF-PROJECT.md" target="_blank" rel="noopener">project state</a>.</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══════════ فارسی ══════════ -->
+  <div id="fa" class="lang-fa" hidden>
+    <div class="hero wrap">
+      <h1>گذرگاهِ هوش مصنوعیِ خودتان،<br>رایگان برای اجرا.</h1>
+      <p class="sub">سیمرغ سهمیه‌های رایگانِ مدل‌دهنده‌های اینترنت را به یک «گلّه» تبدیل می‌کند، از
+        سالم‌ترین پرندۀ بیدار پاسخ می‌گیرد و به‌جای خیال‌بافی، افتِ صادقانه نشان می‌دهد. این صفحه
+        هستهٔ شما را راه می‌اندازد — سپس اپلیکیشن اندروید را به آن وصل می‌کند.</p>
+      <div class="badges">
+        <span class="badge"><b>۰ دلار</b> هزینه اجرا</span>
+        <span class="badge">بدون KYC</span>
+        <span class="badge">مجوز MIT</span>
+        <span class="badge">دو میزبان: Node + Cloudflare</span>
+        <span class="badge">MCP 2026-07-28</span>
+      </div>
+    </div>
+
+    <section id="start">
+      <div class="wrap">
+        <h2>در سه قدم راه بیفتد</h2>
+        <p>بدون حساب، بدون کارت، بدون مرحلۀ build. انتخاب کنید هسته کجا زندگی کند، کلید API بسازید،
+          سپس اپ اندروید را تنظیم کنید.</p>
+
+        <div class="step">
+          <h3><span class="num">۱</span> یک هسته اجرا کنید</h3>
+          <p>نیازمند <b>Node 22+</b> و <a href="https://github.com/unjs/upm" target="_blank" rel="noopener">upm</a>
+            (مدیرِ پکیجِ مخزن). هر سه مسیر همان موتور را اجرا می‌کنند.</p>
+          <div class="tabs" id="pathTabs">
+            <button class="tab active" data-panel="path-node-fa" type="button">Node محلی (سریع‌ترین)</button>
+            <button class="tab" data-panel="path-cf-fa" type="button">Cloudflare Workers (لبهٔ رایگان)</button>
+            <button class="tab" data-panel="path-vps-fa" type="button">VPS / self-hosted</button>
+          </div>
+
+          <div class="tab-panel active" id="path-node-fa">
+            <pre><code>git clone https://github.com/Shaiinarab/simorgh.git
+cd simorgh
+upm install
+export NO_PROXY=127.0.0.1,localhost
+upm run simorgh -- serve --port 8788</code><button class="copy" type="button">copy</button></pre>
+            <p>هسته با <b>صفر کلید</b> بالا می‌آید — پروایدرهایی که کلیدشان را ندارید
+              <code>dormant</code> می‌شوند. برای بیدارکردنِ پرنده‌ها کلیدها را (مثل
+              <code>GROQ_API_KEY</code>، <code>GEMINI_API_KEY</code>، <code>OLLAMA_BASE_URL</code>)
+              قبل از اجرا ست کنید.</p>
+          </div>
+
+          <div class="tab-panel" id="path-cf-fa">
+            <pre><code>git clone https://github.com/Shaiinarab/simorgh.git
+cd simorgh
+upm install
+npx wrangler login
+npx wrangler kv namespace create CONTEXT_STORE
+# شناسۀ برگشتی را در wrangler.toml (binding CONTEXT_STORE) بگذارید</code><button class="copy" type="button">copy</button></pre>
+            <p>سپس secretها را ست کنید و deploy کنید (قدم ۲ کلید را می‌سازد؛ اسکریپتِ deploy اول
+              typecheck می‌کند و درختِ خراب را رد می‌کند):</p>
+            <pre><code>wrangler secret put SIMORGH_API_KEY       # توکنِ ساخته‌شده را بچسبانید
+wrangler secret put SIMORGH_API_KEYS      # نگاشتِ JSON از قدم ۲
+upm run deploy</code><button class="copy" type="button">copy</button></pre>
+            <div class="note good"><b>تضمینِ صفر-کلید:</b> روی Cloudflare، Homā (Workers AI) بدون هیچ
+              کلیدِ پروایدر پاسخ می‌دهد — تنها میزبانی که این‌طور است.</div>
+          </div>
+
+          <div class="tab-panel" id="path-vps-fa">
+            <pre><code>git clone https://github.com/Shaiinarab/simorgh.git
+cd simorgh
+upm install
+export NO_PROXY=127.0.0.1,localhost
+export SIMORGH_API_KEY="&lt;token&gt;"
+export SIMORGH_API_KEYS='{"&lt;token&gt;":"&lt;user&gt;"}'
+upm run simorgh -- serve --port 8788</code><button class="copy" type="button">copy</button></pre>
+            <p>با systemd یا یک supervisor اجرا کنید و TLS را جلوتر بگذارید (Caddy، nginx).
+              رانتایمِ Node فقط <code>process.env</code> را می‌خواند — جزئیات در
+              <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">docs/DEPLOY.md</a>.</p>
+            <div class="note"><b>توجه:</b> entrypointهای Node در حالت پیش‌فرض SQLite را در حافظه نگه
+              می‌دارند — دفتر و شمارنده‌ها با restart پاک می‌شوند. برای حالتِ پایدار، از entry point
+              خودتان <code>startNodeRuntime({ sqlPath: "/var/lib/simorgh/core.db" })</code> را صدا بزنید.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <h3><span class="num">۲</span> کلید API خودتان را بسازید</h3>
+          <p>توکن فقط یک رشته است که خودتان می‌سازید؛ نگاشتِ <code>SIMORGH_API_KEYS</code> آن را به
+            یک شناسۀ کاربر متصل می‌کند. اپ اندروید توکن را به‌عنوان Bearer می‌فرستد و هسته
+            <b>کاربر را از توکن</b> استخراج می‌کند — نه از ادعای کلاینت.</p>
+          <div class="row">
+            <div class="field" style="flex:0 0 220px">
+              <label for="username_fa">شناسۀ کاربریِ شما</label>
+              <input id="username_fa" type="text" value="me" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="field" style="flex:0 0 auto; display:flex; align-items:flex-end">
+              <button class="primary" id="genBtn_fa" type="button">ساخت توکن</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="tokenOut_fa">توکنِ شما (محرمانه نگهش دارید — همان credential است)</label>
+            <input id="tokenOut_fa" type="text" readonly autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="mapOut_fa"><code>SIMORGH_API_KEYS</code> — این را export کنید یا به‌عنوان Wrangler secret ذخیره کنید</label>
+            <input id="mapOut_fa" type="text" readonly autocomplete="off">
+          </div>
+          <pre><code>export SIMORGH_API_KEYS='<span id="mapPre_fa">{"…":"…"}</span>'
+export SIMORGH_API_KEY='<span id="tokenPre_fa">…</span>'   # توکنِ سرویس برای CLI؛ اختیاری</code><button class="copy" type="button">copy</button></pre>
+          <div class="note"><b>احراز هویتِ ست نشده fail-closed است:</b> با کلیدِ ست‌نشده، هر مسیرِ
+            authed پاسخِ <code>503 AUTH_NOT_CONFIGURED</code> می‌دهد — نه یک درِ باز.</div>
+        </div>
+
+        <div class="step">
+          <h3><span class="num">۳</span> اپ اندروید را به هسته‌تان وصل کنید</h3>
+          <p>اپ را از سورس بسازید (APK از پیش‌ساخته‌ای منتشر نمی‌شود): با نصبِ Android SDK و
+            تنظیمِ <code>sdk.dir</code> در <code>android/local.properties</code>،</p>
+          <pre><code>cd android
+./gradlew assembleDebug
+# APK: android/app/build/outputs/apk/debug/app-debug.apk</code><button class="copy" type="button">copy</button></pre>
+          <p>نصبش کنید، <b>Config</b> را باز کنید و دقیقاً این سه مقدار را وارد کنید (تا حد امکان از
+            قدم ۲ پر شده‌اند):</p>
+          <div class="row">
+            <div class="field">
+              <label for="cfgUrl_fa">Base URL</label>
+              <input id="cfgUrl_fa" type="text" value="http://127.0.0.1:8788" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="field">
+              <label for="cfgKey_fa">کلید API (توکن)</label>
+              <input id="cfgKey_fa" type="text" readonly autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="cfgUser_fa">شناسۀ کاربر (claim؛ خالی بگذارید مگر اینکه با subjectِ توکن برابر باشد)</label>
+              <input id="cfgUser_fa" type="text" readonly autocomplete="off">
+            </div>
+          </div>
+          <p>در صفحۀ <b>Agent</b> یک درخواست بفرستید. هسته‌ای که هیچ کلیدِ پروایدر ندارد هم صادقانه
+            پاسخ می‌دهد: <code>answered_by: "none"</code> با خطای روشن — نه یک پاسخِ جعلی.</p>
+          <div class="note good"><b>اول از ترمینال بررسی کنید:</b>
+            <pre style="margin:8px 0 0"><code>curl -s http://127.0.0.1:8788/health
+curl -s -X POST http://127.0.0.1:8788/api/v1/agent/execute \
+  -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" \
+  -d '{"prompt":"who is simorgh"}'</code><button class="copy" type="button">copy</button></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="android">
+      <div class="wrap">
+        <h2>اپ اندروید با چه چیزی حرف می‌زند</h2>
+        <p>سه صفحه، یک قرارداد (<a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/api/CONTRACT.md" target="_blank" rel="noopener">docs/api/CONTRACT.md</a>).
+          credential تنها هویت است؛ <code>userId</code> یک ادعاست که هسته اعتبارسنجی می‌کند.</p>
+        <table>
+          <thead><tr><th>متد</th><th>مسیر</th><th>احراز هویت</th><th>صفحه</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/health</code></td><td>بدون</td><td>صفحۀ Status</td></tr>
+            <tr><td><code>GET</code></td><td><code>/api/v1/flock/status</code></td><td>بدون</td><td>Status — کدام پرنده بیدار است</td></tr>
+            <tr><td><code>POST</code></td><td><code>/api/v1/agent/execute</code></td><td>Bearer</td><td>Agent — tool loop + failover گلّه</td></tr>
+          </tbody>
+        </table>
+        <p>خطاهایی که اپ صریحاً مدیریت می‌کند:</p>
+        <table>
+          <thead><tr><th>وضعیت</th><th>کد</th><th>معنا</th></tr></thead>
+          <tbody>
+            <tr><td>401</td><td><code>UNAUTHORIZED</code></td><td>توکن ناموجود/ناشناس — فیلد کلید API را چک کنید</td></tr>
+            <tr><td>403</td><td><code>FORBIDDEN</code></td><td>ادعای userId با توکن نمی‌خواند — خالی بگذارید</td></tr>
+            <tr><td>429</td><td><code>RATE_LIMITED</code></td><td><code>Retry-After</code> را رعایت کنید؛ گلّه rate-limited است، نه خراب</td></tr>
+            <tr><td>503</td><td><code>AUTH_NOT_CONFIGURED</code></td><td>هسته کلید ندارد — <code>SIMORGH_API_KEY(S)</code> را ست و restart کنید</td></tr>
+            <tr><td>503</td><td><code>IDENTITY_UNRESOLVED</code></td><td>مسیرِ read توکنِ سرویس دید — از توکنِ map‌شده استفاده کنید</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="api">
+      <div class="wrap">
+        <h2>بدون کلید هم راست می‌گوید</h2>
+        <p>سیمرغ با <b>صفر راز</b> بالا می‌آید. پروایدرِ بی‌کلید <code>dormant</code> است، نه خراب:
+          بدون cooldown رد می‌شود و گلّه از هر چه بیدار است پاسخ می‌دهد. روی Cloudflare، Homā
+          (Workers AI) ذاتاً بی‌کلید است. روی Node، یک کلیدِ رایگان اضافه کنید یا
+          <code>OLLAMA_BASE_URL</code> را به یک daemon محلی اشاره دهید. اگر هیچ‌چیز بیدار نباشد،
+          پاسخ می‌گوید — <code>answered_by: "none"</code>، نه خیال‌بافی.</p>
+        <p>ماتریسِ کاملِ کلیدها، تله‌ها و جزئیاتِ هر میزبان:
+          <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">docs/DEPLOY.md</a>
+          · <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/ROADMAP-SPINE.md" target="_blank" rel="noopener">roadmap</a>
+          · <a href="https://github.com/Shaiinarab/simorgh/blob/main/docs/STATE-OF-PROJECT.md" target="_blank" rel="noopener">وضعیت پروژه</a>.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    Simorgh — free-to-run, no-KYC agentic AI gateway · MIT ·
+    <a href="https://github.com/Shaiinarab/simorgh" target="_blank" rel="noopener">source &amp; docs</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ── Language toggle: default follows the browser, switch is remembered ──
+  var saved = null;
+  try { saved = localStorage.getItem("simorgh-lang"); } catch (e) {}
+  var lang = saved || ((navigator.language || "").toLowerCase().indexOf("fa") === 0 ? "fa" : "en");
+  function applyLang(l) {
+    $("en").hidden = l !== "en";
+    $("fa").hidden = l !== "fa";
+    document.documentElement.lang = l;
+    $("langBtn").textContent = l === "en" ? "فارسی" : "English";
+    document.body.classList.toggle("lang-fa", l === "fa");
+    try { localStorage.setItem("simorgh-lang", l); } catch (e) {}
+  }
+  applyLang(lang);
+  $("langBtn").addEventListener("click", function () {
+    applyLang($("en").hidden ? "en" : "fa");
+  });
+
+  // ── Path tabs ──
+  document.querySelectorAll(".tabs").forEach(function (tabs) {
+    tabs.addEventListener("click", function (ev) {
+      var btn = ev.target.closest(".tab");
+      if (!btn) return;
+      tabs.querySelectorAll(".tab").forEach(function (t) { t.classList.remove("active"); });
+      var panel = document.getElementById(btn.dataset.panel);
+      // Both language copies share panel ids — toggle the matching one in THIS section.
+      var root = tabs.closest("section");
+      root.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.remove("active"); });
+      if (panel && root.contains(panel)) panel.classList.add("active");
+      btn.classList.add("active");
+    });
+  });
+
+  // ── Token minting (Web Crypto, client-side only; nothing leaves the page) ──
+  function mintToken() {
+    var bytes = new Uint8Array(24);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    var hex = Array.prototype.map.call(bytes, function (b) {
+      return ("0" + b.toString(16)).slice(-2);
+    }).join("");
+    return "simorgh_" + hex;
+  }
+
+  function currentToken() {
+    var t = $("tokenOut").value || mintToken();
+    $("tokenOut").value = t;
+    if ($("tokenOut_fa")) $("tokenOut_fa").value = t;
+    return t;
+  }
+
+  function refresh() {
+    var user = ($("username").value || "me").trim() || "me";
+    if ($("username_fa")) $("username_fa").value = user;
+    var token = currentToken();
+    var map = JSON.stringify(Object.fromEntries([[token, user]]));
+    $("mapOut").value = map;
+    if ($("mapOut_fa")) $("mapOut_fa").value = map;
+    $("mapPre").textContent = map;
+    $("tokenPre").textContent = token;
+    if ($("mapPre_fa")) $("mapPre_fa").textContent = map;
+    if ($("tokenPre_fa")) $("tokenPre_fa").textContent = token;
+    // Android config fields follow step 2 (operator can still edit the URL).
+    $("cfgKey").value = token;
+    $("cfgKey_fa").value = token;
+    $("cfgUser").value = user;
+    $("cfgUser_fa").value = user;
+  }
+
+  ["username", "username_fa"].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener("input", refresh);
+  });
+  ["genBtn", "genBtn_fa"].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener("click", function () { currentToken(); refresh(); });
+  });
+  refresh();
+
+  // ── Copy buttons ──
+  document.querySelectorAll(".copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var pre = btn.closest("pre");
+      if (!pre) return;
+      var text = pre.querySelector("code").innerText;
+      var done = function () {
+        var old = btn.textContent;
+        btn.textContent = "copied";
+        setTimeout(function () { btn.textContent = old; }, 1200);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); done(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
