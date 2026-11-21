@@ -37,8 +37,8 @@ The earlier ADR-0008 proposal says provider tokens should be validated in the br
 
 ## Decision
 
-1. GitHub Pages hosts the static Control Center shell and public documentation only.
-2. A local CLI-launched companion performs privileged operations. It binds to loopback, validates browser Origin, uses one-time pairing, and delegates to existing deployment adapters.
+1. GitHub Pages hosts the static landing page, public docs and launcher instructions only. It never hosts the secret-entry form.
+2. A local CLI-launched companion serves the actual interactive wizard from its own loopback origin, performs privileged operations, validates Host/Origin and CSRF protections, and delegates to existing deployment adapters. Same-origin local UI avoids sending secret fields through the public Pages origin or requiring a cross-origin secret bridge.
 3. Provider keys are submitted directly to the local companion and installed into the selected Core host secret store. They are never sent to GitHub Pages, committed, placed in URLs, or saved in browser storage.
 4. Personal Simorgh credentials are distinct from provider keys and service credentials. They map to a principal using the existing A3 contract. Client profiles are sensitive bearer-secret containers.
 5. The wizard reuses the existing deploy plan/preflight/apply pipeline and target matrix. It does not create a new provisioning backend or second deployment engine.
@@ -47,7 +47,7 @@ The earlier ADR-0008 proposal says provider tokens should be validated in the br
 
 ## Consequences
 
-- The Pages wizard can be opened from any device, but provisioning requires the user's local CLI companion or an explicitly supported remote self-hosted admin surface.
+- The Pages landing page can be opened from any device, but provisioning requires the user's local CLI companion (which serves the actual wizard at localhost) or an explicitly supported remote self-hosted admin surface.
 - "All setup inside the website" is not safely achievable with a static public page alone. The local companion is the secure bridge that makes the experience feel like one wizard without turning Pages into a secret-handling server.
 - The current manual site remains useful until the companion exists; documentation and UI must label manual steps honestly.
 - Key lifecycle improvements (hashed storage, key IDs, scopes, expiry, rotation and revocation) are follow-up work, not assumed capabilities of the current JSON subject map.
