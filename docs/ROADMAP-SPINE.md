@@ -77,7 +77,7 @@ A3 is done. C2 shipped 2026-11-21 (knowledge routes, chunked FTS5, principal-sco
 **B1 is next**. Then B1–B4 (the execution spine is the critical path and nothing external changes
 it), E1 against the now-final MCP 2026-07-28 spec, and the two new 2026 levers: **G2 Go-gateway
 convergence** (the stranded Go runtime becomes a fleet core) and **G3 MCP Apps** (the existing
-dashboard renders inside MCP conversations). C3/C4 memory and D1 digest follow. G4 adds a secure onboarding product after the current execution/MCP priorities: static Pages UI + local provisioner, not a browser-held cloud token. See [ADR-0011](adr/ADR-0011-control-center-provisioning-boundary.md) and [G4](todo/G4-control-center-wizard.md). The native shield
+dashboard renders inside MCP conversations). C3/C4 memory and D1 digest follow. G4 adds a secure onboarding product after the current execution/MCP priorities: Pages launcher + localhost wizard, not a browser-held cloud token. See [ADR-0011](adr/ADR-0011-control-center-provisioning-boundary.md) and [G4](todo/G4-control-center-wizard.md). The native shield
 (G1) is an optional, default-off FFI artifact — the Rust exploration measured honestly and the
 audit's verdict stands. The executable queue is [`todo/index.md`](todo/index.md).
 
