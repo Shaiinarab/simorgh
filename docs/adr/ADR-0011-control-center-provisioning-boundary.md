@@ -64,7 +64,7 @@ The earlier ADR-0008 proposal says provider tokens should be validated in the br
 
 - Loopback-only listener by default; no LAN bind unless an explicit, separately reviewed remote-admin mode is introduced.
 - Strict Origin allow-list for the Pages origin and local UI; reject DNS-rebinding/host-header ambiguity.
-- Pairing secret is high entropy, short lived, single use, and never logged.
+- Local session/CSRF bootstrap secret is high entropy, short lived, scoped to the local origin, and never logged.
 - Redact provider keys, personal bearer credentials and authorization headers from logs/errors.
 - No secrets in browser local/session storage, IndexedDB, service-worker caches, URLs, telemetry or Git history.
 - Explicit confirmation before deployment, secret replacement, credential rotation or revocation.
