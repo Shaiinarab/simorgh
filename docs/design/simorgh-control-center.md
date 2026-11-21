@@ -117,7 +117,7 @@ No GitHub PAT in the browser. No GitHub Actions workflow that accepts arbitrary 
 
 - A first-time user can choose Local Node, Cloudflare, or self-hosted without reading the full README.
 - Provider keys are never sent to the Pages origin or persisted in browser storage.
-- The local companion binds only to loopback and enforces Origin + one-time pairing.
+- The local companion binds only to loopback and enforces Host/Origin/CSRF checks plus a short-lived local session bootstrap.
 - Deployment plans are previewed and require confirmation; failed steps are resumable and report actionable errors.
 - A generated personal credential authenticates as the intended principal; a service credential is not substituted.
 - CLI, local web app and Android consume the same versioned connection profile.
