@@ -49,6 +49,7 @@ the document lifecycle.
 - [REST contract](api/CONTRACT.md) — the single API/config surface used by the CLI, dashboard and Android client.
 - [Simorgh Control Center](design/simorgh-control-center.md) — six-step onboarding, secure provisioning boundary, identity handoff and client profile design.
 - [ADR-0011](adr/ADR-0011-control-center-provisioning-boundary.md) — Pages stays static; a loopback CLI companion owns secrets and deployment.
+- [ADR-0012](adr/ADR-0012-global-provider-catalog-and-cloud-topology.md) — global cardless provider discovery, automated health lifecycle, and GitHub/Cloudflare/Vercel/Telegram topology.
 
 ## Decisions and research
 
