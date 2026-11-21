@@ -33,7 +33,7 @@ sources:
 ## Scope
 
 - Rework the current site into a six-step onboarding journey: target, providers, capabilities, deploy/verify, identity, clients.
-- Add a CLI command that starts a loopback-only local provisioner and opens the Pages wizard with a one-time pairing code.
+- Add a CLI command that starts a loopback-only local provisioner and serves the actual interactive wizard at localhost; Pages remains the public launcher/docs surface.
 - Reuse deploy plan/preflight/apply and target eligibility metadata.
 - Validate provider keys, then install them directly into the user's selected host secret store.
 - Issue/map a personal Simorgh credential to a principal and export a versioned connection profile/QR.
@@ -61,7 +61,7 @@ sources:
 - [ ] Pages page is deployable by the existing GitHub Actions workflow and repository Pages source is configured to GitHub Actions.
 - [ ] A new user can complete local setup without manually editing JSON secrets or copying commands between unrelated pages.
 - [ ] No provider key reaches the Pages origin, browser storage, workflow input, logs or Git history.
-- [ ] Provisioner rejects non-loopback bind and unpaired requests; pairing expires and is single-use.
+- [ ] Provisioner rejects non-loopback bind and invalid Host/Origin/CSRF requests; local UI session bootstrap is short-lived.
 - [ ] Provider validation is truthful and never persists the submitted key itself.
 - [ ] Plan is visible before deploy and deploy requires explicit confirmation.
 - [ ] Personal credential authenticates as the expected principal across API, CLI, local web app and Android.
