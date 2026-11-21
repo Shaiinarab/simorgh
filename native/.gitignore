@@ -1,0 +1,3 @@
+# Rust build artifacts — never commit (the repo commits source + upm.lock, not build output)
+/target
+**/*.rs.bk

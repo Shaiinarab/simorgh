@@ -1,0 +1,33 @@
+# Simorgh native workspace
+#
+# The first Rust code in this repository, and deliberately not a core: the engine stays
+# TypeScript (see docs/adr/ADR-0010-native-module-policy.md). This workspace holds
+# *optional acceleration modules* that the TypeScript engine can call behind a port —
+# never a second implementation of engine policy that has to be kept in agreement.
+#
+# The rule this workspace enforces by existing: a native module is acceptable when it is
+# (a) pure computation, (b) differentially tested against its TypeScript reference, and
+# (c) measured against it with a reproducible benchmark. The output shield (ported from
+# phoenix-core/src/security.ts) is the first candidate because the repo's own audit
+# (docs/research/NATIVE-COMPUTE-AUDIT.md) measured it as the only hotspot above 1% of the
+# request CPU budget.
+[workspace]
+resolver = "2"
+members = ["simorgh-native"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Shaiinarab/simorgh"
+rust-version = "1.82"
+
+# Size and speed matter for the Workers/Wasm path: the module must not cost more bundle
+# than the JS it accelerates, and LTO + one codegen unit is the standard shape for that.
+# panic = "abort" is deliberately NOT set: native-bench's negative control relies on
+# catch_unwind to prove the correctness assertions can fail (AGENTS.md verification
+# discipline), and abort would make that impossible. The size cost is small next to the
+# regex engine; the harness is load-bearing.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
