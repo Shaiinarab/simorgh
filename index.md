@@ -1,10 +1,13 @@
 ---
-okf_version: "0.2"
+okf_version: "0.3"
+title: "Simorgh documentation bundle"
+description: "The repository's own documentation as an OKF v0.3 bundle: the roadmap spine, the live task queue, architecture decisions, research, and the operating contract."
+license: MIT
 ---
 
 # Simorgh documentation bundle
 
-This is the bundle root: an [OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
+This is the bundle root: an [OKF v0.3](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md)
 corpus covering the repository's own documentation. Every non-reserved `.md` file in it carries YAML
 frontmatter with a `type`, plus provenance, trust and lifecycle fields. The conventions this tree
 follows, and the list of held-out vendored directories, are written down in
@@ -22,13 +25,13 @@ follows, and the list of held-out vendored directories, are written down in
 ## The plan and the queue
 
 * [Roadmap spine](docs/ROADMAP-SPINE.md) — architecture, phases, dependencies, frozen non-goals.
-* [TODO index](docs/todo/index.md) — the live ordered queue of thirteen tasks.
-* [Project state](docs/STATE-OF-PROJECT.md) — evidence-backed capabilities and known gaps, re-measured 2026-10-12.
+* [TODO index](docs/todo/index.md) — the live ordered queue of fifteen tasks.
+* [Project state](docs/STATE-OF-PROJECT.md) — evidence-backed capabilities and known gaps, re-measured 2026-11-21.
 
 ## Directories
 
 * [docs/](docs/) — the documentation map, and every planning concept.
-  * [Architecture decisions](docs/adr/) — eight ADRs, decision status in each body.
+  * [Architecture decisions](docs/adr/) — ten ADRs, decision status in each body.
   * [Research](docs/research/) — ecosystem evidence and audits, dated records marked `deprecated`.
   * [Adoption specs](docs/research/adoption/) — what to take from each open-source system, and what to refuse.
   * [Product requirements](docs/prd/) — the historical August PRD and epic breakdowns.

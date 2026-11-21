@@ -9,6 +9,7 @@ Ecosystem evidence, audits and adoption specs. Dated conclusions are marked `dep
 * [GitHub Inspiration Dossier — 2026-10-10](GITHUB-INSPIRATION-2026-10-10.md) — External repository survey behind REFERENCE-ARCHITECTURE.md.
 * [Go quota findings — ADR-0003 fact check and unfixed defects](GO-QUOTA-FINDINGS.md) — Dated 2026-10-09 Go-side quota audit: what ledger.Remaining reports and what it cannot.
 * [Native Compute Audit](NATIVE-COMPUTE-AUDIT.md) — Measured CPU-cost study deciding whether any Simorgh request-path component justifies a native rewrite.
+* [November 2026 Deep Recon — what Simorgh must be today](NOVEMBER-2026-DEEP-RECON.md) — The 2026-11-21 reconnaissance: final MCP 2026-07-28, Go-gateway throughput evidence, the October 2026 free-tier roster, Rust MCP/embedding crates, agent-memory state, and this pass's REA/native-module evidence.
 * [Perplexity deep-research prompt — Simorgh (2026-10)](PERPLEXITY-DEEPRESEARCH-PROMPT.md) — The outbound prompt used to gather external ecosystem evidence; a record, not a claim.
 * [Routing convergence — TypeScript engine vs Go gateway](ROUTING-CONVERGENCE.md) — Dated 2026-10-09 comparison of the two routing implementations and where they diverge.
 * [Simorgh Skillstack — top 20 per category (brainstorm baseline, 2026-10)](SKILLSTACK-2026.md) — Dated 2026-10 brainstorm baseline of skills and ecosystem tools to mine; a record of what was considered.

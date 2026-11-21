@@ -15,7 +15,7 @@ status: "stable"
 verified:
   by: "process:okf-fact-check-2026-10-12"
   at: "2026-10-12T15:20:00Z"
-stale_after: "2026-11-12T00:00:00Z"
+stale_after: "2027-05-20T00:00:00Z"
 sources:
   - id: boundary-test
     resource: "../phoenix-core/test/boundary.test.ts"
@@ -56,7 +56,7 @@ Every file below exists and is in the build. This is the map to reach for before
 
 | File | Owns |
 |------|------|
-| `ports.ts` | Every port the engine declares, and nowhere else: `SqlPort`, `FetchLike`, `HttpLike`, `PhoenixPorts`, `ContextStorePort`, `LedgerPort`, `WorkersAiPort`, plus their row/option types. |
+| `ports.ts` | Every port the engine declares, and nowhere else: `SqlPort`, `FetchLike`, `HttpLike`, `PhoenixPorts`, `ContextStorePort`, `LedgerPort`, `WorkersAiPort`, `RetrievalPort`, plus their row/option types. |
 | `provider.ts` | The `Provider` contract plus factories (`openAiCompatibleProvider`, `geminiProvider`, `workersAiProvider`, `autoRouterProvider`) — one per **wire shape**, not one per vendor |
 | `flock.ts` | `flyFlock()`: priority routing, dormant skip, cooldowns, fail-through, exhaustion, and `describeFlock()` status assembly |
 | `agent.ts` | The agent loop: registry, argument extraction, per-tool failure capture, truncation, the synthesis prompt, the iteration budget |
@@ -67,6 +67,7 @@ Every file below exists and is in the build. This is the map to reach for before
 | `health.ts` | `bird_health` upsert, cooldown reads, the stale sweep |
 | `quota.ts` | **Free-compute capacity.** Quota windows, reset horizons, `capacityFor`, `postSpendValue`, `planQuotaRun`, the `quota_state` table, and the latency EMA. Pure over `(states, workload, now)` — see [`adr/ADR-0003`](adr/ADR-0003-free-compute-capacity.md) |
 | `ledger.ts` | `createLedger()` / `LEDGER_SCHEMA` — the transparency ledger, on any `SqlPort` |
+| `retrieval.ts` | `RetrievalPort` baseline: `createFts5Retrieval()` over `SqlPort`, `normalizeFtsQuery()`, `mergeRetrievalHits()` — zero dependencies; FTS5 is in both hosts' SQLite (ADR-0009) |
 | `models.ts` | The model catalog |
 | `swarm.ts` | Decomposition + placement, bounded by `planTaskRun` |
 | `tasks.ts` | The task graph — a goal as data, ordered and scheduled |
@@ -146,6 +147,7 @@ Every capability the engine needs arrives through an interface declared in `phoe
 | *(no new port for quota)* | — | `quota.ts` needs only `SqlPort` and an injected clock | `SqlStorage` (DO) and `node:sqlite` both already satisfy it; the whole capacity model is pure functions over a value type | — |
 | `LedgerPort` | `phoenix-core/src/ports.ts` | Transparency ledger: `logEntry()`, `getUserLogs()` | The `DataTrustVault` Durable Object at `src/data-trust.ts`, bound to storage via `createLedger(this.ctx.storage.sql)` | `createLedger(sql)` at `phoenix-core/src/ledger.ts`, re-exported as `sqlLedger` from the `/node` subpath |
 | `WorkersAiPort` | `phoenix-core/src/ports.ts` | Cloudflare Workers AI: `run(model, input)` | Workers AI binding at `src/index.ts` | Not supplied — Node host omits it; providers needing it report themselves unavailable |
+| `RetrievalPort` | `phoenix-core/src/ports.ts` | Document indexing and ranked search: `index()`, `search()`, `delete()` | `createFts5Retrieval()` over DO `SqlStorage` (FTS5) or a conditional AI Search adapter | `createFts5Retrieval()` over `node:sqlite` (FTS5, verified) or an optional Orama adapter |
 
 The Node adapter lives at `phoenix-core/src/node/index.ts` and is exposed as the subpath export `@simorgh/phoenix-core/node` (see `phoenix-core/package.json` `exports`). It is the **only** place in `phoenix-core` that names a `node:` module.
 

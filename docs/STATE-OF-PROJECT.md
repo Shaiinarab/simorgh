@@ -11,7 +11,7 @@ generated:
   by: "opencode/space-bunny-free"
   at: "2026-10-12T15:20:00Z"
 status: "stable"
-stale_after: "2026-11-12T00:00:00Z"
+stale_after: "2027-05-20T00:00:00Z"
 sources:
   - id: roadmap-spine
     resource: "ROADMAP-SPINE.md"
@@ -601,17 +601,19 @@ bump to 5 blindly.
   `planQuotaRun()`, but production scheduled execution is claim→fly. EPIC-B makes the invariant real:
   *nothing spends provider quota until the capacity planner says it can*, then closes the usage loop
   (`recordUsage()` → health → ledger). B4 proves one end-to-end durable task through the whole spine.
-- **Retrieval remains unbuilt** — confirmed again by the 2026-10 external audits; EPIC-C starts with a
-  `RetrievalPort` in phoenix-core (core never imports `env.AI_SEARCH`), Cloudflare AI Search adapter
-  first (hybrid search, built-in storage, namespace isolation; Free ≈1k semantic + 1k full-text
-  queries/mo, billing from 2026-11-01), plus a tiny `POST /knowledge` slice with retrieval provenance.
+- **Retrieval: the port and the baseline are in; the routes are not.** 2026-11-20: `RetrievalPort`
+  (`ports.ts`) and a zero-dependency FTS5 adapter (`retrieval.ts`) shipped with 17 tests; both hosts
+  already ship FTS5 (Durable Object SQLite documents it; Node `node:sqlite` verified). Orama
+  (Apache-2.0) is the optional Node/local vector adapter; Cloudflare AI Search is the conditional
+  hosted adapter (Free ≈1k semantic + 1k full-text queries/mo; billing begins 2026-12-01 per current
+  docs). C2 (`POST /knowledge`, `GET /knowledge/:id`, `POST /knowledge/search`) is next. See ADR-0009.
 - Swarm (`swarm.ts`) plans but does not drive execution — EPIC-D gives it exactly one real job
   (multi-source research digest) rather than a second framework.
 
 ### 12.4 Where planning truth lives now
 
 - [`ROADMAP-SPINE.md`](ROADMAP-SPINE.md) owns the architecture, dependencies, phase order and freeze list.
-- [`todo/index.md`](todo/index.md) and its linked OKF v0.2 task documents own the live implementation queue.
+- [`todo/index.md`](todo/index.md) and its linked OKF v0.3 task documents own the live implementation queue.
 - [`index.md`](index.md) maps the documentation bundle. New/updated task concepts carry provenance,
   generation time, lifecycle/freshness and work-status metadata.
 - BMAD skills remain available as optional tools; generated sprint/planning artifacts are derived and
@@ -621,3 +623,98 @@ bump to 5 blindly.
   in [the retirement record](history/coordination-retirement-2026-10-10.md).
 
 **Order of attack:** A3 → B1 → B2 → B3 → B4 → C1 → C2 → C3 → C4 → D1 → E1 → E2 → E3.
+
+---
+
+## 13. Retrieval slice — 2026-11-20
+
+| Claim | Command | Result |
+|---|---|---|
+| typecheck (3 configs) | `upm run typecheck` | ✅ exit 0 |
+| workers suite | `upm run test:workers` | ✅ 18 files / 188 tests |
+| node suite | `upm run test:node` | ✅ 29 files / 539 tests (was 28 / 522) |
+| new retrieval tests | `upx vitest run --config vitest.node.config.ts phoenix-core/test/retrieval.test.ts` | ✅ 17/17 |
+
+**What shipped:** `RetrievalPort` / `RetrievalDocument` / `RetrievalQuery` / `RetrievalHit` in
+`phoenix-core/src/ports.ts`; `RETRIEVAL_SCHEMA`, `createFts5Retrieval`, `normalizeFtsQuery`,
+`mergeRetrievalHits` in `phoenix-core/src/retrieval.ts`; barrel export; 17 tests.
+
+**What did not ship:** the C2 HTTP routes, an Orama adapter, an AI Search adapter, and vector/hybrid
+ranking. The baseline is lexical only. `boundary.test.ts` still passes because the new module imports
+only `./ports.ts`.
+
+**Decision record:** [ADR-0009](adr/ADR-0009-module-adoption-retrieval.md) — FTS5 baseline, optional
+Orama, conditional AI Search, and the refusal list for search servers and memory engines.
+
+---
+
+## 14. The 2026-11-21 pass — native module, MCP 2026-07-28, Go convergence (this session)
+
+**Written 2026-11-21 by `kilo/ernie-5.5-flash-preview`.** This section records what this documentation
+and native-module pass changed; the sections above remain the historical record where marked.
+
+### 14.1 What this pass added
+
+| Artifact | What it is |
+|---|---|
+| `native/` (Rust workspace) | The first native code in the repository — the output shield ported faithfully from `phoenix-core/src/security.ts`, with 17 unit tests, a 346-input differential test against the live TS reference (negative control FIRED), a C ABI + cdylib + zero-import Wasm artifact, and block-amortised benchmarks |
+| `docs/adr/ADR-0010` | The native-module policy: optional accelerators behind ports, differentially tested, measured, default OFF; the Rust/Wasm *core* rejection is unchanged |
+| `docs/research/NOVEMBER-2026-DEEP-RECON.md` | The dated reconnaissance: MCP 2026-07-28 final, Go-gateway throughput evidence, October 2026 free-tier roster, Rust MCP/embedding crates, agent-memory state, and this pass's own REA/benchmark evidence |
+| `docs/todo/G1/G2/G3` | The new EPIC-G tasks: native shield (done, default OFF), Go-gateway convergence, MCP Apps dashboard |
+| Roadmap v2 (`ROADMAP-SPINE.md`) | Re-baselined with the new phase 10, the updated freeze list, and the reorder (C2 land → B1–B4 → E1 → G2 → G3 → C4 → D1) |
+
+### 14.2 The measured native verdict (the honest part)
+
+On this box (i5-3570, Node 26.11.1, rustc 1.99.0), the Rust shield port is **byte-identical** to the
+TypeScript reference (346 differential inputs, findings order included, comparator negative control
+FIRED) but **1.5–1.7× slower** than V8 on this workload (16 KB adversarial: 764 µs TS vs 1160 µs
+Rust; 32 KB adversarial: 1474 µs vs 2444 µs; block-amortised, baseline-subtracted, 3 passes). V8's
+irregexp is exceptionally fast; the `regex` crate does not beat it here. **The audit's "no CPU win"
+verdict survives the native exploration** — the module ships default OFF as an FFI-ready artifact
+(zero-import Wasm verified via `WebAssembly.Module.imports()`; NX + RELRO cdylib via REA), and the
+differential harness is the reusable machinery for any future native candidate.
+
+### 14.3 What this pass did NOT change
+
+- No TypeScript engine code was modified by the 2026-11-21 documentation/native pass itself; the
+  uncommitted C2 work in the tree was pre-existing at that point. **Update (2026-11-21, later same
+  day):** C2 was landed — see §14.5.
+
+### 14.5 C2 landed (2026-11-21, second pass)
+
+The in-flight knowledge API was finished and verified:
+
+- **Chunked retrieval** — `phoenix-core/src/retrieval.ts` now splits documents into
+  1,200-code-point passages (`RETRIEVAL_CHUNK_CHARS`, code-point safe, no overlap),
+  indexes one FTS5 row per chunk, returns passage-level search hits with `chunkId`, reassembles
+  the whole document on `get`, and **re-indexing replaces** a document's chunks (fixing a latent
+  duplicate-row bug where re-indexing appended). `RetrievalHit` gained optional `chunkId`
+  (`phoenix-core/src/ports.ts`).
+- **Route-level tests** — `test/knowledge-routes.test.ts` (5 tests, workers suite) exercises the
+  four routes against the real KnowledgeVault DO: the provenance envelope, delete semantics
+  (deleted material stops appearing), principal isolation (same label, different principal → 404
+  on get/delete, empty search), auth refusals (401 / 503 IDENTITY_UNRESOLVED / 503
+  AUTH_NOT_CONFIGURED), and validation (400 INVALID_NAMESPACE / EMPTY_TEXT / INVALID_ID, 413
+  text_too_large).
+- **Verification** — workers 19 files / 193 tests, node 30 files / 561 tests, `upm run typecheck`
+  (3 configs) green, `upm run platform:smoke` green (real core boots on an ephemeral port;
+  MCP negotiates protocol 2026-07-28).
+- Docs updated in the same change: `docs/todo/C2-knowledge-api.md` (done + acceptance),
+  `docs/todo/index.md`, `docs/ROADMAP-SPINE.md` (truth baseline, phase ledger, C2 epic).
+- No provider terms were re-verified; the free-tier roster in the research doc is secondary-source
+  (October 2026) and provisional by design (E2's job).
+- Bifrost's 11 µs/5,000 RPS figure is maintainer-reported; an independent review (TrueFoundry)
+  confirms the throughput class but disputes "fastest" marketing. It is cited as *evidence of a
+  category*, not as a benchmark we reproduced.
+- The Firecrawl/Tavily fleet bridges are misconfigured with a dead proxy (127.0.0.1:10809) in this
+  session; research used open-websearch + webfetch. Fleet fix belongs to `harnesses/skillset/mcp-fleet/`.
+
+### 14.4 Reproduce this pass
+
+```bash
+cd native && cargo test --release                 # 17/17
+node native/test/differential.mjs                 # 346/346, negative control FIRED
+node native/test/bench-node.mjs                   # TS-vs-Rust table
+cd gateway && GOFLAGS=-mod=readonly go build -o /tmp/simorgh-gateway ./cmd/simorgh-gateway
+# REA: inspect_go_binary on the built binary; inspect_binary_hardening on native/target/release/libsimorgh_native.so
+```

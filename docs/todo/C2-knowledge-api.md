@@ -12,13 +12,13 @@ tags:
 generated:
   by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
-status: "draft"
-work_status: "queued"
+status: "stable"
+work_status: "done"
 priority: "P1"
 depends_on:
   - A3
   - C1
-stale_after: "2026-10-17T00:00:00Z"
+stale_after: "2027-01-21T00:00:00Z"
 sources:
   - id: roadmap-spine
     resource: "../ROADMAP-SPINE.md"
@@ -31,25 +31,39 @@ sources:
 
 ## TL;DR
 
-Ship the smallest useful knowledge surface before connectors or a large UI: ingest, get, search, and
-delete a document with source/chunk provenance.
+**Done 2026-11-21.** The knowledge surface shipped: four identity-gated routes
+(`POST /api/v1/knowledge`, `GET /api/v1/knowledge/:id`, `POST /api/v1/knowledge/search`,
+`DELETE /api/v1/knowledge/:id`) over the C1 FTS5 adapter, with passage-level provenance
+(chunked indexing, `chunkId` on search hits), replace-on-reindex semantics, and
+principal-scoped namespaces (`<subject>::<label>`) that make cross-principal access
+structurally impossible. Verified: 18 parser/namespace unit tests + 4 chunking tests +
+5 route-level tests against the real KnowledgeVault DO (workers 19 files / 193 tests,
+node 30 files / 561 tests, typecheck all 3 configs, `platform:smoke` green).
 
-**Verified 2026-10-12.** NOT STARTED — no RetrievalPort in `phoenix-core/src/ports.ts`, no `/knowledge`
-routes on either host, no namespace concept, no memory port; the tool list is still `search_web` +
-`get_server_time`.
+## Shipped (2026-11-21)
 
-## Work
-
-- Add POST /knowledge, GET /knowledge/:id and POST /knowledge/search, plus a delete operation needed
-  to guarantee deletion semantics.
-- Gate every route through the authenticated principal from A3.
-- Return documentId, chunkId, source, title, text, score, timestamp, metadata and knowledgeNamespace.
-- Preserve ingestion source and content metadata, document state, and errors honestly.
+- `phoenix-core/src/knowledge.ts` — validation, namespace rules, the four parsers, the
+  principal-prefixing (`knowledgeNamespaceFor`), and the public-hit mapping. Pure over its
+  input; no runtime import.
+- `src/knowledge-vault.ts` — the KnowledgeVault DO: FTS5 over `ctx.storage.sql`, schema
+  ensured under `blockConcurrencyWhile`.
+- `src/index.ts` routes — the four routes, gated by `requireIdentity` (the credential is
+  the only source of the subject).
+- `wrangler.toml` v3 migration + `env.d.ts` binding (both `Env` and `Cloudflare.Env`).
+- `phoenix-core/src/retrieval.ts` — chunked indexing (`RETRIEVAL_CHUNK_CHARS = 1200`,
+  code-point safe, no overlap), replace-on-reindex, passage-level search hits,
+  whole-document `get`.
+- Tests: `phoenix-core/test/knowledge.test.ts` (18), chunking tests in
+  `phoenix-core/test/retrieval.test.ts` (4), `test/knowledge-routes.test.ts` (5, real DO).
 
 ## Acceptance
 
-- Search results carry the full provenance envelope.
-- An owner can retrieve and delete their document; deleted material stops appearing in future search.
-- A principal cannot fetch, search or delete another principal's knowledge.
-- Local and hosted adapters satisfy the same contract, even if local search is lexical rather than
-  semantically equivalent.
+- [x] Search results carry the full provenance envelope (documentId, chunkId, source,
+      title, text, score, timestamp, metadata, namespace label).
+- [x] An owner can retrieve and delete their document; deleted material stops appearing
+      in future search (route test pins both).
+- [x] A principal cannot fetch, search or delete another principal's knowledge
+      (route test pins all three, with the same label under a different principal).
+- [x] Local and hosted adapters satisfy the same contract — the adapter is pure over
+      `SqlPort`, tested on real Node SQLite; the Workers host runs the same adapter over
+      DO SQLite through the KnowledgeVault DO.

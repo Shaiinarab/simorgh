@@ -36,6 +36,8 @@ sources:
 > 10 `simorgh-platform`; typecheck exit 0 (see `docs/STATE-OF-PROJECT.md` §11.5 and `ROADMAP-SPINE.md`
 > §0). Canonical commands today are `upm run typecheck`, `upm test`. The §7 "ten things to fix first"
 > list still stands as open quality debt; it is folded into EPIC-A/B acceptance criteria in the spine.
+>
+> **2026-11-20:** +17 retrieval tests (`phoenix-core/test/retrieval.test.ts`); node suite now **29 files / 539 tests**, workers **18 / 188**; typecheck exit 0.
 
 ## 1. Method — what was run
 

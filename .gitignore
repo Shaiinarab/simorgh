@@ -47,3 +47,8 @@ Thumbs.db
 # be a second, competing resolution of the same manifest, which is the "two truths nothing
 # compares them" failure this repo already paid for once in ledger.ts.
 package-lock.json
+
+# Agent scratch and local-only trees — never commit (AGENTS.md: "Never do").
+.kilo/
+mailbox/
+qwenone/

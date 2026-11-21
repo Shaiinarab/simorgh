@@ -264,7 +264,7 @@ Three of the load-bearing claims were independently re-verified against the code
 
 ## 6. Process and environment (this shapes what is cheap)
 
-- **Current planning contract:** the roadmap owns sequence; one OKF v0.2 document per task owns
+- **Current planning contract:** the roadmap owns sequence; one OKF v0.3 document per task owns
   dependencies, evidence and acceptance. Start with `docs/todo/index.md`.
 - **Review discipline:** a green suite is not proof by itself. Confirm boundary behavior against a
   real core or actual plan builder, include a negative control for detectors, and report checks that

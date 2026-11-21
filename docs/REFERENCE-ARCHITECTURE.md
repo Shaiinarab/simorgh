@@ -11,7 +11,7 @@ generated:
   by: "openai/gpt-6"
   at: "2026-10-10T15:05:00Z"
 status: "stable"
-stale_after: "2026-11-10T00:00:00Z"
+stale_after: "2027-05-20T00:00:00Z"
 sources:
   - id: roadmap-spine
     resource: "ROADMAP-SPINE.md"
@@ -177,6 +177,19 @@ verified-free citations, re-verified in CI** — the bird-catalog discipline app
 infrastructure (ADR-0008 §4). A wizard that hardcodes one target inherits that target's
 policy risk.
 
+### 2.7 Retrieval and memory modules (ADR-0009)
+
+**Precedents:** SQLite **FTS5** (both hosts), **Orama** (Apache-2.0, zero-dependency
+vector/hybrid), **MiniSearch** (MIT, lexical), **Cloudflare AI Search** (hosted; 1k semantic
++ 1k full-text free queries/month).
+
+**What the evidence forces:** the baseline is **FTS5 over the existing `SqlPort`** — no new
+dependency, and it works on Durable Object SQLite (documented) and `node:sqlite` (verified
+2026-11-20). Orama is the optional Node/local vector adapter; AI Search is the conditional
+hosted adapter. Search servers (Meilisearch/Typesense/Qdrant) and memory engines
+(Mem0/Graphiti/Neo4j) are refused. (Lives: `RetrievalPort` in `ports.ts`, `retrieval.ts`,
+[ADR-0009](adr/ADR-0009-module-adoption-retrieval.md).)
+
 ## 3. The decisions the evidence forces (and where they already live)
 
 1. **The port is the modularity unit — never the library.** Every system that grew a
@@ -201,7 +214,7 @@ policy risk.
 | Gap | Spine item | Why it matters to "swarms + parallel runs" |
 |---|---|---|
 | `planTaskRun` not wired into the claim path | B2 | today a claim flies without asking the capacity brain — parallel runs are ungoverned in production |
-| No RetrievalPort | C1 | the spine's knowledge half is a hole; swarms currently can't retrieve |
+| RetrievalPort landed (C1 partial); C2 routes missing | C1/C2 | the port and FTS5 baseline exist; swarms still can't retrieve over HTTP |
 | Layered memory not built | C4 | `ContextStore` is session state, not memory |
 | MCP on the pre-2026-07-28 shape; no task-shaped tools | E1 | the "MCP-based ecosystem" is not yet task-shaped |
 | Swarm plans but does not drive execution | D1/B4 | no end-to-end proof: Goal → DAG → parallel placement → aggregate → verify |

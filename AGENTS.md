@@ -54,7 +54,7 @@ collision was found and removed once already.
 ## Plan of record (read before starting any work)
 
 The strategic plan is [`docs/ROADMAP-SPINE.md`](docs/ROADMAP-SPINE.md). The live task queue is
-[`docs/todo/index.md`](docs/todo/index.md); each task is one Markdown concept in OKF v0.2 format
+[`docs/todo/index.md`](docs/todo/index.md); each task is one Markdown concept in OKF v0.3 format
 with a required `type`, sources, generation metadata, lifecycle/freshness, priority, dependency and
 work-status fields. [`docs/index.md`](docs/index.md) is the documentation map.
 
@@ -115,6 +115,11 @@ upm run cf:dry-run              # wrangler bundle check
 upm run go:build                # Go workspace (all 8 modules)
 upm run go:vet
 upm run go:test
+
+# native/ (Rust workspace — optional accelerators behind ports, ADR-0010)
+cd native && cargo test --release                  # 17 unit tests (the TS fixtures, ported)
+node native/test/differential.mjs                  # rust === typescript, 346 inputs, negative control
+node native/test/bench-node.mjs                    # TS-vs-Rust comparison (needs cargo build --release)
 ```
 
 **Two suites, split by what each can prove.** A change that only passes one has been tested on one
@@ -196,7 +201,7 @@ So, on this repo:
   honest degradation always); ADR-0007 §3 is the refusal list and it is load-bearing. A new
   dependency is the last resort, never the first — stdlib, then what is already installed,
   then upstream.
-- New or materially revised planning documents use OKF v0.2 Markdown + YAML frontmatter, sources, generation time, lifecycle status and a freshness deadline; reserved `index.md` files remain directory indexes. Put a short TL;DR near the top. Comments explain **why**, and carry the evidence for a non-obvious decision. Several comments in this
+- New or materially revised planning documents use OKF v0.3 Markdown + YAML frontmatter, sources, generation time, lifecycle status and a freshness deadline; reserved `index.md` files remain directory indexes. Put a short TL;DR near the top. Comments explain **why**, and carry the evidence for a non-obvious decision. Several comments in this
   repo are load-bearing; do not strip them as "noise".
 - Documentation must describe **reality**, not intent. If you change behaviour, change the doc that
   claims otherwise — `README.md`, `docs/ARCHITECTURE.md`, `docs/STATE-OF-PROJECT.md`, `docs/adr/`.
