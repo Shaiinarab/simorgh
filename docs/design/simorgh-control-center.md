@@ -25,7 +25,7 @@ sources:
     resource: "../ROADMAP-SPINE.md"
     title: "Canonical roadmap"
   - id: ts7
-    resource: "https://devblogs.microsoft.com/typescript/2026/10/20/announcing-typescript-7-1-beta/"
+    resource: "https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/"
     title: "TypeScript 7.1 Beta announcement"
   - id: htmx4
     resource: "https://four.htmx.org/announcements/2026-08-28-htmx-4.0.0-is-released"
