@@ -68,7 +68,8 @@ PHASE 7  Autonomous loop       NEXT   (D1: one evaluated research digest)
 PHASE 8  Connectors            LATER  (Notion/Drive/Telegram/GitHub sync)
 PHASE 9  UI                    NEXT   (G3: MCP Apps — the dashboard as a ui:// resource)
 PHASE 10 Runtime convergence   NEXT   (G2: Go gateway on the core contract; G1: native shield optional)
-PHASE 11 Onboarding            PLANNED (G4: Pages Control Center + loopback CLI provisioner)
+PHASE 11 Onboarding            PLANNED (G4: secure setup and identity handoff)
+PHASE 12 Global provider mesh  PLANNED (E2/E3: evidence-backed discovery, per-account probes, lifecycle)
 ```
 
 ## TL;DR
@@ -91,7 +92,8 @@ audit's verdict stands. The executable queue is [`todo/index.md`](todo/index.md)
 ❌ Second task DB / second scheduler / Task-class circus
 ❌ Cloudflare-only substrate (self-host stays first-class; Workflows = adapter candidate later)
 ❌ Pooled free-provider credentials & autonomous account creation (BYOK-first)
-❌ Vercel migration, full Agents SDK adoption, giant policy engine, giant PWA
+🟡 Vercel dashboard as an optional frontend only; Cloudflare remains the API/control plane (ADR-0012)
+❌ Full Agents SDK adoption, giant policy engine, giant PWA
 ❌ Wiring the native shield into the request path   (new: measured 1.5–1.7× slower than V8 on this
                                                      box; ADR-0010 gates any future revisit)
 🟡 Go companion: frozen at conformance level until G2 lands; no semantic drift added meanwhile
@@ -182,17 +184,22 @@ Native acceleration is allowed only under [ADR-0010](adr/ADR-0010-native-module-
   `simorgh.agent.execute`. **No Sampling/Roots/Logging** (deprecated by the spec).
 - **E2 Provider discovery pipeline** — discovery → probe → cost → quota → capabilities →
   freshness → eligibility → routing. "5 options per capability" = discovered, not hard-coded.
-  The October 2026 free-tier roster (Gemini, Groq, OpenRouter, Mistral, Workers AI, NVIDIA, Cohere,
-  SambaNova, Cerebras) is the starting candidate set; every limit is provisional with a
-  last-verified date.
-- **E3 Validation birds only** — Gemini + OpenRouter `:free` (strongest current evidence), each
-  declaration carrying cost/quota/reset/capabilities/privacy/training/region/eligibility/freshness/
-  source/confidence.
+  Provider offers are evidence-backed and classified as recurring free, trial, promotional,
+  free-model-pool or paid; no-card, phone, identity and region requirements are separate fields.
+- **E3 Validation birds only** — start with providers whose API free-tier evidence is current.
+  Gemini, Groq, OpenRouter, Workers AI, NVIDIA NIM and Cohere are candidates with distinct caveats;
+  Mistral API, SambaNova and Cerebras are excluded from the no-payment set under current evidence.
+- **E4 Global catalogue auditor** — GitHub Actions checks official docs, terms, model listings and
+  offer freshness; emits evidence diffs and reviewable manifest updates without collecting keys.
+- **E5 Per-deployment API health** — Cloudflare Cron tests only the user's configured accounts;
+  classify 401/403/429/model-404/5xx separately; quarantine and recover by repeated evidence, never
+  delete on one failed probe. Full decision: [ADR-0012](adr/ADR-0012-global-provider-catalog-and-cloud-topology.md).
 
 ### EPIC-F · Scale (only after B–D prove out)
 
 - F1 DO sharding phases: global coordinator → principal coordinator → justified task shards.
-- F2 Connectors sync (Notion/Drive/Telegram/GitHub). F3 PWA around real APIs.
+- F2 Connectors sync (Notion/Drive/Telegram/GitHub). F3 portable PWA/dashboard around the existing
+  Cloudflare API; Vercel is an optional personal frontend, not the control plane (ADR-0012).
 - F4 Workflows-vs-DO benchmark → durable-execution interface with DO/alarm, Workflows, and
   Node/local implementations; default chosen by measurement, not faith.
 - F5 Public multi-user deployment (post-A3 gate).
